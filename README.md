@@ -5,3 +5,7 @@
 # Tempo
 
 More to come...
+
+## Logo
+
+Logo provided by [softicons.com](https://www.softicons.com/object-icons/vista-musical-instruments-icons-by-icons-land/metronome-icon).  Many thanks!
