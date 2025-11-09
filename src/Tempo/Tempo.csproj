@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>Tempo</Title>
+    <Authors>jchristn</Authors>
+    <Description>Placeholder</Description>
+    <Copyright>(c)2025 Joel Christner</Copyright>
+    <PackageProjectUrl>https://github.com/jchristn/tempo</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jchristn/tempo</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+</Project>
