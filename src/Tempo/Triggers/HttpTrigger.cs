@@ -20,6 +20,9 @@
             set => _Method = value != null ? value : throw new ArgumentNullException(nameof(Method));
         }
 
+        /// <summary>
+        /// URI.
+        /// </summary>
         public Uri Uri
         {
             get => _Uri;

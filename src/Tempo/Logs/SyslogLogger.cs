@@ -33,6 +33,7 @@
         /// <param name="port">Syslog server port.</param>
         /// <param name="logDirectory">Directory for logfiles.</param>
         /// <param name="logFilename">Log filename.</param>
+        /// <param name="dfLogsDirectory">Data flow logs directory.</param>
         /// <param name="console">Enable or disable console logging.</param>
         public SyslogLogger(
             string serverIp = "127.0.0.1", 

@@ -1,0 +1,1313 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Tempo</name>
+    </assembly>
+    <members>
+        <member name="T:Tempo.CodeAttributeStepInfo">
+            <summary>
+            Information about an attribute-based code step (static method decorated with [StepMethod]).
+            Used by StepManager to track and instantiate CodeAttributeStepRunner instances.
+            </summary>
+        </member>
+        <member name="P:Tempo.CodeAttributeStepInfo.Identifier">
+            <summary>
+            Gets or sets the step identifier.
+            This is the unique identifier used to reference the step in DataFlow transitions.
+            </summary>
+        </member>
+        <member name="P:Tempo.CodeAttributeStepInfo.Method">
+            <summary>
+            Gets or sets the method info for the static method to invoke.
+            The method must have signature: static Task&lt;StepResult&gt; MethodName(StepRequest req).
+            </summary>
+        </member>
+        <member name="P:Tempo.CodeAttributeStepInfo.TenantId">
+            <summary>
+            Gets or sets the tenant identifier for multi-tenant isolation.
+            Null indicates the step is available to all tenants.
+            </summary>
+        </member>
+        <member name="P:Tempo.CodeAttributeStepInfo.MaxRuntimeMs">
+            <summary>
+            Gets or sets the maximum runtime in milliseconds.
+            Zero indicates no timeout.
+            </summary>
+        </member>
+        <member name="M:Tempo.CodeAttributeStepInfo.#ctor">
+            <summary>
+            Initializes a new instance of the CodeAttributeStepInfo class.
+            </summary>
+        </member>
+        <member name="T:Tempo.DataFlow">
+            <summary>
+            A data flow is an orchestrated and coordinated set of steps.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.Identifier">
+            <summary>
+            Identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.TenantId">
+            <summary>
+            Tenant identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.Tenant">
+            <summary>
+            Tenant object.  This property is only used in metadata expansion.  Do not use directly.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.Name">
+            <summary>
+            Name.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.TriggerId">
+            <summary>
+            Trigger identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.Trigger">
+            <summary>
+            Trigger object.  This property is only used in metadata expansion.  Do not use directly.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.MaxRuntimeMs">
+            <summary>
+            Maximum runtime in milliseconds.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.StartStepId">
+            <summary>
+            Starting step identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.Steps">
+            <summary>
+            Dictionary of step transitions.  
+            Key is the step identifier.
+            Value is the StepTransition object.
+            </summary>
+        </member>
+        <member name="P:Tempo.DataFlow.CreatedUtc">
+            <summary>
+            Creation timestamp, in UTC.
+            </summary>
+        </member>
+        <member name="M:Tempo.DataFlow.#ctor">
+            <summary>
+            A data flow is an orchestrated and coordinated set of steps.
+            </summary>
+        </member>
+        <member name="M:Tempo.DataFlow.ValidateStartingStep">
+            <summary>
+            Validates that the starting step exists in the steps collection
+            </summary>
+            <returns>True if valid.</returns>
+        </member>
+        <member name="M:Tempo.DataFlow.ValidateStepReferences(System.Collections.Generic.List{System.String}@)">
+            <summary>
+            Validates that all referenced steps in transitions exist
+            </summary>
+            <param name="errors">Output parameter containing validation errors if any</param>
+            <returns>True if valid, false otherwise</returns>
+        </member>
+        <member name="M:Tempo.DataFlow.HasCycles">
+            <summary>
+            Detects if any cycles exist in the flow
+            </summary>
+            <returns>True if cycles exist.</returns>
+        </member>
+        <member name="T:Tempo.Enumeration.EnumerationOrderEnum">
+            <summary>
+            Enumeration order. 
+            </summary>
+        </member>
+        <member name="F:Tempo.Enumeration.EnumerationOrderEnum.IdAscending">
+            <summary>
+            IdAscending.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enumeration.EnumerationOrderEnum.IdDescending">
+            <summary>
+            IdDescending.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enumeration.EnumerationOrderEnum.StartUtcAscending">
+            <summary>
+            StartUtcAscending.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enumeration.EnumerationOrderEnum.StartUtcDescending">
+            <summary>
+            StartUtcDescending.
+            </summary>
+        </member>
+        <member name="T:Tempo.Enumeration.EnumerationRequest">
+            <summary>
+            Object used to request enumeration.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationRequest.TenantId">
+            <summary>
+            Tenant identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationRequest.Ordering">
+            <summary>
+            Order by.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationRequest.MaxResults">
+            <summary>
+            Maximum number of results to retrieve.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationRequest.Skip">
+            <summary>
+            The number of records to skip.
+            </summary>
+        </member>
+        <member name="M:Tempo.Enumeration.EnumerationRequest.#ctor">
+            <summary>
+            Instantiate.
+            </summary>
+        </member>
+        <member name="T:Tempo.Enumeration.EnumerationResult`1">
+            <summary>
+            Object returned as the result of an enumeration.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationResult`1.Success">
+            <summary>
+            Indicates if the statistics operation was successful.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationResult`1.Timestamp">
+            <summary>
+            Start and end timestamps.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationResult`1.MaxResults">
+            <summary>
+            Maximum number of results to retrieve.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationResult`1.EndOfResults">
+            <summary>
+            Boolean indicating end of results.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationResult`1.TotalRecords">
+            <summary>
+            Total number of records.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationResult`1.RecordsRemaining">
+            <summary>
+            Number of candidate records remaining in the enumeration.
+            </summary>
+        </member>
+        <member name="P:Tempo.Enumeration.EnumerationResult`1.Objects">
+            <summary>
+            Objects.
+            </summary>
+        </member>
+        <member name="M:Tempo.Enumeration.EnumerationResult`1.#ctor">
+            <summary>
+            Instantiates the object.
+            </summary>
+        </member>
+        <member name="T:Tempo.Enums.StepResultTypeEnum">
+            <summary>
+            Step result types.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.StepResultTypeEnum.Success">
+            <summary>
+            Successs.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.StepResultTypeEnum.Timeout">
+            <summary>
+            Timeout.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.StepResultTypeEnum.Error">
+            <summary>
+            Error.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.StepResultTypeEnum.Exception">
+            <summary>
+            Exception.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.StepResultTypeEnum.MaxIterationsExceeded">
+            <summary>
+            MaxIterationsExceeded.
+            </summary>
+        </member>
+        <member name="T:Tempo.Enums.StepTypeEnum">
+            <summary>
+            Step types.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.StepTypeEnum.Code">
+            <summary>
+            Code-based step (looked up from StepManager).
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.StepTypeEnum.Rest">
+            <summary>
+            REST API step.
+            </summary>
+        </member>
+        <member name="T:Tempo.Enums.TriggerTypeEnum">
+            <summary>
+            Trigger types.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.TriggerTypeEnum.Http">
+            <summary>
+            HTTP.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.TriggerTypeEnum.RabbitMq">
+            <summary>
+            RabbitMQ.
+            </summary>
+        </member>
+        <member name="F:Tempo.Enums.TriggerTypeEnum.Native">
+            <summary>
+            Native.
+            </summary>
+        </member>
+        <member name="T:Tempo.Logs.Logger">
+            <summary>
+            Logger.
+            </summary>
+        </member>
+        <member name="M:Tempo.Logs.Logger.#ctor">
+            <summary>
+            Logger.
+            </summary>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Log(Tempo.Logs.SeverityEnum,System.String)">
+            <summary>
+            Emit a log message.
+            </summary>
+            <param name="sev">Severity.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Debug(System.String)">
+            <summary>
+            Emit a debug message.
+            </summary>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Info(System.String)">
+            <summary>
+            Emit an informational message.
+            </summary>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Warn(System.String)">
+            <summary>
+            Emit a warning message.
+            </summary>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Error(System.String)">
+            <summary>
+            Emit an error message.
+            </summary>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Alert(System.String)">
+            <summary>
+            Emit an alert message.
+            </summary>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Critical(System.String)">
+            <summary>
+            Emit a critical message.
+            </summary>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Emergency(System.String)">
+            <summary>
+            Emit an emergency message.
+            </summary>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Log(System.String,Tempo.Logs.SeverityEnum,System.String)">
+            <summary>
+            Emit a request-specific log message.
+            </summary>
+            <param name="requestIdentifier">Request identifier.</param>
+            <param name="sev">Severity.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Debug(System.String,System.String)">
+            <summary>
+            Emit a request-specific debug message.
+            </summary>
+            <param name="requestIdentifier">Request identifier.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Info(System.String,System.String)">
+            <summary>
+            Emit a request-specific informational message.
+            </summary>
+            <param name="requestIdentifier">Request identifier.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Warn(System.String,System.String)">
+            <summary>
+            Emit a request-specific warning message.
+            </summary>
+            <param name="requestIdentifier">Request identifier.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Error(System.String,System.String)">
+            <summary>
+            Emit a request-specific error message.
+            </summary>
+            <param name="requestIdentifier">Request identifier.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Alert(System.String,System.String)">
+            <summary>
+            Emit a request-specific alert message.
+            </summary>
+            <param name="requestIdentifier">Request identifier.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Critical(System.String,System.String)">
+            <summary>
+            Emit a request-specific critical message.
+            </summary>
+            <param name="requestIdentifier">Request identifier.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Logs.Logger.Emergency(System.String,System.String)">
+            <summary>
+            Emit a request-specific emergency message.
+            </summary>
+            <param name="requestIdentifier">Request identifier.</param>
+            <param name="msg">Message.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="T:Tempo.Logs.SeverityEnum">
+            <summary>
+            Message severity.
+            </summary>
+        </member>
+        <member name="F:Tempo.Logs.SeverityEnum.Debug">
+            <summary>
+            Debug messages.
+            </summary>
+        </member>
+        <member name="F:Tempo.Logs.SeverityEnum.Info">
+            <summary>
+            Informational messages.
+            </summary>
+        </member>
+        <member name="F:Tempo.Logs.SeverityEnum.Warn">
+            <summary>
+            Warning messages.
+            </summary>
+        </member>
+        <member name="F:Tempo.Logs.SeverityEnum.Error">
+            <summary>
+            Error messages.
+            </summary>
+        </member>
+        <member name="F:Tempo.Logs.SeverityEnum.Alert">
+            <summary>
+            Alert messages.
+            </summary>
+        </member>
+        <member name="F:Tempo.Logs.SeverityEnum.Critical">
+            <summary>
+            Critical messages.
+            </summary>
+        </member>
+        <member name="F:Tempo.Logs.SeverityEnum.Emergency">
+            <summary>
+            Emergency messages.
+            </summary>
+        </member>
+        <member name="T:Tempo.Logs.SyslogLogger">
+            <summary>
+            Syslog logger.
+            </summary>
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.#ctor(System.String,System.Int32,System.String,System.String,System.String,System.Boolean)">
+            <summary>
+            Syslog logger
+            </summary>
+            <param name="serverIp">Syslog server IP.</param>
+            <param name="port">Syslog server port.</param>
+            <param name="logDirectory">Directory for logfiles.</param>
+            <param name="logFilename">Log filename.</param>
+            <param name="dfLogsDirectory">Data flow logs directory.</param>
+            <param name="console">Enable or disable console logging.</param>
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Alert(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Alert(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Critical(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Critical(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Debug(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Debug(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Emergency(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Emergency(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Error(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Error(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Info(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Info(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Log(System.String,Tempo.Logs.SeverityEnum,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Log(Tempo.Logs.SeverityEnum,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Warn(System.String,System.String)">
+            <inheritdoc />
+        </member>
+        <member name="M:Tempo.Logs.SyslogLogger.Warn(System.String)">
+            <inheritdoc />
+        </member>
+        <member name="T:Tempo.Metrics.DataFlowRunDetails">
+            <summary>
+            Data flow run details.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.DataFlowRunDetails.RowId">
+            <summary>
+            Row identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.DataFlowRunDetails.TenantId">
+            <summary>
+            Tenant identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.DataFlowRunDetails.DataFlowId">
+            <summary>
+            Data flow identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.DataFlowRunDetails.RequestId">
+            <summary>
+            Request identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.DataFlowRunDetails.StartUtc">
+            <summary>
+            Start time, in UTC time.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.DataFlowRunDetails.EndUtc">
+            <summary>
+            End time, in UTC time.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.DataFlowRunDetails.TotalMs">
+            <summary>
+            Total runtime in milliseconds.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.DataFlowRunDetails.Result">
+            <summary>
+            Result.
+            </summary>
+        </member>
+        <member name="M:Tempo.Metrics.DataFlowRunDetails.#ctor">
+            <summary>
+            Data flow run details.
+            </summary>
+        </member>
+        <member name="T:Tempo.Metrics.MetricsStore">
+            <summary>
+            Metrics store.
+            </summary>
+        </member>
+        <member name="M:Tempo.Metrics.MetricsStore.#ctor">
+            <summary>
+            Metrics store.
+            </summary>
+        </member>
+        <member name="M:Tempo.Metrics.MetricsStore.WriteDataFlowRun(Tempo.Metrics.DataFlowRunDetails)">
+            <summary>
+            Write data flow run details.
+            </summary>
+            <param name="details">Details.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.MetricsStore.WriteStepRun(Tempo.Metrics.StepRunDetails)">
+            <summary>
+            Write step run details.
+            </summary>
+            <param name="details">Details.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.MetricsStore.GetDataFlowRun(System.String)">
+            <summary>
+            Get data flow run details.
+            </summary>
+            <param name="requestId">Request ID.</param>
+            <returns>Data flow run details.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.MetricsStore.GetDataFlowStepRuns(System.String)">
+            <summary>
+            Get step run details for a given request.
+            </summary>
+            <param name="requestId">Request ID.</param>
+            <returns>List of step run details.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.MetricsStore.EnumerateDataFlowRuns(Tempo.Enumeration.EnumerationRequest,System.Threading.CancellationToken)">
+            <summary>
+            Enumerate data flow runs.
+            </summary>
+            <param name="request">Enumeration request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Enumeration result.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.MetricsStore.EnumerateStepRuns(Tempo.Enumeration.EnumerationRequest,System.Threading.CancellationToken)">
+            <summary>
+            Enumerate step runs.
+            </summary>
+            <param name="request">Enumeration request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Enumeration result.</returns>
+        </member>
+        <member name="T:Tempo.Metrics.SqliteMetricsStore">
+            <summary>
+            Sqlite metrics store.
+            </summary>
+        </member>
+        <member name="M:Tempo.Metrics.SqliteMetricsStore.#ctor(System.String)">
+            <summary>
+            Sqlite metrics store.
+            </summary>
+        </member>
+        <member name="M:Tempo.Metrics.SqliteMetricsStore.WriteDataFlowRun(Tempo.Metrics.DataFlowRunDetails)">
+            <summary>
+            Write data flow run details.
+            </summary>
+            <param name="details">Details.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.SqliteMetricsStore.WriteStepRun(Tempo.Metrics.StepRunDetails)">
+            <summary>
+            Write step run details.
+            </summary>
+            <param name="details">Details.</param>
+            <returns>Task.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.SqliteMetricsStore.GetDataFlowRun(System.String)">
+            <summary>
+            Get data flow run details.
+            </summary>
+            <param name="requestId">Request ID.</param>
+            <returns>Data flow run details.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.SqliteMetricsStore.GetDataFlowStepRuns(System.String)">
+            <summary>
+            Get step run details for a given request.
+            </summary>
+            <param name="requestId">Request ID.</param>
+            <returns>List of step run details.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.SqliteMetricsStore.EnumerateDataFlowRuns(Tempo.Enumeration.EnumerationRequest,System.Threading.CancellationToken)">
+            <summary>
+            Enumerate data flow runs.
+            </summary>
+            <param name="request">Enumeration request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Enumeration result.</returns>
+        </member>
+        <member name="M:Tempo.Metrics.SqliteMetricsStore.EnumerateStepRuns(Tempo.Enumeration.EnumerationRequest,System.Threading.CancellationToken)">
+            <summary>
+            Enumerate step runs.
+            </summary>
+            <param name="request">Enumeration request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Enumeration result.</returns>
+        </member>
+        <member name="T:Tempo.Metrics.StepRunDetails">
+            <summary>
+            Step run details.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.RowId">
+            <summary>
+            Row identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.TenantId">
+            <summary>
+            Tenant identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.DataFlowId">
+            <summary>
+            Data flow identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.StepId">
+            <summary>
+            Step identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.RequestId">
+            <summary>
+            Request identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.NextStepId">
+            <summary>
+            Next step identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.StartUtc">
+            <summary>
+            Start time, in UTC time.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.EndUtc">
+            <summary>
+            End time, in UTC time.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.TotalMs">
+            <summary>
+            Total runtime in milliseconds.
+            </summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.Result">
+            <summary>
+            Result.
+            </summary>
+        </member>
+        <member name="M:Tempo.Metrics.StepRunDetails.#ctor">
+            <summary>
+            Step run details.
+            </summary>
+        </member>
+        <member name="T:Tempo.RestStepConfiguration">
+            <summary>
+            Configuration for REST API step.
+            </summary>
+        </member>
+        <member name="P:Tempo.RestStepConfiguration.Method">
+            <summary>
+            HTTP method (GET, POST, PUT, DELETE, PATCH).
+            </summary>
+        </member>
+        <member name="P:Tempo.RestStepConfiguration.Url">
+            <summary>
+            URL template with optional {tokens} for runtime substitution.
+            </summary>
+        </member>
+        <member name="P:Tempo.RestStepConfiguration.Headers">
+            <summary>
+            Default headers to include in requests.
+            </summary>
+        </member>
+        <member name="P:Tempo.RestStepConfiguration.TimeoutMs">
+            <summary>
+            Timeout in milliseconds (default 30000).
+            </summary>
+        </member>
+        <member name="M:Tempo.RestStepConfiguration.#ctor">
+            <summary>
+            REST step configuration.
+            </summary>
+        </member>
+        <member name="T:Tempo.Runners.CodeAttributeStepRunner">
+            <summary>
+            Step runner for attribute-based code steps (static methods decorated with [StepMethod]).
+            </summary>
+        </member>
+        <member name="M:Tempo.Runners.CodeAttributeStepRunner.#ctor(System.Reflection.MethodInfo,Tempo.Logs.Logger)">
+            <summary>
+            Code attribute step runner.
+            </summary>
+            <param name="method">Static method to invoke.</param>
+            <param name="logger">Logger instance for logging (optional).</param>
+        </member>
+        <member name="M:Tempo.Runners.CodeAttributeStepRunner.ExecuteInternal(Tempo.StepRequest,System.Threading.CancellationToken)">
+            <summary>
+            Execute the step by invoking the static method.
+            </summary>
+            <param name="req">Step request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Step result.</returns>
+        </member>
+        <member name="T:Tempo.Runners.CodeStepRunner">
+            <summary>
+            Step runner for code-based steps (Step instances).
+            </summary>
+        </member>
+        <member name="M:Tempo.Runners.CodeStepRunner.#ctor(Tempo.Step,Tempo.Logs.Logger)">
+            <summary>
+            Code step runner.
+            </summary>
+            <param name="step">Step instance to execute.</param>
+            <param name="logger">Logger instance for logging (optional).</param>
+        </member>
+        <member name="M:Tempo.Runners.CodeStepRunner.ExecuteInternal(Tempo.StepRequest,System.Threading.CancellationToken)">
+            <summary>
+            Execute the code-based step.
+            </summary>
+            <param name="req">Step request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Step result.</returns>
+        </member>
+        <member name="T:Tempo.Runners.DataFlowRunner">
+            <summary>
+            Data flow runner.
+            </summary>
+        </member>
+        <member name="P:Tempo.Runners.DataFlowRunner.MetricsStore">
+            <summary>
+            Metrics store.
+            </summary>
+        </member>
+        <member name="M:Tempo.Runners.DataFlowRunner.#ctor(Tempo.StepManager,Tempo.Logs.Logger)">
+            <summary>
+            Data flow runner.
+            </summary>
+            <param name="stepManager">Step manager.</param>
+            <param name="logger">Logger instance for logging data flow execution (optional).</param>
+        </member>
+        <member name="M:Tempo.Runners.DataFlowRunner.Run(Tempo.DataFlow,Tempo.StepRequest,System.Threading.CancellationToken)">
+            <summary>
+            Run a data flow.
+            </summary>
+            <param name="flow">Data flow.</param>
+            <param name="req">Step request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Step result.</returns>
+        </member>
+        <member name="M:Tempo.Runners.DataFlowRunner.ResolveStepRunner(Tempo.StepTransition,System.String,System.String)">
+            <summary>
+            Resolve a step runner from a step transition.
+            </summary>
+            <param name="stepTransition">Step transition.</param>
+            <param name="stepId">Step identifier.</param>
+            <param name="tenantId">Tenant identifier.</param>
+            <returns>StepRunner instance.</returns>
+        </member>
+        <member name="M:Tempo.Runners.DataFlowRunner.ProcessStepResult(Tempo.StepResult,Tempo.StepTransition,Tempo.StepRequest,Tempo.Metrics.StepRunDetails,System.Boolean)">
+            <summary>
+            Process step result, update request for next step, and update step run details.
+            </summary>
+            <param name="result">Step result.</param>
+            <param name="stepTransition">Step transition.</param>
+            <param name="req">Step request to update.</param>
+            <param name="stepRunDetails">Step run details to update.</param>
+            <param name="isException">Whether this is an exception scenario.</param>
+            <returns>Next step identifier.</returns>
+        </member>
+        <member name="M:Tempo.Runners.DataFlowRunner.WriteStepRunDetailsAsync(Tempo.Metrics.StepRunDetails)">
+            <summary>
+            Write step run details to metrics store if configured.
+            </summary>
+            <param name="stepRunDetails">Step run details.</param>
+        </member>
+        <member name="T:Tempo.Runners.RestStepRunner">
+            <summary>
+            Step runner for REST API calls using RestWrapper.
+            </summary>
+        </member>
+        <member name="M:Tempo.Runners.RestStepRunner.#ctor(System.Net.Http.HttpMethod,System.String,System.Collections.Specialized.NameValueCollection,System.Int32,Tempo.Logs.Logger)">
+            <summary>
+            REST step runner.
+            </summary>
+            <param name="httpMethod">HTTP method (GET, POST, PUT, DELETE, PATCH).</param>
+            <param name="urlTemplate">URL template with optional {tokens} for runtime substitution.</param>
+            <param name="defaultHeaders">Default headers to include in requests.</param>
+            <param name="timeoutMs">Timeout in milliseconds (default 30000).</param>
+            <param name="logger">Logger instance for logging (optional).</param>
+        </member>
+        <member name="M:Tempo.Runners.RestStepRunner.FromConfig(Tempo.RestStepConfiguration,Tempo.Logs.Logger)">
+            <summary>
+            Create REST step runner from REST step configuration.
+            </summary>
+            <param name="config">REST step configuration.</param>
+            <param name="logger">Logger instance for logging (optional).</param>
+            <returns>RestStepRunner instance.</returns>
+        </member>
+        <member name="M:Tempo.Runners.RestStepRunner.ExecuteInternal(Tempo.StepRequest,System.Threading.CancellationToken)">
+            <summary>
+            Execute the REST API call.
+            </summary>
+            <param name="req">Step request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Step result.</returns>
+        </member>
+        <member name="M:Tempo.Runners.RestStepRunner.BuildUrl(System.String,System.Collections.Generic.Dictionary{System.String,System.String})">
+            <summary>
+            Build URL from template by substituting tokens with values.
+            </summary>
+            <param name="template">URL template with {token} placeholders.</param>
+            <param name="parameters">Parameter values.</param>
+            <returns>Final URL.</returns>
+        </member>
+        <member name="M:Tempo.Runners.RestStepRunner.MapStatusCodeToResult(System.Int32)">
+            <summary>
+            Map HTTP status code to StepResultTypeEnum.
+            </summary>
+            <param name="statusCode">HTTP status code.</param>
+            <returns>Step result type.</returns>
+        </member>
+        <member name="T:Tempo.Runners.StepRunner">
+            <summary>
+            Abstract base class for step runners.
+            </summary>
+        </member>
+        <member name="P:Tempo.Runners.StepRunner.Logger">
+            <summary>
+            Logger instance for logging step execution.
+            </summary>
+        </member>
+        <member name="M:Tempo.Runners.StepRunner.Execute(System.String,Tempo.StepRequest,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Execute a step.
+            </summary>
+            <param name="stepId">Step identifier (for error messages).</param>
+            <param name="req">Step request.</param>
+            <param name="maxRuntimeMs">Maximum runtime in milliseconds (0 for no timeout).</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Step result.</returns>
+        </member>
+        <member name="M:Tempo.Runners.StepRunner.ExecuteWithTimeout(System.String,Tempo.StepRequest,System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            Execute step with timeout.
+            </summary>
+            <param name="stepId">Step identifier.</param>
+            <param name="req">Step request.</param>
+            <param name="timeoutMs">Timeout in milliseconds.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Step result.</returns>
+        </member>
+        <member name="M:Tempo.Runners.StepRunner.ExecuteInternal(Tempo.StepRequest,System.Threading.CancellationToken)">
+            <summary>
+            Internal execution method to be implemented by derived classes.
+            </summary>
+            <param name="req">Step request.</param>
+            <param name="token">Cancellation token.</param>
+            <returns>Step result.</returns>
+        </member>
+        <member name="T:Tempo.Step">
+            <summary>
+            A step is an individual unit of work within a data flow.  A step can be re-used across data flows.
+            </summary>
+        </member>
+        <member name="P:Tempo.Step.Identifier">
+            <summary>
+            Identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Step.TenantId">
+            <summary>
+            Tenant identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Step.Tenant">
+            <summary>
+            Tenant object.  This property is only used in metadata expansion.  Do not use directly.
+            </summary>
+        </member>
+        <member name="P:Tempo.Step.Name">
+            <summary>
+            Name.
+            </summary>
+        </member>
+        <member name="P:Tempo.Step.MaxRuntimeMs">
+            <summary>
+            Maximum runtime in milliseconds.
+            </summary>
+        </member>
+        <member name="P:Tempo.Step.CreatedUtc">
+            <summary>
+            Creation timestamp, in UTC.
+            </summary>
+        </member>
+        <member name="M:Tempo.Step.#ctor">
+            <summary>
+            A step is an individual unit of work within a data flow.  A step can be re-used across data flows.
+            </summary>
+        </member>
+        <member name="M:Tempo.Step.Run(Tempo.StepRequest)">
+            <summary>
+            Run this step.
+            </summary>
+            <param name="req">Step request.</param>
+            <returns>Step result.</returns>
+        </member>
+        <member name="T:Tempo.StepManager">
+            <summary>
+            Manages both class-based steps (Step instances) and attribute-based code steps (methods decorated with [StepMethod]).
+            Provides thread-safe storage, retrieval, and assembly scanning capabilities for step registration.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepManager.Steps">
+            <summary>
+            Gets or sets the collection of registered class-based steps.
+            Setting this property replaces all existing steps with the provided collection.
+            </summary>
+        </member>
+        <member name="M:Tempo.StepManager.#ctor(Tempo.Logs.Logger)">
+            <summary>
+            Initializes a new instance of the StepManager class.
+            </summary>
+            <param name="logger">Logger instance for logging (optional).</param>
+        </member>
+        <member name="M:Tempo.StepManager.All(System.String)">
+            <summary>
+            Retrieve all steps.
+            </summary>
+            <param name="tenantId">Tenant identifier.</param>
+            <returns>List.</returns>
+        </member>
+        <member name="M:Tempo.StepManager.GetByIdentifier(System.String,System.String)">
+            <summary>
+            Retrieve by identifier.
+            </summary>
+            <param name="id">Identifier.</param>
+            <param name="tenantId">Tenant identifier.</param>
+            <returns>Step.</returns>
+        </member>
+        <member name="M:Tempo.StepManager.Add(Tempo.Step)">
+            <summary>
+            Add a step.
+            </summary>
+            <param name="step">Step.</param>
+        </member>
+        <member name="M:Tempo.StepManager.RegisterMethod(System.String,System.Reflection.MethodInfo,System.String,System.Int32)">
+            <summary>
+            Register an attribute-based code step (method with [StepMethod] attribute).
+            </summary>
+            <param name="identifier">Step identifier.</param>
+            <param name="method">Static method to invoke.</param>
+            <param name="tenantId">Tenant identifier (optional).</param>
+            <param name="maxRuntimeMs">Maximum runtime in milliseconds.</param>
+        </member>
+        <member name="M:Tempo.StepManager.ScanAssembly(System.Reflection.Assembly,System.String)">
+            <summary>
+            Scan an assembly for methods decorated with [StepMethod] and register them.
+            </summary>
+            <param name="assembly">Assembly to scan.</param>
+            <param name="defaultTenantId">Default tenant ID to use when attribute doesn't specify one.</param>
+            <returns>Number of methods registered.</returns>
+        </member>
+        <member name="M:Tempo.StepManager.ScanCallingAssembly(System.String)">
+            <summary>
+            Scan the calling assembly for methods decorated with [StepMethod] and register them.
+            </summary>
+            <param name="defaultTenantId">Default tenant ID.</param>
+            <returns>Number of methods registered.</returns>
+        </member>
+        <member name="M:Tempo.StepManager.ScanEntryAssembly(System.String)">
+            <summary>
+            Scan the entry assembly (main program) for methods decorated with [StepMethod] and register them.
+            </summary>
+            <param name="defaultTenantId">Default tenant ID.</param>
+            <returns>Number of methods registered.</returns>
+        </member>
+        <member name="M:Tempo.StepManager.GetStepRunner(System.String,System.String)">
+            <summary>
+            Get a step runner for the specified identifier and tenant.
+            Checks both regular steps and attribute-based method steps.
+            </summary>
+            <param name="identifier">Step identifier.</param>
+            <param name="tenantId">Tenant identifier (optional).</param>
+            <returns>StepRunner, or null if not found.</returns>
+        </member>
+        <member name="M:Tempo.StepManager.GetMaxRuntimeMs(System.String,System.String)">
+            <summary>
+            Get max runtime for a step (works for both regular and attribute-based steps).
+            </summary>
+            <param name="identifier">Step identifier.</param>
+            <param name="tenantId">Tenant identifier (optional).</param>
+            <returns>Max runtime in milliseconds, or 0 if not found or no timeout.</returns>
+        </member>
+        <member name="T:Tempo.StepMethodAttribute">
+            <summary>
+            Attribute to mark a static method as a step.
+            The method must have signature: static Task&lt;StepResult&gt; MethodName(StepRequest req)
+            </summary>
+        </member>
+        <member name="P:Tempo.StepMethodAttribute.Identifier">
+            <summary>
+            Step identifier used to reference this step in DataFlows.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepMethodAttribute.TenantId">
+            <summary>
+            Tenant identifier for multi-tenant isolation.
+            If null, the step is available to all tenants.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepMethodAttribute.MaxRuntimeMs">
+            <summary>
+            Maximum runtime in milliseconds (0 for no timeout).
+            </summary>
+        </member>
+        <member name="M:Tempo.StepMethodAttribute.#ctor(System.String)">
+            <summary>
+            Step method attribute.
+            </summary>
+            <param name="identifier">Step identifier.</param>
+        </member>
+        <member name="T:Tempo.StepRequest">
+            <summary>
+            Step request.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepRequest.DataFlowId">
+            <summary>
+            Data flow identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepRequest.RequestId">
+            <summary>
+            Request identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepRequest.Data">
+            <summary>
+            Request data.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepRequest.Metadata">
+            <summary>
+            Metadata.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepRequest.PreviousResult">
+            <summary>
+            Result type from the previous step in the data flow.
+            Null if this is the first step.
+            </summary>
+        </member>
+        <member name="M:Tempo.StepRequest.#ctor">
+            <summary>
+            Step request.
+            </summary>
+        </member>
+        <member name="T:Tempo.StepResult">
+            <summary>
+            Step result.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.DataFlowId">
+            <summary>
+            Data flow identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.RequestId">
+            <summary>
+            Request identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.Result">
+            <summary>
+            Step result.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.Data">
+            <summary>
+            Request data.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.Exception">
+            <summary>
+            Exception data.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.Metadata">
+            <summary>
+            Metadata.
+            </summary>
+        </member>
+        <member name="M:Tempo.StepResult.#ctor">
+            <summary>
+            Step result.
+            </summary>
+        </member>
+        <member name="T:Tempo.StepTransition">
+            <summary>
+            Step transition.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepTransition.Name">
+            <summary>
+            Name of the step transition.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepTransition.OnSuccess">
+            <summary>
+            Step to invoke on success.  
+            Use null to terminate the data flow.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepTransition.OnFailure">
+            <summary>
+            Step to invoke on failure.
+            Use null to terminate the data flow.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepTransition.OnException">
+            <summary>
+            Step to invoke on exception.
+            Use null to terminate the data flow.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepTransition.MaxTransitions">
+            <summary>
+            Maximum number of times this transition can be used.
+            Set to 0 to allow unlimited transitions.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepTransition.StepType">
+            <summary>
+            Step type for inline steps.
+            When null, the step is looked up from StepManager by Name (code-based step).
+            When set, the step is created dynamically using the corresponding configuration property.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepTransition.Rest">
+            <summary>
+            REST API step configuration (when StepType is "rest").
+            </summary>
+        </member>
+        <member name="M:Tempo.StepTransition.#ctor">
+            <summary>
+            Step transition.
+            </summary>
+        </member>
+        <member name="T:Tempo.Tenant">
+            <summary>
+            A tenant is a collection of users and dataflows that are isolated from other tenants within Tempo.
+            </summary>
+        </member>
+        <member name="P:Tempo.Tenant.Identifier">
+            <summary>
+            Identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Tenant.Name">
+            <summary>
+            Name.
+            </summary>
+        </member>
+        <member name="P:Tempo.Tenant.CreatedUtc">
+            <summary>
+            Creation timestamp, in UTC.
+            </summary>
+        </member>
+        <member name="M:Tempo.Tenant.#ctor">
+            <summary>
+            A tenant is a collection of users and dataflows that are isolated from other tenants within Tempo.
+            </summary>
+        </member>
+        <member name="T:Tempo.Triggers.HttpTrigger">
+            <summary>
+            HTTP trigger.
+            </summary>
+        </member>
+        <member name="P:Tempo.Triggers.HttpTrigger.Method">
+            <summary>
+            HTTP method.
+            </summary>
+        </member>
+        <member name="P:Tempo.Triggers.HttpTrigger.Uri">
+            <summary>
+            URI.
+            </summary>
+        </member>
+        <member name="M:Tempo.Triggers.HttpTrigger.#ctor">
+            <summary>
+            HTTP trigger.
+            </summary>
+        </member>
+        <member name="T:Tempo.Triggers.Trigger">
+            <summary>
+            Trigger.
+            </summary>
+        </member>
+        <member name="P:Tempo.Triggers.Trigger.Identifier">
+            <summary>
+            Identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.Triggers.Trigger.Name">
+            <summary>
+            Name.
+            </summary>
+        </member>
+        <member name="P:Tempo.Triggers.Trigger.Type">
+            <summary>
+            Trigger type.
+            </summary>
+        </member>
+        <member name="P:Tempo.Triggers.Trigger.CreatedUtc">
+            <summary>
+            Creation timestamp, in UTC.
+            </summary>
+        </member>
+        <member name="M:Tempo.Triggers.Trigger.#ctor">
+            <summary>
+            Trigger.
+            </summary>
+        </member>
+    </members>
+</doc>
