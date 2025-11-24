@@ -4,6 +4,10 @@
 
 # Tempo
 
+[![NuGet](https://img.shields.io/nuget/v/Tempo.svg)](https://www.nuget.org/packages/Tempo/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![.NET](https://img.shields.io/badge/.NET-8.0-blue.svg)](https://dotnet.microsoft.com/download/dotnet/8.0)
+
 Tempo is a .NET 8 library for orchestrating data flows through coordinated steps. It implements a flexible workflow engine with multi-tenant support, configurable step transitions, and multiple execution patterns.
 
 ## Features
