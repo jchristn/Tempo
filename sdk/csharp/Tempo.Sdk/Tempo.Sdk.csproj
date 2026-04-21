@@ -7,7 +7,7 @@
     <NoWarn>1591</NoWarn>
     <AssemblyName>Tempo.Sdk</AssemblyName>
     <RootNamespace>Tempo.Sdk</RootNamespace>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <PackageId>Tempo.Sdk</PackageId>
     <Authors>Tempo</Authors>
     <Description>Tempo protocol v1 SDK for .NET artifact step handlers.</Description>

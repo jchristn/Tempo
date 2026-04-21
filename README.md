@@ -7,6 +7,7 @@
 v0.2.0
 
 [![NuGet](https://img.shields.io/nuget/v/Tempo.svg)](https://www.nuget.org/packages/Tempo/)
+[![NuGet Tempo.Sdk](https://img.shields.io/nuget/v/Tempo.Sdk.svg)](https://www.nuget.org/packages/Tempo.Sdk/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET](https://img.shields.io/badge/.NET-10.0-blue.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
 
@@ -245,7 +246,7 @@ publish-nuget.bat YOUR_NUGET_API_KEY
 
 That script packs and pushes:
 
-- `Tempo.Core`
+- `Tempo`
 - `Tempo.Sdk`
 - their matching `.snupkg` symbol packages
 

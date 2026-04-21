@@ -21,7 +21,7 @@ All notable changes to Tempo are documented in this file.
   - `docker/compose.yaml`
   - per-component Dockerfiles
   - root image build scripts for server, dashboard, and MCP
-- `publish-nuget.bat` for `Tempo.Core` and the C# SDK, including symbol package publishing
+- `publish-nuget.bat` for `Tempo` and the C# SDK, including symbol package publishing
 
 ### Changed
 

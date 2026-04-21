@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>1591;CS8618</NoWarn>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Description>Core contracts, models, and services for Tempo workflow orchestration.</Description>
     <PackageProjectUrl>https://github.com/jchristn/tempo</PackageProjectUrl>
     <RepositoryUrl>https://github.com/jchristn/tempo</RepositoryUrl>
