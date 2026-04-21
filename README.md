@@ -266,6 +266,24 @@ That script packs and pushes:
 | `docker` | Compose file and container config |
 | `docs` | Focused operator and developer guides |
 
+## Technology Stack
+
+| Technology | Role in Tempo |
+| --- | --- |
+| [.NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) | Primary runtime for `Tempo`, `Tempo.Core`, `Tempo.Server`, `Tempo.McpServer`, and the server-side test projects |
+| [Watson](https://www.nuget.org/packages/Watson/) | Embedded web server used by `Tempo.Server` for HTTP routing, OpenAPI exposure, and trigger/API handling |
+| [Voltaic](https://www.nuget.org/packages/Voltaic/) | MCP scaffolding and transport layer used by `Tempo.McpServer` |
+| [React 19](https://react.dev/) | Component model for the dashboard UI |
+| [React Router 7](https://reactrouter.com/) | Client-side routing for dashboard workspaces and navigation |
+| [Vite 6](https://vite.dev/) | Dashboard development server and production build toolchain |
+| [Microsoft.Data.Sqlite](https://www.nuget.org/packages/Microsoft.Data.Sqlite/) | SQLite persistence provider for local and lightweight Tempo deployments |
+| [Microsoft.Data.SqlClient](https://www.nuget.org/packages/Microsoft.Data.SqlClient/) | SQL Server persistence provider |
+| [Npgsql](https://www.nuget.org/packages/Npgsql/) | PostgreSQL persistence provider |
+| [MySqlConnector](https://www.nuget.org/packages/MySqlConnector/) | MySQL persistence provider |
+| [PrettyId](https://www.nuget.org/packages/PrettyId/) | K-sortable ID generation for Tempo resource identifiers |
+| [RestWrapper](https://www.nuget.org/packages/RestWrapper/) | Outbound HTTP execution support for REST-backed steps |
+| [SyslogLogging](https://www.nuget.org/packages/SyslogLogging/) | Structured logging used across the server-side projects |
+
 ## Contributing
 
 Follow the coding and review rules in [CLAUDE.md](CLAUDE.md). Keep README, changelog, API docs, and the Postman collection in sync with code changes.
