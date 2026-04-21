@@ -8,7 +8,6 @@ namespace Tempo.Metrics
     using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.Data.Sqlite;
-    using PrettyId;
     using Tempo.Enumeration;
     using Tempo.Enums;
 
@@ -23,7 +22,6 @@ namespace Tempo.Metrics
     public class SqliteMetricsStore : MetricsStore
     {
         private string _DatabaseFilename;
-        private IdGenerator _IdGenerator = new IdGenerator();
         private const string TimestampFormat = "yyyy-MM-dd HH:mm:ss.ffffffZ";
 
         /// <summary>
@@ -48,7 +46,7 @@ namespace Tempo.Metrics
             // Generate RowId if not already set
             if (string.IsNullOrEmpty(details.RowId))
             {
-                details.RowId = _IdGenerator.GenerateKSortable("id", 64);
+                details.RowId = Tempo.TempoIds.GenerateMetricRowId();
             }
 
             using (var connection = new SqliteConnection($"Data Source={_DatabaseFilename}"))
@@ -88,7 +86,7 @@ namespace Tempo.Metrics
             // Generate RowId if not already set
             if (string.IsNullOrEmpty(details.RowId))
             {
-                details.RowId = _IdGenerator.GenerateKSortable("id", 64);
+                details.RowId = Tempo.TempoIds.GenerateMetricRowId();
             }
 
             using (var connection = new SqliteConnection($"Data Source={_DatabaseFilename}"))

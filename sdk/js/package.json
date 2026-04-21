@@ -1,0 +1,11 @@
+{
+  "name": "tempo-sdk",
+  "version": "0.1.0",
+  "description": "Tempo protocol v1 SDK for JavaScript artifact step handlers",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node test-app/test.js"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoWarn>1591;CS8618</NoWarn>
+    <Version>0.2.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tempo.Core\Tempo.Core.csproj" />
+    <ProjectReference Include="..\Tempo.Server\Tempo.Server.csproj" />
+    <ProjectReference Include="..\Test.ArtifactFixture\Test.ArtifactFixture.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Tempo.Sample.DotnetProcess\Tempo.Sample.DotnetProcess.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Touchstone.Core" Version="0.1.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="ProtocolGoldenFiles\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

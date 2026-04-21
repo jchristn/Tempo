@@ -4,6 +4,54 @@
         <name>Tempo</name>
     </assembly>
     <members>
+        <member name="T:Tempo.BuiltinStepRegistration">
+            <summary>Metadata describing a registered in-process built-in step.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.ExecutionKey">
+            <summary>Stable execution key.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.TenantId">
+            <summary>Tenant identifier, or null for global registrations.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.SourceKind">
+            <summary>Registration source kind.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.DisplayName">
+            <summary>User-facing display name.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.DeclaringType">
+            <summary>Declaring type full name.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.MethodName">
+            <summary>Method name when the source kind is <see cref="F:Tempo.BuiltinStepSourceKind.Method"/>.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.AssemblyName">
+            <summary>Assembly simple name.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.AssemblyVersion">
+            <summary>Assembly version string.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.SignatureHash">
+            <summary>Deterministic hash of the executable signature.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.MaxRuntimeMs">
+            <summary>Maximum runtime in milliseconds.</summary>
+        </member>
+        <member name="P:Tempo.BuiltinStepRegistration.IsGlobal">
+            <summary>True when the registration is globally available.</summary>
+        </member>
+        <member name="M:Tempo.BuiltinStepRegistration.Clone">
+            <summary>Create a detached copy.</summary>
+        </member>
+        <member name="T:Tempo.BuiltinStepSourceKind">
+            <summary>Source kind for an in-process built-in step registration.</summary>
+        </member>
+        <member name="F:Tempo.BuiltinStepSourceKind.Class">
+            <summary>Class-based <see cref="T:Tempo.Step"/> registration.</summary>
+        </member>
+        <member name="F:Tempo.BuiltinStepSourceKind.Method">
+            <summary>Static method registration.</summary>
+        </member>
         <member name="T:Tempo.CodeAttributeStepInfo">
             <summary>
             Information about an attribute-based code step (static method decorated with [StepMethod]).
@@ -81,13 +129,13 @@
         </member>
         <member name="P:Tempo.DataFlow.StartStepId">
             <summary>
-            Starting step identifier.
+            Stable execution key of the starting step.
             </summary>
         </member>
         <member name="P:Tempo.DataFlow.Steps">
             <summary>
-            Dictionary of step transitions.  
-            Key is the step identifier.
+            Dictionary of step transitions.
+            Key is the stable step execution key.
             Value is the StepTransition object.
             </summary>
         </member>
@@ -103,13 +151,13 @@
         </member>
         <member name="M:Tempo.DataFlow.ValidateStartingStep">
             <summary>
-            Validates that the starting step exists in the steps collection
+            Validates that the starting execution key exists in the steps collection.
             </summary>
             <returns>True if valid.</returns>
         </member>
         <member name="M:Tempo.DataFlow.ValidateStepReferences(System.Collections.Generic.List{System.String}@)">
             <summary>
-            Validates that all referenced steps in transitions exist
+            Validates that all referenced execution keys in transitions exist.
             </summary>
             <param name="errors">Output parameter containing validation errors if any</param>
             <returns>True if valid, false otherwise</returns>
@@ -734,10 +782,92 @@
             Result.
             </summary>
         </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.ExceptionMessage">
+            <summary>Exception or diagnostic text.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.ExecutionState">
+            <summary>Execution lifecycle state.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.ArtifactId">
+            <summary>Artifact identifier executed by this step run.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.ArtifactVersionId">
+            <summary>Resolved artifact version row identifier.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.ArtifactVersion">
+            <summary>Resolved artifact version label.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.ArtifactSha256">
+            <summary>Resolved artifact SHA-256.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.ManifestEntrypoint">
+            <summary>Manifest entrypoint name.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.CapacityQueuedUtc">
+            <summary>UTC time the step began waiting for external runtime capacity.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.CapacityAcquiredUtc">
+            <summary>UTC time the step acquired external runtime capacity.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.CapacityWaitMs">
+            <summary>External runtime capacity wait duration in milliseconds.</summary>
+        </member>
+        <member name="P:Tempo.Metrics.StepRunDetails.ProtocolVersion">
+            <summary>
+            Negotiated step protocol version used for this step run.
+            </summary>
+        </member>
         <member name="M:Tempo.Metrics.StepRunDetails.#ctor">
             <summary>
             Step run details.
             </summary>
+        </member>
+        <member name="T:Tempo.Protocol.ITempoStepHandler">
+            <summary>Handler contract for .NET process-backed Tempo step artifacts.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.ITempoStepHandler.RunAsync(Tempo.StepRequest,System.Threading.CancellationToken)">
+            <summary>Handle a single Tempo step request.</summary>
+        </member>
+        <member name="T:Tempo.Protocol.ProtocolVersions">
+            <summary>
+            Public step protocol version constants and compatibility checks.
+            </summary>
+        </member>
+        <member name="F:Tempo.Protocol.ProtocolVersions.V1">
+            <summary>Version 1.0 protocol.</summary>
+        </member>
+        <member name="F:Tempo.Protocol.ProtocolVersions.Current">
+            <summary>Current protocol version emitted by this host.</summary>
+        </member>
+        <member name="F:Tempo.Protocol.ProtocolVersions.ProtocolVersionEnvironmentVariable">
+            <summary>Environment variable containing the negotiated protocol version for a launched external process.</summary>
+        </member>
+        <member name="F:Tempo.Protocol.ProtocolVersions.SupportedProtocolVersionsEnvironmentVariable">
+            <summary>Environment variable containing comma-separated protocol versions supported by the launching server.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.ProtocolVersions.Supported">
+            <summary>Supported protocol versions.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.ProtocolVersions.IsSupported(System.String)">
+            <summary>Return true when <paramref name="version"/> is supported. Empty values default to current.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.ProtocolVersions.Normalize(System.String)">
+            <summary>Return the canonical version string or throw for unsupported versions.</summary>
+        </member>
+        <member name="T:Tempo.Protocol.TempoStepHost">
+            <summary>Minimal stdin/stdout host for .NET process-backed Tempo step artifacts.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHost.RunAsync(Tempo.Protocol.ITempoStepHandler,System.Threading.CancellationToken)">
+            <summary>Run a handler by reading one <see cref="T:Tempo.StepRequest"/> from stdin and writing one <see cref="T:Tempo.StepResult"/> to stdout.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHost.Success(Tempo.StepRequest,System.Object,System.Object)">
+            <summary>Create a successful result correlated to the request.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHost.Error(Tempo.StepRequest,System.Object,System.Object)">
+            <summary>Create an error result correlated to the request.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHost.Exception(Tempo.StepRequest,System.Exception,System.Object)">
+            <summary>Create an exception result correlated to the request.</summary>
         </member>
         <member name="T:Tempo.RestStepConfiguration">
             <summary>
@@ -927,6 +1057,14 @@
             <param name="token">Cancellation token.</param>
             <returns>Step result.</returns>
         </member>
+        <member name="M:Tempo.Runners.StepRunner.NormalizeResult(Tempo.StepResult,Tempo.StepRequest)">
+            <summary>
+            Normalize protocol and correlation fields after runner execution.
+            </summary>
+            <param name="result">Step result.</param>
+            <param name="req">Step request.</param>
+            <returns>Normalized step result.</returns>
+        </member>
         <member name="M:Tempo.Runners.StepRunner.ExecuteWithTimeout(System.String,Tempo.StepRequest,System.Int32,System.Threading.CancellationToken)">
             <summary>
             Execute step with timeout.
@@ -1017,11 +1155,27 @@
             <param name="tenantId">Tenant identifier.</param>
             <returns>List.</returns>
         </member>
+        <member name="M:Tempo.StepManager.Registrations(System.String,System.String)">
+            <summary>
+            Retrieve built-in registration metadata.
+            </summary>
+            <param name="executionKey">Optional execution key filter.</param>
+            <param name="tenantId">Optional tenant scope filter. Global registrations are included.</param>
+            <returns>Registered built-in step metadata.</returns>
+        </member>
+        <member name="M:Tempo.StepManager.GetByExecutionKey(System.String,System.String)">
+            <summary>
+            Retrieve by execution key.
+            </summary>
+            <param name="executionKey">Execution key.</param>
+            <param name="tenantId">Tenant identifier.</param>
+            <returns>Step.</returns>
+        </member>
         <member name="M:Tempo.StepManager.GetByIdentifier(System.String,System.String)">
             <summary>
-            Retrieve by identifier.
+            Retrieve by identifier. Compatibility shim for callers that still use legacy terminology.
             </summary>
-            <param name="id">Identifier.</param>
+            <param name="id">Execution key.</param>
             <param name="tenantId">Tenant identifier.</param>
             <returns>Step.</returns>
         </member>
@@ -1064,16 +1218,16 @@
         </member>
         <member name="M:Tempo.StepManager.GetStepRunner(System.String,System.String)">
             <summary>
-            Get a step runner for the specified identifier and tenant.
+            Get a step runner for the specified execution key and tenant.
             Checks both regular steps and attribute-based method steps.
             </summary>
-            <param name="identifier">Step identifier.</param>
+            <param name="identifier">Step execution key.</param>
             <param name="tenantId">Tenant identifier (optional).</param>
             <returns>StepRunner, or null if not found.</returns>
         </member>
         <member name="M:Tempo.StepManager.GetMaxRuntimeMs(System.String,System.String)">
             <summary>
-            Get max runtime for a step (works for both regular and attribute-based steps).
+            Get max runtime for a step execution key (works for both regular and attribute-based steps).
             </summary>
             <param name="identifier">Step identifier.</param>
             <param name="tenantId">Tenant identifier (optional).</param>
@@ -1112,9 +1266,29 @@
             Step request.
             </summary>
         </member>
+        <member name="P:Tempo.StepRequest.ProtocolVersion">
+            <summary>
+            Tempo step protocol version.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepRequest.TenantId">
+            <summary>
+            Tenant identifier, when the host is running in a tenant-scoped context.
+            </summary>
+        </member>
         <member name="P:Tempo.StepRequest.DataFlowId">
             <summary>
             Data flow identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepRequest.FlowRunId">
+            <summary>
+            Flow run identifier, when the request is tied to a persisted flow run.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepRequest.StepRunId">
+            <summary>
+            Step run identifier, when the host pre-allocates a persisted step run.
             </summary>
         </member>
         <member name="P:Tempo.StepRequest.RequestId">
@@ -1148,9 +1322,29 @@
             Step result.
             </summary>
         </member>
+        <member name="P:Tempo.StepResult.ProtocolVersion">
+            <summary>
+            Tempo step protocol version.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.TenantId">
+            <summary>
+            Tenant identifier, when the host is running in a tenant-scoped context.
+            </summary>
+        </member>
         <member name="P:Tempo.StepResult.DataFlowId">
             <summary>
             Data flow identifier.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.FlowRunId">
+            <summary>
+            Flow run identifier, when the result is tied to a persisted flow run.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.StepRunId">
+            <summary>
+            Step run identifier, when the host pre-allocates a persisted step run.
             </summary>
         </member>
         <member name="P:Tempo.StepResult.RequestId">
@@ -1171,6 +1365,11 @@
         <member name="P:Tempo.StepResult.Exception">
             <summary>
             Exception data.
+            </summary>
+        </member>
+        <member name="P:Tempo.StepResult.ExceptionMessage">
+            <summary>
+            Protocol-safe exception text.
             </summary>
         </member>
         <member name="P:Tempo.StepResult.Metadata">
@@ -1220,7 +1419,7 @@
         <member name="P:Tempo.StepTransition.StepType">
             <summary>
             Step type for inline steps.
-            When null, the step is looked up from StepManager by Name (code-based step).
+            When null, the transition dictionary key is used as the StepManager execution key.
             When set, the step is created dynamically using the corresponding configuration property.
             </summary>
         </member>
@@ -1232,6 +1431,11 @@
         <member name="M:Tempo.StepTransition.#ctor">
             <summary>
             Step transition.
+            </summary>
+        </member>
+        <member name="T:Tempo.TempoIds">
+            <summary>
+            Generates Tempo identifiers in the form prefix_timestamp_random at a total length of 32 characters.
             </summary>
         </member>
         <member name="T:Tempo.Tenant">

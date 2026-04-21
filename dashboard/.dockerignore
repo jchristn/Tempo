@@ -1,0 +1,26 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Dependencies and build outputs
+node_modules
+dist
+coverage
+
+# Logs and temp files
+*.log
+tmp
+temp
+
+# Editor state
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

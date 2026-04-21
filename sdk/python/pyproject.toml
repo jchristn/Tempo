@@ -1,0 +1,9 @@
+[project]
+name = "tempo-sdk"
+version = "0.1.0"
+description = "Tempo protocol v1 SDK for Python artifact step handlers"
+requires-python = ">=3.10"
+authors = [{ name = "Tempo" }]
+
+[tool.setuptools]
+packages = ["tempo_sdk"]

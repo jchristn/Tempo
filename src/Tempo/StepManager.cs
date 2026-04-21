@@ -5,6 +5,7 @@
     using System.Collections.Generic;
     using System.Linq;
     using System.Reflection;
+    using System.Security.Cryptography;
     using System.Text;
     using System.Threading.Tasks;
     using Tempo.Logs;
@@ -84,22 +85,52 @@
         }
 
         /// <summary>
-        /// Retrieve by identifier.
+        /// Retrieve built-in registration metadata.
         /// </summary>
-        /// <param name="id">Identifier.</param>
+        /// <param name="executionKey">Optional execution key filter.</param>
+        /// <param name="tenantId">Optional tenant scope filter. Global registrations are included.</param>
+        /// <returns>Registered built-in step metadata.</returns>
+        public List<BuiltinStepRegistration> Registrations(string executionKey = null, string tenantId = null)
+        {
+            lock (_Lock)
+            {
+                List<BuiltinStepRegistration> registrations = new List<BuiltinStepRegistration>();
+
+                foreach (Step step in _Steps.Values)
+                {
+                    if (!MatchesExecutionKey(step.Identifier, executionKey)) continue;
+                    if (!AppliesToTenant(step.TenantId, tenantId)) continue;
+                    registrations.Add(BuildClassRegistration(step));
+                }
+
+                foreach (CodeAttributeStepInfo info in _AttributeMethods.Values)
+                {
+                    if (!MatchesExecutionKey(info.Identifier, executionKey)) continue;
+                    if (!AppliesToTenant(info.TenantId, tenantId)) continue;
+                    registrations.Add(BuildMethodRegistration(info));
+                }
+
+                return registrations.Select(r => r.Clone()).ToList();
+            }
+        }
+
+        /// <summary>
+        /// Retrieve by execution key.
+        /// </summary>
+        /// <param name="executionKey">Execution key.</param>
         /// <param name="tenantId">Tenant identifier.</param>
         /// <returns>Step.</returns>
-        public Step GetByIdentifier(string id, string tenantId = null)
+        public Step GetByExecutionKey(string executionKey, string tenantId = null)
         {
-            if (String.IsNullOrEmpty(id)) throw new ArgumentNullException(nameof(id));
+            if (String.IsNullOrEmpty(executionKey)) throw new ArgumentNullException(nameof(executionKey));
 
             lock (_Lock)
             {
                 if (!String.IsNullOrEmpty(tenantId))
                 {
-                    if (_Steps.Values.Any(s => s.TenantId.Equals(tenantId) && s.Identifier.Equals(id)))
+                    if (_Steps.Values.Any(s => String.Equals(s.TenantId, tenantId, StringComparison.Ordinal) && s.Identifier.Equals(executionKey)))
                     {
-                        return _Steps.Values.First(s => s.TenantId.Equals(tenantId) && s.Identifier.Equals(id));
+                        return _Steps.Values.First(s => String.Equals(s.TenantId, tenantId, StringComparison.Ordinal) && s.Identifier.Equals(executionKey));
                     }
                     else
                     {
@@ -108,9 +139,9 @@
                 }
                 else
                 {
-                    if (_Steps.Keys.Contains(id))
+                    if (_Steps.Keys.Contains(executionKey))
                     {
-                        return _Steps[id];
+                        return _Steps[executionKey];
                     }
                     else
                     {
@@ -118,6 +149,17 @@
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Retrieve by identifier. Compatibility shim for callers that still use legacy terminology.
+        /// </summary>
+        /// <param name="id">Execution key.</param>
+        /// <param name="tenantId">Tenant identifier.</param>
+        /// <returns>Step.</returns>
+        public Step GetByIdentifier(string id, string tenantId = null)
+        {
+            return GetByExecutionKey(id, tenantId);
         }
 
         /// <summary>
@@ -224,10 +266,10 @@
         }
 
         /// <summary>
-        /// Get a step runner for the specified identifier and tenant.
+        /// Get a step runner for the specified execution key and tenant.
         /// Checks both regular steps and attribute-based method steps.
         /// </summary>
-        /// <param name="identifier">Step identifier.</param>
+        /// <param name="identifier">Step execution key.</param>
         /// <param name="tenantId">Tenant identifier (optional).</param>
         /// <returns>StepRunner, or null if not found.</returns>
         public StepRunner GetStepRunner(string identifier, string tenantId = null)
@@ -237,7 +279,7 @@
             lock (_Lock)
             {
                 // First check regular steps
-                Step step = GetByIdentifier(identifier, tenantId);
+                Step step = GetClassStep(identifier, tenantId);
                 if (step != null)
                 {
                     return new CodeStepRunner(step, _Logger);
@@ -265,7 +307,7 @@
         }
 
         /// <summary>
-        /// Get max runtime for a step (works for both regular and attribute-based steps).
+        /// Get max runtime for a step execution key (works for both regular and attribute-based steps).
         /// </summary>
         /// <param name="identifier">Step identifier.</param>
         /// <param name="tenantId">Tenant identifier (optional).</param>
@@ -277,7 +319,7 @@
             lock (_Lock)
             {
                 // First check regular steps
-                Step step = GetByIdentifier(identifier, tenantId);
+                Step step = GetClassStep(identifier, tenantId);
                 if (step != null)
                 {
                     return step.MaxRuntimeMs;
@@ -310,6 +352,87 @@
                 return identifier;
 
             return $"{tenantId}::{identifier}";
+        }
+
+        private Step GetClassStep(string identifier, string tenantId)
+        {
+            Step step = GetByExecutionKey(identifier, tenantId);
+            if (step != null) return step;
+
+            if (!String.IsNullOrEmpty(tenantId) && _Steps.TryGetValue(identifier, out Step globalStep))
+            {
+                if (String.IsNullOrWhiteSpace(globalStep.TenantId) || String.Equals(globalStep.TenantId, "global", StringComparison.OrdinalIgnoreCase))
+                {
+                    return globalStep;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool MatchesExecutionKey(string candidate, string executionKey)
+        {
+            return String.IsNullOrWhiteSpace(executionKey) || String.Equals(candidate, executionKey, StringComparison.Ordinal);
+        }
+
+        private static bool AppliesToTenant(string registrationTenantId, string tenantId)
+        {
+            if (String.IsNullOrWhiteSpace(tenantId)) return true;
+            if (String.Equals(registrationTenantId, tenantId, StringComparison.Ordinal)) return true;
+            return String.IsNullOrWhiteSpace(registrationTenantId) || String.Equals(registrationTenantId, "global", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static BuiltinStepRegistration BuildClassRegistration(Step step)
+        {
+            Type type = step.GetType();
+            AssemblyName assembly = type.Assembly.GetName();
+            MethodInfo run = type.GetMethod(nameof(Step.Run), BindingFlags.Instance | BindingFlags.Public)!;
+            return new BuiltinStepRegistration
+            {
+                ExecutionKey = step.Identifier,
+                TenantId = step.TenantId,
+                SourceKind = BuiltinStepSourceKind.Class,
+                DisplayName = step.Name,
+                DeclaringType = type.FullName ?? String.Empty,
+                AssemblyName = assembly.Name ?? String.Empty,
+                AssemblyVersion = assembly.Version?.ToString() ?? String.Empty,
+                SignatureHash = ComputeSignatureHash(BuildMethodSignature(run)),
+                MaxRuntimeMs = step.MaxRuntimeMs
+            };
+        }
+
+        private static BuiltinStepRegistration BuildMethodRegistration(CodeAttributeStepInfo info)
+        {
+            Type? declaringType = info.Method.DeclaringType;
+            AssemblyName assembly = info.Method.Module.Assembly.GetName();
+            return new BuiltinStepRegistration
+            {
+                ExecutionKey = info.Identifier,
+                TenantId = info.TenantId,
+                SourceKind = BuiltinStepSourceKind.Method,
+                DisplayName = info.Identifier,
+                DeclaringType = declaringType?.FullName ?? String.Empty,
+                MethodName = info.Method.Name,
+                AssemblyName = assembly.Name ?? String.Empty,
+                AssemblyVersion = assembly.Version?.ToString() ?? String.Empty,
+                SignatureHash = ComputeSignatureHash(BuildMethodSignature(info.Method)),
+                MaxRuntimeMs = info.MaxRuntimeMs
+            };
+        }
+
+        private static string BuildMethodSignature(MethodInfo method)
+        {
+            string parameters = String.Join(",", method.GetParameters().Select(p => p.ParameterType.FullName ?? p.ParameterType.Name));
+            string declaringType = method.DeclaringType?.FullName ?? String.Empty;
+            string returnType = method.ReturnType.FullName ?? method.ReturnType.Name;
+            return returnType + " " + declaringType + "." + method.Name + "(" + parameters + ")";
+        }
+
+        private static string ComputeSignatureHash(string signature)
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(signature);
+            byte[] hash = SHA256.HashData(bytes);
+            return Convert.ToHexString(hash).ToLowerInvariant();
         }
 
 #pragma warning restore CS8600 // Converting null literal or possible null value to non-nullable type.

@@ -1,6 +1,5 @@
 ﻿namespace Tempo
 {
-    using PrettyId;
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -64,7 +63,7 @@
             set => _CreatedUtc = value.ToUniversalTime();
         }
 
-        private string _Identifier = new IdGenerator().Generate("step_", 64);
+        private string _Identifier = TempoIds.GenerateStepId();
         private string _TenantId = null;
         private string _Name = "My step";
         private int _MaxRuntimeMs = 0;

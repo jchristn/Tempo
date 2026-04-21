@@ -72,6 +72,7 @@
         public override async Task Alert(string requestIdentifier, string msg)
         {
             if (String.IsNullOrEmpty(requestIdentifier)) throw new ArgumentNullException(nameof(requestIdentifier));
+            msg = Normalize(msg);
             using (_Lock.Lock(requestIdentifier))
             {
                 await File.AppendAllLinesAsync(
@@ -83,12 +84,13 @@
         }
 
         /// <inheritdoc />
-        public override async Task Alert(string msg) => _Logging.Alert(msg);
+        public override async Task Alert(string msg) => _Logging.Alert(Normalize(msg));
 
         /// <inheritdoc />
         public override async Task Critical(string requestIdentifier, string msg)
         {
             if (String.IsNullOrEmpty(requestIdentifier)) throw new ArgumentNullException(nameof(requestIdentifier));
+            msg = Normalize(msg);
             using (_Lock.Lock(requestIdentifier))
             {
                 await File.AppendAllLinesAsync(
@@ -100,12 +102,13 @@
         }
 
         /// <inheritdoc />
-        public override async Task Critical(string msg) => _Logging.Critical(msg);
+        public override async Task Critical(string msg) => _Logging.Critical(Normalize(msg));
 
         /// <inheritdoc />
         public override async Task Debug(string requestIdentifier, string msg)
         {
             if (String.IsNullOrEmpty(requestIdentifier)) throw new ArgumentNullException(nameof(requestIdentifier));
+            msg = Normalize(msg);
             using (_Lock.Lock(requestIdentifier))
             {
                 await File.AppendAllLinesAsync(
@@ -117,12 +120,13 @@
         }
 
         /// <inheritdoc />
-        public override async Task Debug(string msg) => _Logging.Debug(msg);
+        public override async Task Debug(string msg) => _Logging.Debug(Normalize(msg));
 
         /// <inheritdoc />
         public override async Task Emergency(string requestIdentifier, string msg)
         {
             if (String.IsNullOrEmpty(requestIdentifier)) throw new ArgumentNullException(nameof(requestIdentifier));
+            msg = Normalize(msg);
             using (_Lock.Lock(requestIdentifier))
             {
                 await File.AppendAllLinesAsync(
@@ -134,12 +138,13 @@
         }
 
         /// <inheritdoc />
-        public override async Task Emergency(string msg) => _Logging.Emergency(msg);
+        public override async Task Emergency(string msg) => _Logging.Emergency(Normalize(msg));
 
         /// <inheritdoc />
         public override async Task Error(string requestIdentifier, string msg)
         {
             if (String.IsNullOrEmpty(requestIdentifier)) throw new ArgumentNullException(nameof(requestIdentifier));
+            msg = Normalize(msg);
             using (_Lock.Lock(requestIdentifier))
             {
                 await File.AppendAllLinesAsync(
@@ -151,12 +156,13 @@
         }
 
         /// <inheritdoc />
-        public override async Task Error(string msg) => _Logging.Error(msg);
+        public override async Task Error(string msg) => _Logging.Error(Normalize(msg));
 
         /// <inheritdoc />
         public override async Task Info(string requestIdentifier, string msg)
         {
             if (String.IsNullOrEmpty(requestIdentifier)) throw new ArgumentNullException(nameof(requestIdentifier));
+            msg = Normalize(msg);
             using (_Lock.Lock(requestIdentifier))
             {
                 await File.AppendAllLinesAsync(
@@ -168,12 +174,13 @@
         }
 
         /// <inheritdoc />
-        public override async Task Info(string msg) => _Logging.Info(msg);
+        public override async Task Info(string msg) => _Logging.Info(Normalize(msg));
 
         /// <inheritdoc />
         public override async Task Log(string requestIdentifier, SeverityEnum sev, string msg)
         {
             if (String.IsNullOrEmpty(requestIdentifier)) throw new ArgumentNullException(nameof(requestIdentifier));
+            msg = Normalize(msg);
             using (_Lock.Lock(requestIdentifier))
             {
                 await File.AppendAllLinesAsync(
@@ -189,6 +196,7 @@
         /// <inheritdoc />
         public override async Task Log(SeverityEnum sev, string msg)
         {
+            msg = Normalize(msg);
             _Logging.Log(
                 (Severity)(Enum.Parse(typeof(Severity), sev.ToString())),
                 msg);
@@ -198,6 +206,7 @@
         public override async Task Warn(string requestIdentifier, string msg)
         {
             if (String.IsNullOrEmpty(requestIdentifier)) throw new ArgumentNullException(nameof(requestIdentifier));
+            msg = Normalize(msg);
             using (_Lock.Lock(requestIdentifier))
             {
                 await File.AppendAllLinesAsync(
@@ -209,7 +218,13 @@
         }
 
         /// <inheritdoc />
-        public override async Task Warn(string msg) => _Logging.Warn(msg);
+        public override async Task Warn(string msg) => _Logging.Warn(Normalize(msg));
+
+        private static string Normalize(string msg)
+        {
+            if (string.IsNullOrEmpty(msg)) return string.Empty;
+            return msg.TrimEnd().TrimEnd('.');
+        }
 
         private string GetFilename(string requestIdentifier)
         {

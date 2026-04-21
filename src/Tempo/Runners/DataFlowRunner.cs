@@ -8,6 +8,7 @@
     using Tempo.Enums;
     using Tempo.Logs;
     using Tempo.Metrics;
+    using Tempo.Protocol;
 
     /// <summary>
     /// Data flow runner.
@@ -54,6 +55,9 @@
         {
             ArgumentNullException.ThrowIfNull(flow);
             ArgumentNullException.ThrowIfNull(req);
+            req.ProtocolVersion = ProtocolVersions.Normalize(req.ProtocolVersion);
+            req.TenantId = flow.TenantId;
+            req.FlowRunId ??= req.RequestId;
 
             if (!flow.ValidateStartingStep())
                 throw new InvalidOperationException("The specified starting step " + flow.StartStepId + " could not be found in flow " + flow.Identifier + ".");
@@ -97,7 +101,11 @@
                     {
                         lastResult = new StepResult
                         {
+                            ProtocolVersion = req.ProtocolVersion,
+                            TenantId = req.TenantId,
                             DataFlowId = req.DataFlowId,
+                            FlowRunId = req.FlowRunId,
+                            StepRunId = req.StepRunId,
                             RequestId = req.RequestId,
                             Result = StepResultTypeEnum.Timeout,
                             Data = req.Data,
@@ -126,7 +134,11 @@
                 {
                     lastResult = new StepResult
                     {
+                        ProtocolVersion = req.ProtocolVersion,
+                        TenantId = req.TenantId,
                         DataFlowId = req.DataFlowId,
+                        FlowRunId = req.FlowRunId,
+                        StepRunId = req.StepRunId,
                         RequestId = req.RequestId,
                         Result = StepResultTypeEnum.MaxIterationsExceeded,
                         Data = req.Data,
@@ -145,6 +157,7 @@
                     DataFlowId = flow.Identifier,
                     StepId = currentStepId,
                     RequestId = req.RequestId,
+                    ProtocolVersion = req.ProtocolVersion,
                     StartUtc = DateTime.UtcNow
                 };
 
@@ -283,6 +296,7 @@
             stepRunDetails.EndUtc = DateTime.UtcNow;
             stepRunDetails.Result = result.Result;
             stepRunDetails.NextStepId = nextStepId;
+            stepRunDetails.ProtocolVersion = result.ProtocolVersion;
 
             return nextStepId;
         }

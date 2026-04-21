@@ -1,0 +1,69 @@
+{
+  "createdUtc": "2026-04-20T00:00:00.000Z",
+  "rest": {
+    "hostname": "0.0.0.0",
+    "port": 8901,
+    "ssl": false
+  },
+  "database": {
+    "type": "Sqlite",
+    "filename": "/var/lib/tempo-server/db/tempo.db",
+    "commandTimeoutSeconds": 30
+  },
+  "logging": {
+    "consoleLogging": true,
+    "fileLogging": true,
+    "logDirectory": "/var/lib/tempo-server/logs",
+    "logFilename": "tempo.log"
+  },
+  "auth": {
+    "issuer": "tempo",
+    "signingKey": "tempo-development-key-override-for-production-use",
+    "tokenExpirationMinutes": 1440,
+    "adminApiKey": ""
+  },
+  "requestHistory": {
+    "enabled": true,
+    "maxRequestBodyBytes": 65536,
+    "maxResponseBodyBytes": 65536,
+    "retentionDays": 30,
+    "pruneIntervalMinutes": 60
+  },
+  "engine": {
+    "queueEnabled": true,
+    "maxConcurrentRuns": 4,
+    "pollIntervalMs": 1000
+  },
+  "runtimes": {
+    "externalExecution": {
+      "maxConcurrentProcessesServerWide": 4,
+      "maxConcurrentProcessesPerTenant": 2,
+      "defaultMaxRuntimeMs": 30000,
+      "maxStdoutBytes": 1048576,
+      "maxStderrBytes": 1048576,
+      "maxInputBytes": 1048576,
+      "maxOutputBytes": 1048576,
+      "scratchRoot": "/var/lib/tempo-server/scratch",
+      "cacheRoot": "/var/lib/tempo-server/runtime-cache",
+      "environmentAllowList": [],
+      "networkPolicyMode": "disabled",
+      "killProcessTreeOnCancel": true,
+      "pythonExecutable": "python3",
+      "nodeExecutable": "node",
+      "dotnetExecutable": "dotnet",
+      "allowPythonDependencyInstall": false
+    },
+    "hostExecutables": {
+      "enabled": false,
+      "allowList": []
+    }
+  },
+  "hydration": {
+    "seedDefaults": true,
+    "defaultTenantName": "Default Tenant",
+    "defaultAdminEmail": "admin@tempo.local",
+    "defaultAdminPassword": "password",
+    "defaultUserEmail": "user@tempo.local",
+    "defaultUserPassword": "password"
+  }
+}

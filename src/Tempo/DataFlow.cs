@@ -1,6 +1,5 @@
 ﻿namespace Tempo
 {
-    using PrettyId;
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -71,7 +70,7 @@
         }
 
         /// <summary>
-        /// Starting step identifier.
+        /// Stable execution key of the starting step.
         /// </summary>
         public string StartStepId
         {
@@ -80,8 +79,8 @@
         }
 
         /// <summary>
-        /// Dictionary of step transitions.  
-        /// Key is the step identifier.
+        /// Dictionary of step transitions.
+        /// Key is the stable step execution key.
         /// Value is the StepTransition object.
         /// </summary>
         public Dictionary<string, StepTransition> Steps
@@ -99,7 +98,7 @@
             set => _CreatedUtc = value.ToUniversalTime();
         }
 
-        private string _Identifier = new IdGenerator().Generate("dataflow_", 64);
+        private string _Identifier = TempoIds.GenerateDataFlowId();
         private string _TenantId = null;
         private string _Name = "My dataflow";
         private string _TriggerId = null;
@@ -117,7 +116,7 @@
         }
 
         /// <summary>
-        /// Validates that the starting step exists in the steps collection
+        /// Validates that the starting execution key exists in the steps collection.
         /// </summary>
         /// <returns>True if valid.</returns>
         public bool ValidateStartingStep()
@@ -126,7 +125,7 @@
         }
 
         /// <summary>
-        /// Validates that all referenced steps in transitions exist
+        /// Validates that all referenced execution keys in transitions exist.
         /// </summary>
         /// <param name="errors">Output parameter containing validation errors if any</param>
         /// <returns>True if valid, false otherwise</returns>

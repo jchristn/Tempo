@@ -1,0 +1,69 @@
+services:
+  tempo-server:
+    build:
+      context: ..
+      dockerfile: src/Tempo.Server/Dockerfile
+    image: jchristn77/tempo-server:v0.2.0
+    restart: unless-stopped
+    ports:
+      - "8901:8901"
+    volumes:
+      - tempo_server_config:/var/lib/tempo-server/config
+      - tempo_server_db:/var/lib/tempo-server/db
+      - tempo_server_logs:/var/lib/tempo-server/logs
+      - tempo_server_runtime_cache:/var/lib/tempo-server/runtime-cache
+      - tempo_server_scratch:/var/lib/tempo-server/scratch
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8901/v1.0/api/health > /dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    image: jchristn77/tempo-ui:v0.2.0
+    restart: unless-stopped
+    depends_on:
+      tempo-server:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    volumes:
+      - dashboard_logs:/var/log/nginx
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+
+  tempo-mcp:
+    build:
+      context: ..
+      dockerfile: src/Tempo.McpServer/Dockerfile
+    image: jchristn77/tempo-mcp:v0.2.0
+    restart: unless-stopped
+    depends_on:
+      tempo-server:
+        condition: service_healthy
+    ports:
+      - "8910:8910"
+      - "8911:8911"
+      - "8912:8912"
+    volumes:
+      - tempo_mcp_config:/var/lib/tempo-mcp/config
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc 'exec 3<>/dev/tcp/127.0.0.1/8910' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+
+volumes:
+  tempo_server_config:
+  tempo_server_db:
+  tempo_server_logs:
+  tempo_server_runtime_cache:
+  tempo_server_scratch:
+  dashboard_logs:
+  tempo_mcp_config:

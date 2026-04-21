@@ -1,6 +1,5 @@
 ﻿namespace Tempo.Triggers
 {
-    using PrettyId;
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -46,7 +45,7 @@
             set => _CreatedUtc = value.ToUniversalTime();
         }
 
-        private string _Identifier = new IdGenerator().Generate("trigger_", 64);
+        private string _Identifier = Tempo.TempoIds.GenerateTriggerId();
         private string _Name = "My trigger";
         private DateTime _CreatedUtc = DateTime.UtcNow;
 

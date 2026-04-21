@@ -1,7 +1,6 @@
 ﻿namespace Tempo
 {
     using System;
-    using PrettyId;
 
     /// <summary>
     /// A tenant is a collection of users and dataflows that are isolated from other tenants within Tempo.
@@ -35,7 +34,7 @@
             set => _CreatedUtc = value.ToUniversalTime();
         }
 
-        private string _Identifier = new IdGenerator().Generate("tenant_", 64);
+        private string _Identifier = TempoIds.GenerateTenantId();
         private string _Name = "My tenant";
         private DateTime _CreatedUtc = DateTime.UtcNow;
 

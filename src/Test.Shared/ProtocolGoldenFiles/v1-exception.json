@@ -1,0 +1,15 @@
+{
+  "protocolVersion": "1.0",
+  "tenantId": "ten_protocol",
+  "dataFlowId": "flow_protocol",
+  "flowRunId": "fru_protocol",
+  "stepRunId": "sru_protocol",
+  "requestId": "req_protocol",
+  "result": "Exception",
+  "data": null,
+  "metadata": {
+    "stdout": "",
+    "stderr": "boom"
+  },
+  "exception": "boom"
+}

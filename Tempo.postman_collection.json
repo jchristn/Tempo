@@ -1,0 +1,1552 @@
+﻿{
+    "info":  {
+                 "_postman_id":  "c58ca1ec-0bdc-4f1a-9a2b-0a1b2c3d4e5f",
+                 "name":  "Tempo API 0.2.0",
+                 "description":  "REST API for Tempo Server 0.2.0. Uses {{serverUrl}} + {{token}} + {{tenantId}} variables. Includes current coverage for runtimes, source steps, artifacts, data flows, triggers, runs, request history, settings, and migrations.",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "variable":  [
+                     {
+                         "key":  "serverUrl",
+                         "value":  "http://localhost:8901"
+                     },
+                     {
+                         "key":  "email",
+                         "value":  "admin@tempo.local"
+                     },
+                     {
+                         "key":  "password",
+                         "value":  "password"
+                     },
+                     {
+                         "key":  "tenantId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "token",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "accountId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "adminId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "userId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "flowId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "stepId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "triggerId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "runId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "artifactId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "artifactVersion",
+                         "value":  "current"
+                     },
+                     {
+                         "key":  "roleId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "permissionId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "credentialId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "runtimeKey",
+                         "value":  "Artifact.JavaScript"
+                     },
+                     {
+                         "key":  "requestHistoryId",
+                         "value":  ""
+                     }
+                 ],
+    "auth":  {
+                 "type":  "bearer",
+                 "bearer":  [
+                                {
+                                    "key":  "token",
+                                    "value":  "{{token}}",
+                                    "type":  "string"
+                                }
+                            ]
+             },
+    "item":  [
+                 {
+                     "name":  "Health",
+                     "item":  [
+                                  {
+                                      "name":  "Health",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/api/health",
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Root",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/",
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "OpenAPI spec",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/openapi.json",
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Auth",
+                     "item":  [
+                                  {
+                                      "name":  "Issue token (admin)",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "pm.collectionVariables.set(\u0027token\u0027, res.token);",
+                                                                                    "pm.test(\u0027returned token\u0027, function() { pm.expect(res.token).to.be.a(\u0027string\u0027); });"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/token",
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Issue token (tenant user)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/token",
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"email\": \"user@tempo.local\",\n  \"password\": \"password\"\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Validate token",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/token"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Token details",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/token/details"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Me",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/me"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Accounts",
+                     "item":  [
+                                  {
+                                      "name":  "List accounts",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/accounts?pageNumber=1\u0026pageSize=25"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create account",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/accounts",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Acme Inc\"\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read account",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/accounts/:id"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update account",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/accounts/:id",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"id\": \":id\",\n  \"name\": \"Acme Corp\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete account",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/accounts/:id"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Administrators",
+                     "item":  [
+                                  {
+                                      "name":  "List administrators",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/admins"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create administrator",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/admins",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane@example.com\",\n  \"passwordSha256\": \"password\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read administrator",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/admins/:id"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update administrator",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/admins/:id",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"jane@example.com\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete administrator",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/admins/:id"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Tenants",
+                     "item":  [
+                                  {
+                                      "name":  "List tenants",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027tenantId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants?pageNumber=1\u0026pageSize=25"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create tenant",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"tenant A\",\n  \"region\": \"us-east-1\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read tenant",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update tenant",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"id\": \"{{tenantId}}\",\n  \"name\": \"tenant A (renamed)\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete tenant",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Users",
+                     "item":  [
+                                  {
+                                      "name":  "List users",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027userId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/users"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create user",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/users",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"new.user@example.com\",\n  \"firstName\": \"New\",\n  \"lastName\": \"User\",\n  \"passwordSha256\": \"password\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read user",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/users/{{userId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update user",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/users/{{userId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"new.user@example.com\",\n  \"isTenantAdmin\": true,\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete user",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/users/{{userId}}"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Credentials",
+                     "item":  [
+                                  {
+                                      "name":  "List credentials",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027credentialId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/credentials"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create credential",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/credentials",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"production API key\",\n  \"userId\": \"{{userId}}\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read credential",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/credentials/{{credentialId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update credential",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/credentials/{{credentialId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"renamed\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete credential",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/credentials/{{credentialId}}"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Roles and Permissions",
+                     "item":  [
+                                  {
+                                      "name":  "List roles",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027roleId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/roles"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create role",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/roles",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"CustomRole\",\n  \"description\": \"team-specific role\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update role",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/roles/{{roleId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"CustomRole\",\n  \"description\": \"updated\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete role",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/roles/{{roleId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "List permissions",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027permissionId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/permissions"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create permission",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/permissions",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"read flows\",\n  \"resourceTypes\": [\"DataFlow\"],\n  \"operationTypes\": [\"Read\"],\n  \"permissionType\": \"Permit\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete permission",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/permissions/{{permissionId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Assign role to user",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/user-role-maps",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"userId\": \"{{userId}}\",\n  \"roleId\": \"{{roleId}}\"\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "List user\u0027s roles",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/users/{{userId}}/roles"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Attach permission to role",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/role-permission-maps",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"roleId\": \"{{roleId}}\",\n  \"permissionId\": \"{{permissionId}}\"\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "List role\u0027s permissions",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/roles/{{roleId}}/permissions"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Data flows",
+                     "item":  [
+                                  {
+                                      "name":  "List flows",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027flowId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/flows"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create flow",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.id) pm.collectionVariables.set(\u0027flowId\u0027, res.id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/flows",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"hello world\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read flow",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/flows/{{flowId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update flow",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/flows/{{flowId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"updated from Postman\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Ensure steps exist",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/flows/{{flowId}}/ensure-steps"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Enqueue flow run",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.id) pm.collectionVariables.set(\u0027runId\u0027, res.id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/flows/{{flowId}}/runs",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"data\": {\n    \"value\": \"hello from Postman\"\n  },\n  \"metadata\": {\n    \"source\": \"postman\"\n  }\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete flow",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/flows/{{flowId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Bulk delete flows",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/flows/bulk-delete",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{ \"ids\": [\"flow_xxx\", \"flow_yyy\"] }"
+                                                               }
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Runtimes",
+                     "item":  [
+                                  {
+                                      "name":  "List server runtimes",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/runtimes"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read one runtime",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/runtimes/{{runtimeKey}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Server external execution status",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/runtimes/external-execution"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "List tenant runtimes",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runtimes"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Tenant external execution status",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runtimes/external-execution"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Validate runtime config",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runtimes/validate",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"runtimeKey\": \"Artifact.JavaScript\",\n  \"config\": {\n    \"runtimeKey\": \"Artifact.JavaScript\",\n    \"artifactId\": \"{{artifactId}}\",\n    \"artifactVersion\": \"{{artifactVersion}}\",\n    \"entrypoint\": \"main\",\n    \"module\": \"handler.js\",\n    \"function\": \"run\"\n  }\n}"
+                                                               }
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Steps",
+                     "item":  [
+                                  {
+                                      "name":  "List steps",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027stepId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create step (External.Rest)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"executionKey\": \"postman.external.rest\",\n  \"name\": \"Postman External REST step\",\n  \"description\": \"Calls an external HTTP endpoint\",\n  \"runtimeKey\": \"External.Rest\",\n  \"runtimeConfig\": {\n    \"runtimeKey\": \"External.Rest\",\n    \"method\": \"GET\",\n    \"url\": \"https://example.com/orders\",\n    \"headers\": {},\n    \"timeoutMs\": 30000\n  },\n  \"contractType\": \"Loose\",\n  \"maxRuntimeMs\": 30000,\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create step from source (JavaScript)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps/source",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"executionKey\": \"postman.echo_js\",\n  \"name\": \"Postman Echo JavaScript\",\n  \"language\": \"JavaScript\",\n  \"fileName\": \"handler.js\",\n  \"function\": \"run\",\n  \"code\": \"exports.run = async function(input) { return { ok: true, input }; };\"\n}"
+                                                               }
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res && res.step && res.step.id) pm.collectionVariables.set('stepId', res.step.id);",
+                                                                                    "if (res && res.artifact && res.artifact.id) pm.collectionVariables.set('artifactId', res.artifact.id);",
+                                                                                    "if (res && res.artifactVersion && res.artifactVersion.version) pm.collectionVariables.set('artifactVersion', res.artifactVersion.version);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Read step",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps/{{stepId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update step",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps/{{stepId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Postman step updated\",\n  \"description\": \"Updated from Postman\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete step",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps/{{stepId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Registered code steps",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/steps/registered"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Bulk delete steps",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps/bulk-delete",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{ \"ids\": [\"step_xxx\"] }"
+                                                               }
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Artifacts",
+                     "item":  [
+                                  {
+                                      "name":  "List artifacts",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts?pageNumber=1\u0026pageSize=25"
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027artifactId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Create artifact",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Postman artifact\",\n  \"description\": \"Created from Postman\"\n}"
+                                                               }
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.id) pm.collectionVariables.set(\u0027artifactId\u0027, res.id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Read artifact",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update artifact",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"Postman artifact updated\",\n  \"description\": \"Updated from Postman\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "List artifact files",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/files"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read artifact file",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/files/content?path=handler.js"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Save artifact file",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/files/content?path=handler.js",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"content\": \"exports.run = async function(input) { return { ok: true, input, edited: true }; };\",\n  \"contentType\": \"application/javascript\",\n  \"isBinary\": false\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete artifact file",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/files/content?path=handler.js"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "List artifact versions",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/versions?pageNumber=1\u0026pageSize=25"
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027artifactVersion\u0027, res.items[0].version);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Read artifact version",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/versions/{{artifactVersion}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Upload artifact version",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/versions?version=1.0.0\u0026originalFileName=package.zip\u0026contentType=application/zip",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/zip"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "file",
+                                                                   "file":  {
+                                                                                "src":  ""
+                                                                            }
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Download artifact version",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/versions/{{artifactVersion}}/download"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete artifact version",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}/versions/{{artifactVersion}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete artifact",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/artifacts/{{artifactId}}"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Triggers",
+                     "item":  [
+                                  {
+                                      "name":  "List triggers",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027triggerId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/triggers"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create HTTP POST trigger",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.id) pm.collectionVariables.set(\u0027triggerId\u0027, res.id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/triggers",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"order-webhook\",\n  \"triggerType\": \"Http\",\n  \"dataFlowId\": \"{{flowId}}\",\n  \"configuration\": \"{\\\"allowedMethods\\\":[\\\"POST\\\"],\\\"headers\\\":{\\\"Content-Type\\\":\\\"application/json\\\"}}\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Create HTTP GET trigger",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/triggers",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"order-webhook-get\",\n  \"triggerType\": \"Http\",\n  \"dataFlowId\": \"{{flowId}}\",\n  \"configuration\": \"{\\\"allowedMethods\\\":[\\\"GET\\\"]}\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read trigger",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/triggers/{{triggerId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Update trigger",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/triggers/{{triggerId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"name\": \"order-webhook\",\n  \"triggerType\": \"Http\",\n  \"active\": true\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Fire HTTP trigger (POST public)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               },
+                                                      "url":  "{{serverUrl}}/v1.0/triggers/http/{{triggerId}}",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{ \"orderId\": 42 }"
+                                                               }
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const runId = pm.response.headers.get(\u0027x-run-id\u0027);",
+                                                                                    "if (runId) pm.collectionVariables.set(\u0027runId\u0027, runId);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Fire HTTP trigger (GET public)",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/triggers/http/{{triggerId}}",
+                                                      "auth":  {
+                                                                   "type":  "noauth"
+                                                               }
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const runId = pm.response.headers.get('x-run-id');",
+                                                                                    "if (runId) pm.collectionVariables.set('runId', runId);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Delete trigger",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/triggers/{{triggerId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Bulk delete triggers",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/triggers/bulk-delete",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{ \"ids\": [\"trg_xxx\"] }"
+                                                               }
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Runs",
+                     "item":  [
+                                  {
+                                      "name":  "List runs",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027runId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs?pageNumber=1\u0026pageSize=25"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read run",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "List step runs",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}/steps"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Cancel run",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}/cancel"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete run",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Bulk delete runs",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/bulk-delete",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{ \"ids\": [\"run_xxx\"] }"
+                                                               }
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Request history",
+                     "item":  [
+                                  {
+                                      "name":  "List request history",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/api/request-history?pageNumber=1\u0026pageSize=25"
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.items \u0026\u0026 res.items.length) pm.collectionVariables.set(\u0027requestHistoryId\u0027, res.items[0].id);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Read request history entry",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/api/request-history/{{requestHistoryId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Request history summary",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/api/request-history/summary?fromUtc=2026-04-18T00:00:00Z\u0026toUtc=2026-04-19T00:00:00Z\u0026bucketMinutes=15"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete single request history entry",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/api/request-history/{{requestHistoryId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Bulk delete request history",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/api/request-history?method=GET\u0026statusCode=500"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Settings and migrations",
+                     "item":  [
+                                  {
+                                      "name":  "Get settings",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/settings"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Get settings meta",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/settings/meta"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Save settings",
+                                      "request":  {
+                                                      "method":  "PUT",
+                                                      "url":  "{{serverUrl}}/v1.0/settings",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"rest\": { \"hostname\": \"127.0.0.1\", \"port\": 8901, \"ssl\": false },\n  \"database\": { \"type\": \"Sqlite\", \"filename\": \"./tempo.db\" },\n  \"logging\": { \"consoleLogging\": true, \"fileLogging\": true, \"logDirectory\": \"./logs\", \"logFilename\": \"tempo.log\" },\n  \"auth\": { \"issuer\": \"tempo\", \"signingKey\": \"tempo-development-key-override-for-production-use\", \"tokenExpirationMinutes\": 1440 },\n  \"requestHistory\": { \"enabled\": true, \"maxRequestBodyBytes\": 65536, \"maxResponseBodyBytes\": 65536, \"retentionDays\": 30, \"pruneIntervalMinutes\": 60 },\n  \"engine\": { \"queueEnabled\": true, \"maxConcurrentRuns\": 4, \"pollIntervalMs\": 1000 },\n  \"hydration\": { \"seedDefaults\": true, \"defaultTenantName\": \"Default Tenant\", \"defaultAdminEmail\": \"admin@tempo.local\", \"defaultAdminPassword\": \"password\", \"defaultUserEmail\": \"user@tempo.local\", \"defaultUserPassword\": \"password\" }\n}"
+                                                               }
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Run inline REST migration",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/migrations/inline-rest",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"tenantId\": \"{{tenantId}}\"\n}"
+                                                               }
+                                                  }
+                                  }
+                              ]
+                 }
+             ]
+}

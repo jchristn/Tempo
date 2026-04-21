@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1591;CS8618</NoWarn>
+    <AssemblyName>Tempo.McpServer</AssemblyName>
+    <RootNamespace>Tempo.McpServer</RootNamespace>
+    <Version>0.2.0</Version>
+    <Description>MCP server for Tempo workflow automation APIs.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Voltaic" Version="0.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Tempo.Core\Tempo.Core.csproj" />
+  </ItemGroup>
+
+</Project>

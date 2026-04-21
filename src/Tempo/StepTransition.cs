@@ -54,7 +54,7 @@
 
         /// <summary>
         /// Step type for inline steps.
-        /// When null, the step is looked up from StepManager by Name (code-based step).
+        /// When null, the transition dictionary key is used as the StepManager execution key.
         /// When set, the step is created dynamically using the corresponding configuration property.
         /// </summary>
         public StepTypeEnum? StepType { get; set; } = null;

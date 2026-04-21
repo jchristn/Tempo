@@ -1,6 +1,5 @@
 ﻿namespace Tempo.Metrics
 {
-    using PrettyId;
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -70,9 +69,9 @@
         /// </summary>
         public StepResultTypeEnum Result { get; set; } = StepResultTypeEnum.Success;
 
-        private string _TenantId = new IdGenerator().Generate("tenant_", 64);
-        private string _DataFlowId = new IdGenerator().Generate("dataflow_", 64);
-        private string _RequestId = new IdGenerator().Generate("request_", 64);
+        private string _TenantId = Tempo.TempoIds.GenerateTenantId();
+        private string _DataFlowId = Tempo.TempoIds.GenerateDataFlowId();
+        private string _RequestId = Tempo.TempoIds.GenerateRequestId();
 
         /// <summary>
         /// Data flow run details.

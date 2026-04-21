@@ -1,4 +1,4 @@
-namespace Tempo.Runners
+﻿namespace Tempo.Runners
 {
     using System;
     using System.Collections.Generic;
@@ -8,6 +8,7 @@ namespace Tempo.Runners
     using System.Threading.Tasks;
     using Tempo.Enums;
     using Tempo.Logs;
+    using Tempo.Protocol;
 
     /// <summary>
     /// Abstract base class for step runners.
@@ -35,6 +36,7 @@ namespace Tempo.Runners
         {
             ArgumentNullException.ThrowIfNull(stepId);
             ArgumentNullException.ThrowIfNull(req);
+            req.ProtocolVersion = ProtocolVersions.Normalize(req.ProtocolVersion);
 
             DateTime startTime = DateTime.UtcNow;
 
@@ -72,6 +74,8 @@ namespace Tempo.Runners
                 };
             }
 
+            result = NormalizeResult(result, req);
+
             // Calculate runtime
             TimeSpan runtime = DateTime.UtcNow - startTime;
             long runtimeMs = (long)runtime.TotalMilliseconds;
@@ -84,6 +88,24 @@ namespace Tempo.Runners
             }
 
             return result ?? throw new InvalidOperationException($"Step '{stepId}' execution failed to produce a result.");
+        }
+
+        /// <summary>
+        /// Normalize protocol and correlation fields after runner execution.
+        /// </summary>
+        /// <param name="result">Step result.</param>
+        /// <param name="req">Step request.</param>
+        /// <returns>Normalized step result.</returns>
+        private static StepResult NormalizeResult(StepResult result, StepRequest req)
+        {
+            if (result == null) throw new InvalidOperationException("Step execution failed to produce a result.");
+            result.ProtocolVersion = req.ProtocolVersion;
+            result.TenantId = req.TenantId;
+            result.DataFlowId = req.DataFlowId;
+            result.FlowRunId = req.FlowRunId;
+            result.StepRunId = req.StepRunId;
+            result.RequestId = req.RequestId;
+            return result;
         }
 
         /// <summary>
