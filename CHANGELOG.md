@@ -60,9 +60,9 @@ All notable changes to Tempo are documented in this file.
 
 - Rewrote the root README to match the current repository shape and release contents
 - Added or refreshed:
-  - `REST_API.md`
-  - `MCP_API.md`
-  - `BEST_PRACTICES.md`
+  - `docs/REST_API.md`
+  - `docs/MCP_API.md`
+  - `docs/BEST_PRACTICES.md`
   - SDK READMEs
   - operator/runtime docs under `docs/`
 

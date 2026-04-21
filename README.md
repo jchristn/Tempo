@@ -4,6 +4,8 @@
 
 # Tempo
 
+v0.2.0
+
 [![NuGet](https://img.shields.io/nuget/v/Tempo.svg)](https://www.nuget.org/packages/Tempo/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET](https://img.shields.io/badge/.NET-10.0-blue.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -192,9 +194,9 @@ For artifact-backed runtimes and manifests, see [docs/ARTIFACT_MANIFEST.md](docs
 
 Primary reference material:
 
-- [REST_API.md](REST_API.md)
-- [MCP_API.md](MCP_API.md)
-- [BEST_PRACTICES.md](BEST_PRACTICES.md)
+- [docs/REST_API.md](docs/REST_API.md)
+- [docs/MCP_API.md](docs/MCP_API.md)
+- [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md)
 - [Tempo.postman_collection.json](Tempo.postman_collection.json)
 
 Additional operator and implementation guides:
