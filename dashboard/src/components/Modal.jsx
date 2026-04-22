@@ -15,9 +15,16 @@ function Modal({ open, onClose, title, headerMeta = null, children, footer, size
 
   if (!open) return null;
 
+  const sizeClass =
+    size === 'small' ? ' small'
+      : size === 'large' ? ' large'
+        : size === 'xlarge' ? ' xlarge'
+          : size === 'drawer' ? ' drawer'
+            : '';
+
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={'modal' + (size === 'small' ? ' small' : size === 'large' ? ' large' : size === 'drawer' ? ' drawer' : '')} onClick={(e) => e.stopPropagation()}>
+      <div className={'modal' + sizeClass} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-heading">
             <div className="modal-title">{title}</div>

@@ -24,7 +24,20 @@ namespace Tempo.Server.Routes
         public void Register(Webserver server)
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
-            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/runs", EnumerateAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("List flow runs", "Runs"));
+            server.Routes.PostAuthentication.Parameter.Add(
+                HttpMethod.GET,
+                "/v1.0/tenants/{tenantId}/runs",
+                EnumerateAsync,
+                null,
+                openApiMetadata: OpenApiRouteMetadata.Create("List flow runs", "Runs")
+                    .WithParameter(OpenApiParameterMetadata.Query("pageNumber", "Page number, starting at 1.", false, OpenApiSchemaMetadata.Integer("int32")))
+                    .WithParameter(OpenApiParameterMetadata.Query("pageSize", "Page size.", false, OpenApiSchemaMetadata.Integer("int32")))
+                    .WithParameter(OpenApiParameterMetadata.Query("dataFlowId", "Optional flow identifier filter.", false, OpenApiSchemaMetadata.String(null)))
+                    .WithParameter(OpenApiParameterMetadata.Query("state", "Optional lifecycle-state filter.", false, OpenApiSchemaMetadata.String(null)))
+                    .WithParameter(OpenApiParameterMetadata.Query("workerId", "Optional assigned worker identifier filter.", false, OpenApiSchemaMetadata.String(null)))
+                    .WithParameter(OpenApiParameterMetadata.Query("sourceIp", "Optional client source IP filter.", false, OpenApiSchemaMetadata.String(null)))
+                    .WithParameter(OpenApiParameterMetadata.Query("fromUtc", "Inclusive lower UTC bound on created time.", false, OpenApiSchemaMetadata.String("date-time")))
+                    .WithParameter(OpenApiParameterMetadata.Query("toUtc", "Exclusive upper UTC bound on created time.", false, OpenApiSchemaMetadata.String("date-time"))));
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/runs/{id}", ReadAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Read flow run", "Runs"));
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/runs/{id}/steps", StepsAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("List step runs", "Runs"));
             server.Routes.PostAuthentication.Parameter.Add(
@@ -136,6 +149,8 @@ namespace Tempo.Server.Routes
             {
                 TenantId = tid,
                 DataFlowId = RouteHelpers.Query(ctx, "dataFlowId"),
+                WorkerId = RouteHelpers.Query(ctx, "workerId"),
+                SourceIp = RouteHelpers.Query(ctx, "sourceIp"),
                 PageNumber = RouteHelpers.QueryInt(ctx, "pageNumber", 1),
                 PageSize = RouteHelpers.QueryInt(ctx, "pageSize", 25),
                 FromUtc = RouteHelpers.QueryDateTime(ctx, "fromUtc"),

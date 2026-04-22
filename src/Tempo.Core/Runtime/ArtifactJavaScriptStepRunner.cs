@@ -80,7 +80,12 @@ function logWriter() {
       try { return JSON.stringify(value); } catch { return String(value); }
     }).join(" ") : String(args);
     if (!text) return;
-    fs.appendFileSync(file, new Date().toISOString() + " [" + level + "] " + text + "\\n", "utf8");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    for (const line of normalized.split("\n")) {
+      if (!line) continue;
+      fs.appendFileSync(file, new Date().toISOString() + " [" + level + "] " + line + "\n", "utf8");
+    }
   };
 }
 

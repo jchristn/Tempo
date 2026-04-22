@@ -164,7 +164,7 @@ namespace Tempo.Server.Services
                             RunAssignmentId = completion.RunAssignmentId,
                             EventType = "orphan_completion",
                             Severity = "Warning",
-                            Message = "Ignored a stale or mismatched completion frame.",
+                            Message = "Ignored a stale or mismatched completion frame",
                             PayloadJson = System.Text.Json.JsonSerializer.Serialize(completion, WorkerProtocolSerialization.Options)
                         }, token).ConfigureAwait(false);
                     }
@@ -321,7 +321,7 @@ namespace Tempo.Server.Services
                         WorkerSessionId = descriptor.WorkerSessionId,
                         EventType = WorkerFrameTypes.Hello,
                         Severity = "Info",
-                        Message = "Worker connected and registered.",
+                        Message = "Worker connected and registered",
                         PayloadJson = System.Text.Json.JsonSerializer.Serialize(hello, WorkerProtocolSerialization.Options)
                     }, token).ConfigureAwait(false);
                 }
@@ -383,7 +383,7 @@ namespace Tempo.Server.Services
                         RunAssignmentId = ack.RunAssignmentId,
                         EventType = WorkerFrameTypes.AssignAck,
                         Severity = ack.Accepted ? "Info" : "Warning",
-                        Message = ack.Accepted ? "Assignment acknowledged." : (ack.Message ?? "Assignment rejected."),
+                        Message = ack.Accepted ? "Assignment acknowledged" : (ack.Message ?? "Assignment rejected"),
                         PayloadJson = System.Text.Json.JsonSerializer.Serialize(ack, WorkerProtocolSerialization.Options)
                     }, token).ConfigureAwait(false);
                 }
@@ -670,7 +670,7 @@ namespace Tempo.Server.Services
             {
                 if (HasAnyLiveExecutor() && !HasPotentialExecutorForPlan(plan))
                 {
-                    string message = "No eligible worker was available for run '" + run.Id + "'.";
+                    string message = "No eligible worker was available for run " + run.Id;
                     _Logging?.Warn(_Header + "no_eligible_worker: " + message);
                     await _Assignments.FailPendingRunAsync(run, FlowRunStateEnum.Failed, message, token).ConfigureAwait(false);
                     return true;

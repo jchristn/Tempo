@@ -170,8 +170,8 @@ namespace Tempo.Core.Runtime
             {
                 if (!process.Start())
                 {
-                    await WriteHostAsync("External process failed to start.", token).ConfigureAwait(false);
-                    return ExceptionResult(req, "External process failed to start.");
+                    await WriteHostAsync("External process failed to start", token).ConfigureAwait(false);
+                    return ExceptionResult(req, "External process failed to start");
                 }
                 long stdoutLimit = Math.Min(_Settings.MaxStdoutBytes, _Settings.MaxOutputBytes);
                 Task<string> stdoutTask = ReadLimitedAsync(process.StandardOutput, stdoutLimit, "stdout", token);
@@ -203,8 +203,8 @@ namespace Tempo.Core.Runtime
                 }
                 if (timedOut)
                 {
-                    await WriteHostAsync("External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.", token).ConfigureAwait(false);
-                    return TimeoutResult(req, "External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.");
+                    await WriteHostAsync("External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms", token).ConfigureAwait(false);
+                    return TimeoutResult(req, "External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms");
                 }
                 if (process.ExitCode != 0)
                 {
@@ -213,14 +213,14 @@ namespace Tempo.Core.Runtime
                 }
                 if (string.IsNullOrWhiteSpace(stdout))
                 {
-                    await WriteHostAsync("External process produced empty stdout.", token).ConfigureAwait(false);
-                    return ExceptionResult(req, "External process produced empty stdout.");
+                    await WriteHostAsync("External process produced empty stdout", token).ConfigureAwait(false);
+                    return ExceptionResult(req, "External process produced empty stdout");
                 }
 
                 try
                 {
                     StepResult? result = JsonSerializer.Deserialize<StepResult>(stdout, _Json);
-                    return result ?? ExceptionResult(req, "External process stdout did not contain a StepResult.");
+                    return result ?? ExceptionResult(req, "External process stdout did not contain a StepResult");
                 }
                 catch (JsonException ex)
                 {
@@ -236,8 +236,8 @@ namespace Tempo.Core.Runtime
             {
                 if (DateTime.UtcNow >= deadline)
                 {
-                    await WriteHostAsync("External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.", token).ConfigureAwait(false);
-                    return TimeoutResult(req, "External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.");
+                    await WriteHostAsync("External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms", token).ConfigureAwait(false);
+                    return TimeoutResult(req, "External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms");
                 }
                 await WriteHostAsync(ex.Message, token).ConfigureAwait(false);
                 return ExceptionResult(req, ex.Message);

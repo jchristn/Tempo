@@ -67,7 +67,7 @@ namespace Tempo.Core.Runtime
             {
                 if (RunLogs != null)
                 {
-                    await RunLogs.AppendRunAsync("Info", "Flow run started for flow '" + flow.Identifier + "'.", token).ConfigureAwait(false);
+                    await RunLogs.AppendRunAsync("Info", "Flow run started for flow " + flow.Identifier, token).ConfigureAwait(false);
                 }
 
                 while (!string.IsNullOrEmpty(currentStepId))
@@ -137,7 +137,7 @@ namespace Tempo.Core.Runtime
                     if (RunLogs != null)
                     {
                         stepLogScope = await RunLogs.CreateStepScopeAsync(stepSequence, currentStepId, stepRunDetails.RowId, token).ConfigureAwait(false);
-                        await RunLogs.AppendStepAsync(stepLogScope, "Info", "Step '" + currentStepId + "' started.", token).ConfigureAwait(false);
+                        await RunLogs.AppendStepAsync(stepLogScope, "Info", "Step " + currentStepId + " started", token).ConfigureAwait(false);
                     }
 
                     IStepRuntimeProvider provider = _Registry.Get(resolved.Step.RuntimeKey)
@@ -178,7 +178,7 @@ namespace Tempo.Core.Runtime
 
                     if (RunLogs != null && stepLogScope != null)
                     {
-                        string message = "Step '" + stepRunDetails.StepId + "' completed with result " + lastResult.Result + ".";
+                        string message = "Step " + stepRunDetails.StepId + " completed with result " + lastResult.Result;
                         if (!string.IsNullOrWhiteSpace(lastResult.ExceptionMessage))
                         {
                             message += " Exception: " + lastResult.ExceptionMessage;
@@ -206,7 +206,7 @@ namespace Tempo.Core.Runtime
             if (MetricsStore != null) await MetricsStore.WriteDataFlowRun(flowRunDetails).ConfigureAwait(false);
             if (RunLogs != null && lastResult != null)
             {
-                await RunLogs.AppendRunAsync("Info", "Flow run completed with result " + lastResult.Result + ".", token).ConfigureAwait(false);
+                await RunLogs.AppendRunAsync("Info", "Flow run completed with result " + lastResult.Result, token).ConfigureAwait(false);
             }
             return lastResult ?? throw new InvalidOperationException("Data flow '" + flow.Identifier + "' completed without producing a result.");
         }

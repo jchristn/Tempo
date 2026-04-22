@@ -2,6 +2,7 @@ namespace Test.Shared.Suites
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.IO;
     using System.Linq;
     using System.Net;
@@ -13,11 +14,14 @@ namespace Test.Shared.Suites
     using System.Threading.Tasks;
     using SyslogLogging;
     using Tempo;
+    using Tempo.Core.Artifacts;
     using Tempo.Core;
     using Tempo.Core.Database.Sqlite;
     using Tempo.Core.Enums;
     using Tempo.Core.Models;
+    using Tempo.Core.Requests;
     using Tempo.Core.Runtime;
+    using Tempo.Core.Services;
     using Tempo.Core.Settings;
     using Tempo.Core.Workers;
     using Tempo.Server;
@@ -37,8 +41,10 @@ namespace Test.Shared.Suites
                 cases: new[]
                 {
                     new TestCaseDescriptor("RunLogs", "ServiceIndexesReadsAndDeletes", "RunLogService indexes files, enforces bounded reads, and protects active files", ServiceIndexesReadsAndDeletesAsync),
+                    new TestCaseDescriptor("RunLogs", "RunListFiltersByWorkerAndSourceIp", "Flow-run enumeration filters support assigned worker id and source IP", RunListFiltersByWorkerAndSourceIpAsync),
                     new TestCaseDescriptor("RunLogs", "LocalRoutesExposeActivityAndLogs", "Tenant-scoped run activity and log routes expose local server execution details", LocalRoutesExposeActivityAndLogsAsync),
                     new TestCaseDescriptor("RunLogs", "RemoteRoutesExposeWorkerLogs", "Tenant-scoped run log routes expose worker execution details for remote assignments", RemoteRoutesExposeWorkerLogsAsync),
+                    new TestCaseDescriptor("RunLogs", "JavaScriptSourceLogsUseRealLineBreaks", "JavaScript source-step logging writes real line breaks instead of literal backslash-n sequences", JavaScriptSourceLogsUseRealLineBreaksAsync),
                     new TestCaseDescriptor("RunLogs", "PruneRemovesExpiredCompletedRuns", "Server-owned retention pruning removes expired completed run-log directories", PruneRemovesExpiredCompletedRunsAsync)
                 });
         }
@@ -225,6 +231,86 @@ namespace Test.Shared.Suites
             }
         }
 
+        private static async Task RunListFiltersByWorkerAndSourceIpAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct).ConfigureAwait(false);
+            TempoServer? server = null;
+            string root = NewTempRoot("tempo-runlog-filters");
+            try
+            {
+                CoreTenant tenant = await driver.Tenants.CreateAsync(new CoreTenant { Name = "Run Filter Tenant" }, ct).ConfigureAwait(false);
+                DataFlowRecord flow = await driver.DataFlows.CreateAsync(new DataFlowRecord
+                {
+                    TenantId = tenant.Id,
+                    Name = "Run filter flow",
+                    StartStepId = "noop",
+                    Transitions = new Dictionary<string, StepTransition> { ["noop"] = new StepTransition() }
+                }, ct).ConfigureAwait(false);
+
+                await driver.FlowRuns.CreateAsync(new FlowRun
+                {
+                    TenantId = tenant.Id,
+                    DataFlowId = flow.Id,
+                    SourceIp = "198.51.100.41",
+                    AssignedWorkerId = "wrk_filter_a",
+                    State = FlowRunStateEnum.Succeeded,
+                    DispatchState = FlowRunDispatchStateEnum.Completed
+                }, ct).ConfigureAwait(false);
+
+                await driver.FlowRuns.CreateAsync(new FlowRun
+                {
+                    TenantId = tenant.Id,
+                    DataFlowId = flow.Id,
+                    SourceIp = "198.51.100.42",
+                    AssignedWorkerId = "wrk_filter_a",
+                    State = FlowRunStateEnum.Succeeded,
+                    DispatchState = FlowRunDispatchStateEnum.Completed
+                }, ct).ConfigureAwait(false);
+
+                FlowRun matchingRun = await driver.FlowRuns.CreateAsync(new FlowRun
+                {
+                    TenantId = tenant.Id,
+                    DataFlowId = flow.Id,
+                    SourceIp = "198.51.100.41",
+                    AssignedWorkerId = "wrk_filter_b",
+                    State = FlowRunStateEnum.Succeeded,
+                    DispatchState = FlowRunDispatchStateEnum.Completed
+                }, ct).ConfigureAwait(false);
+
+                int port = FreePort();
+                server = new TempoServer(CreateServerSettings(root, port, serverCanExecuteWorkload: false), SilentLogger(), driver, new StepManager());
+                await server.StartAsync().ConfigureAwait(false);
+
+                using HttpClient client = CreateAdminClient(port);
+
+                using JsonDocument workerFiltered = await ReadJsonAsync(
+                    client,
+                    "/v1.0/tenants/" + tenant.Id + "/runs?workerId=wrk_filter_a",
+                    ct).ConfigureAwait(false);
+                Assert2.Equal(2, workerFiltered.RootElement.GetProperty("items").GetArrayLength(), "worker filter returns both wrk_filter_a runs");
+
+                using JsonDocument sourceFiltered = await ReadJsonAsync(
+                    client,
+                    "/v1.0/tenants/" + tenant.Id + "/runs?sourceIp=198.51.100.41",
+                    ct).ConfigureAwait(false);
+                Assert2.Equal(2, sourceFiltered.RootElement.GetProperty("items").GetArrayLength(), "source-ip filter returns both matching runs");
+
+                using JsonDocument combinedFiltered = await ReadJsonAsync(
+                    client,
+                    "/v1.0/tenants/" + tenant.Id + "/runs?workerId=wrk_filter_b&sourceIp=198.51.100.41",
+                    ct).ConfigureAwait(false);
+                JsonElement[] combinedItems = combinedFiltered.RootElement.GetProperty("items").EnumerateArray().ToArray();
+                Assert2.Equal(1, combinedItems.Length, "combined filters narrow results to a single run");
+                Assert2.Equal(matchingRun.Id, combinedItems[0].GetProperty("id").GetString()!, "combined filters return the expected run");
+            }
+            finally
+            {
+                try { server?.Dispose(); } catch { /* ignore */ }
+                await TempTestStore.DisposeAsync(driver).ConfigureAwait(false);
+                DeleteDirectory(root);
+            }
+        }
+
         private static async Task RemoteRoutesExposeWorkerLogsAsync(CancellationToken ct)
         {
             SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct).ConfigureAwait(false);
@@ -288,6 +374,50 @@ namespace Test.Shared.Suites
             finally
             {
                 await StopWorkerTaskAsync(workerCts, workerTask).ConfigureAwait(false);
+                try { server?.Dispose(); } catch { /* ignore */ }
+                await TempTestStore.DisposeAsync(driver).ConfigureAwait(false);
+                DeleteDirectory(root);
+            }
+        }
+
+        private static async Task JavaScriptSourceLogsUseRealLineBreaksAsync(CancellationToken ct)
+        {
+            if (!await NodeAvailableAsync(ct).ConfigureAwait(false)) return;
+
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct).ConfigureAwait(false);
+            TempoServer? server = null;
+            string root = NewTempRoot("tempo-runlog-javascript-linebreaks");
+            try
+            {
+                CoreTenant tenant = await driver.Tenants.CreateAsync(new CoreTenant { Name = "Run Log JavaScript" }, ct).ConfigureAwait(false);
+
+                int port = FreePort();
+                Settings settings = CreateServerSettings(root, port, serverCanExecuteWorkload: true);
+                server = new TempoServer(settings, SilentLogger(), driver, new StepManager());
+                await server.StartAsync().ConfigureAwait(false);
+
+                DataFlowRecord flow = await CreateJavaScriptSourceFlowAsync(driver, settings, tenant.Id, ct).ConfigureAwait(false);
+                FlowRun run = await server.Dispatch.EnqueueAsync(tenant.Id, flow.Id, "{\"value\":123}", null, null, "198.51.100.40", ct).ConfigureAwait(false);
+                FlowRun completed = await WaitForTerminalAsync(driver, tenant.Id, run.Id, ct).ConfigureAwait(false);
+
+                using HttpClient client = CreateAdminClient(port);
+                using JsonDocument files = await ReadJsonAsync(client, "/v1.0/tenants/" + tenant.Id + "/runs/" + run.Id + "/logs", ct).ConfigureAwait(false);
+                JsonElement stepLog = files.RootElement.EnumerateArray().First(file => file.GetProperty("kind").GetString() == "Step");
+                string stepLogPath = Uri.EscapeDataString(stepLog.GetProperty("path").GetString()!);
+
+                using JsonDocument stepRead = await ReadJsonAsync(
+                    client,
+                    "/v1.0/tenants/" + tenant.Id + "/runs/" + run.Id + "/logs/content?path=" + stepLogPath + "&tailLines=50&maxBytes=65536",
+                    ct).ConfigureAwait(false);
+                string stepLogContent = stepRead.RootElement.GetProperty("content").GetString() ?? string.Empty;
+
+                Assert2.Equal(FlowRunStateEnum.Succeeded, completed.State, "javascript source run completed successfully");
+                Assert2.True(stepLogContent.Contains("Echo step received input: {\"value\":123}", StringComparison.Ordinal), "javascript step log contains the emitted message");
+                Assert2.True(!stepLogContent.Contains("\\n", StringComparison.Ordinal), "javascript step log does not contain literal newline escape sequences");
+                Assert2.True(stepLogContent.Contains("completed with result Success", StringComparison.Ordinal), "completion line remains on its own line");
+            }
+            finally
+            {
                 try { server?.Dispose(); } catch { /* ignore */ }
                 await TempTestStore.DisposeAsync(driver).ConfigureAwait(false);
                 DeleteDirectory(root);
@@ -467,6 +597,34 @@ namespace Test.Shared.Suites
             }, token).ConfigureAwait(false);
         }
 
+        private static async Task<DataFlowRecord> CreateJavaScriptSourceFlowAsync(SqliteDatabaseDriver driver, Settings settings, string tenantId, CancellationToken token)
+        {
+            LocalFilesystemArtifactBlobStore blobStore = new LocalFilesystemArtifactBlobStore(settings.Artifacts);
+            SourceStepPackageService sourceSteps = new SourceStepPackageService(driver, blobStore, settings.Runtimes.ExternalExecution);
+            string executionKey = "tempo.runlog.javascript." + Guid.NewGuid().ToString("N");
+
+            await sourceSteps.CreateAsync(tenantId, new SourceStepCreateRequest
+            {
+                ExecutionKey = executionKey,
+                Name = "JavaScript log echo",
+                Language = "JavaScript",
+                FileName = "handler.js",
+                Function = "run",
+                Code = "exports.run = async function(req) {\n  console.log(\"Echo step received input:\", req.data);\n  return { ok: true, input: req.data };\n};\n"
+            }, token).ConfigureAwait(false);
+
+            return await driver.DataFlows.CreateAsync(new DataFlowRecord
+            {
+                TenantId = tenantId,
+                Name = "flow-" + executionKey,
+                StartStepId = executionKey,
+                Transitions = new Dictionary<string, StepTransition>
+                {
+                    [executionKey] = new StepTransition()
+                }
+            }, token).ConfigureAwait(false);
+        }
+
         private static (CancellationTokenSource, Task) StartWorkerTask(WorkerSettings settings, CancellationToken token)
         {
             CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -566,6 +724,30 @@ namespace Test.Shared.Suites
             int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
             listener.Stop();
             return port;
+        }
+
+        private static async Task<bool> NodeAvailableAsync(CancellationToken token)
+        {
+            try
+            {
+                using Process process = new Process();
+                process.StartInfo = new ProcessStartInfo
+                {
+                    FileName = "node",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                process.StartInfo.ArgumentList.Add("--version");
+                if (!process.Start()) return false;
+                await process.WaitForExitAsync(token).ConfigureAwait(false);
+                return process.ExitCode == 0;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private static string NewTempRoot(string prefix)

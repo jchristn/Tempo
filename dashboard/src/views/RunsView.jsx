@@ -113,6 +113,8 @@ function RunsView({ apiClient, principal }) {
   const [loading, setLoading] = useState(false);
   const [stateFilter, setStateFilter] = useState('');
   const [flowIdFilter, setFlowIdFilter] = useState('');
+  const [workerIdFilter, setWorkerIdFilter] = useState('');
+  const [sourceIpFilter, setSourceIpFilter] = useState('');
   const [viewing, setViewing] = useState(null);
   const [steps, setSteps] = useState([]);
   const [runActivity, setRunActivity] = useState(null);
@@ -140,7 +142,9 @@ function RunsView({ apiClient, principal }) {
       pageNumber,
       pageSize,
       state: stateFilter || undefined,
-      dataFlowId: flowIdFilter || undefined
+      dataFlowId: flowIdFilter || undefined,
+      workerId: workerIdFilter || undefined,
+      sourceIp: sourceIpFilter || undefined
     }).then((d) => {
       if (!cancelled) setData(d);
     }).catch(() => {
@@ -149,7 +153,7 @@ function RunsView({ apiClient, principal }) {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [apiClient, tenantId, pageNumber, pageSize, stateFilter, flowIdFilter, refreshKey]);
+  }, [apiClient, tenantId, pageNumber, pageSize, stateFilter, flowIdFilter, workerIdFilter, sourceIpFilter, refreshKey]);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -367,17 +371,57 @@ function RunsView({ apiClient, principal }) {
       <div className="filter-bar compact" style={{ marginBottom: 'var(--spacing-sm)' }}>
         <div className="field">
           <label title="Filter to runs in a specific lifecycle state">State</label>
-          <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} title="Filter to runs in a specific lifecycle state">
+          <select
+            value={stateFilter}
+            onChange={(e) => { setStateFilter(e.target.value); setPageNumber(1); }}
+            title="Filter to runs in a specific lifecycle state"
+          >
             <option value="">Any</option>
             {Object.keys(STATE_PILL).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div className="field">
           <label title="Show only runs of a single flow by identifier">Flow ID</label>
-          <input value={flowIdFilter} onChange={(e) => setFlowIdFilter(e.target.value)} placeholder="flow_..." title="Show only runs of a single flow by identifier" />
+          <input
+            value={flowIdFilter}
+            onChange={(e) => { setFlowIdFilter(e.target.value); setPageNumber(1); }}
+            placeholder="flow_..."
+            title="Show only runs of a single flow by identifier"
+          />
+        </div>
+        <div className="field">
+          <label title="Show only runs assigned to a specific worker identifier">Worker ID</label>
+          <input
+            value={workerIdFilter}
+            onChange={(e) => { setWorkerIdFilter(e.target.value); setPageNumber(1); }}
+            placeholder="wrk_..."
+            title="Show only runs assigned to a specific worker identifier"
+          />
+        </div>
+        <div className="field">
+          <label title="Show only runs observed from a specific client source IP">Source IP</label>
+          <input
+            value={sourceIpFilter}
+            onChange={(e) => { setSourceIpFilter(e.target.value); setPageNumber(1); }}
+            placeholder="198.51.100.10"
+            title="Show only runs observed from a specific client source IP"
+          />
         </div>
         <div style={{ display: 'flex', alignItems: 'end' }}>
-          <button className="button-secondary" onClick={() => { setStateFilter(''); setFlowIdFilter(''); }} style={{ width: '100%' }} title="Clear all run filters">Clear</button>
+          <button
+            className="button-secondary"
+            onClick={() => {
+              setStateFilter('');
+              setFlowIdFilter('');
+              setWorkerIdFilter('');
+              setSourceIpFilter('');
+              setPageNumber(1);
+            }}
+            style={{ width: '100%' }}
+            title="Clear all run filters"
+          >
+            Clear
+          </button>
         </div>
       </div>
 
@@ -409,7 +453,7 @@ function RunsView({ apiClient, principal }) {
             setRunError('');
           }}
           title={'Run - ' + viewing.id.slice(0, 16)}
-          size="large"
+          size="xlarge"
           headerMeta={<ModalRecordId label="Run ID" value={viewing.id} />}
         >
           {runError && <div className="login-error">{runError}</div>}
@@ -457,23 +501,45 @@ function RunsView({ apiClient, principal }) {
 
           <div className="drawer-section">
             <div className="drawer-section-title">Summary</div>
-            <dl className="details-kv">
-              <dt title="Lifecycle state for this run">State</dt><dd><span className={'pill ' + (STATE_PILL[pick(viewing, 'state', 'State', '')] || 'pill-neutral')}>{pick(viewing, 'state', 'State', '-')}</span></dd>
-              <dt title="Flow identifier executed by this run">Flow</dt><dd>{pick(viewing, 'dataFlowId', 'DataFlowId') ? <CopyableId value={pick(viewing, 'dataFlowId', 'DataFlowId')} /> : '-'}</dd>
-              <dt title="Client IP observed when the run was enqueued">Source IP</dt><dd><span className="monospace">{pick(viewing, 'sourceIp', 'SourceIp', '-')}</span></dd>
-              <dt title="Fine-grained dispatch and recovery state">Dispatch</dt><dd><span className="pill pill-neutral">{pick(viewing, 'dispatchState', 'DispatchState', '-')}</span></dd>
-              <dt title="Worker assigned to this run">Worker</dt><dd>{pick(viewing, 'assignedWorkerId', 'AssignedWorkerId') ? <CopyableId value={pick(viewing, 'assignedWorkerId', 'AssignedWorkerId')} /> : '-'}</dd>
-              <dt title="Execution node type that ran the workload">Node kind</dt><dd>{pick(viewing, 'executionNodeKind', 'ExecutionNodeKind', '-')}</dd>
-              <dt title="Current or last assignment record id">Assignment</dt><dd>{pick(viewing, 'runAssignmentId', 'RunAssignmentId') ? <CopyableId value={pick(viewing, 'runAssignmentId', 'RunAssignmentId')} /> : '-'}</dd>
-              <dt title="Queued timestamp">Queued</dt><dd>{formatTime(pick(viewing, 'createdUtc', 'CreatedUtc'))}</dd>
-              <dt title="Assigned timestamp">Assigned</dt><dd>{formatTime(pick(viewing, 'assignedUtc', 'AssignedUtc'))}</dd>
-              <dt title="Started timestamp">Started</dt><dd>{formatTime(pick(viewing, 'startedUtc', 'StartedUtc'))}</dd>
-              <dt title="Completed timestamp">Completed</dt><dd>{formatTime(pick(viewing, 'completedUtc', 'CompletedUtc'))}</dd>
-              <dt title="Lease expiry for the current assignment">Lease expiry</dt><dd>{formatTime(pick(viewing, 'leaseExpiresUtc', 'LeaseExpiresUtc'))}</dd>
-              <dt title="Original run input payload">Input</dt><dd><pre className="code-block">{pick(viewing, 'inputData', 'InputData', '') || '(empty)'}</pre></dd>
-              <dt title="Final run output payload">Output</dt><dd><pre className="code-block">{pick(viewing, 'outputData', 'OutputData', '') || '(empty)'}</pre></dd>
-              {pick(viewing, 'errorMessage', 'ErrorMessage') && (<><dt title="Terminal error message for this run">Error</dt><dd style={{ color: 'var(--color-danger)' }}>{pick(viewing, 'errorMessage', 'ErrorMessage')}</dd></>)}
-            </dl>
+            <div className="run-summary-grid">
+              <div className="summary-panel">
+                <div className="summary-panel-title">Execution</div>
+                <dl className="details-kv run-summary-kv">
+                  <dt title="Lifecycle state for this run">State</dt><dd><span className={'pill ' + (STATE_PILL[pick(viewing, 'state', 'State', '')] || 'pill-neutral')}>{pick(viewing, 'state', 'State', '-')}</span></dd>
+                  <dt title="Flow identifier executed by this run">Flow</dt><dd>{pick(viewing, 'dataFlowId', 'DataFlowId') ? <CopyableId value={pick(viewing, 'dataFlowId', 'DataFlowId')} /> : '-'}</dd>
+                  <dt title="Client IP observed when the run was enqueued">Source IP</dt><dd><span className="monospace">{pick(viewing, 'sourceIp', 'SourceIp', '-')}</span></dd>
+                  <dt title="Fine-grained dispatch and recovery state">Dispatch</dt><dd><span className="pill pill-neutral">{pick(viewing, 'dispatchState', 'DispatchState', '-')}</span></dd>
+                  <dt title="Worker assigned to this run">Worker</dt><dd>{pick(viewing, 'assignedWorkerId', 'AssignedWorkerId') ? <CopyableId value={pick(viewing, 'assignedWorkerId', 'AssignedWorkerId')} /> : '-'}</dd>
+                  <dt title="Execution node type that ran the workload">Node kind</dt><dd>{pick(viewing, 'executionNodeKind', 'ExecutionNodeKind', '-')}</dd>
+                  <dt title="Current or last assignment record id">Assignment</dt><dd>{pick(viewing, 'runAssignmentId', 'RunAssignmentId') ? <CopyableId value={pick(viewing, 'runAssignmentId', 'RunAssignmentId')} /> : '-'}</dd>
+                  <dt title="Queued timestamp">Queued</dt><dd>{formatTime(pick(viewing, 'createdUtc', 'CreatedUtc'))}</dd>
+                  <dt title="Assigned timestamp">Assigned</dt><dd>{formatTime(pick(viewing, 'assignedUtc', 'AssignedUtc'))}</dd>
+                  <dt title="Started timestamp">Started</dt><dd>{formatTime(pick(viewing, 'startedUtc', 'StartedUtc'))}</dd>
+                  <dt title="Completed timestamp">Completed</dt><dd>{formatTime(pick(viewing, 'completedUtc', 'CompletedUtc'))}</dd>
+                  <dt title="Lease expiry for the current assignment">Lease expiry</dt><dd>{formatTime(pick(viewing, 'leaseExpiresUtc', 'LeaseExpiresUtc'))}</dd>
+                </dl>
+              </div>
+
+              <div className="summary-panel">
+                <div className="summary-panel-title">Payloads</div>
+                <div className="summary-panel-stack">
+                  <div className="summary-code-section">
+                    <div className="summary-code-label" title="Original run input payload">Input</div>
+                    <pre className="code-block">{pick(viewing, 'inputData', 'InputData', '') || '(empty)'}</pre>
+                  </div>
+                  <div className="summary-code-section">
+                    <div className="summary-code-label" title="Final run output payload">Output</div>
+                    <pre className="code-block">{pick(viewing, 'outputData', 'OutputData', '') || '(empty)'}</pre>
+                  </div>
+                  {pick(viewing, 'errorMessage', 'ErrorMessage') && (
+                    <div className="summary-code-section">
+                      <div className="summary-code-label" title="Terminal error message for this run">Error</div>
+                      <div className="summary-error-block">{pick(viewing, 'errorMessage', 'ErrorMessage')}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="drawer-section">

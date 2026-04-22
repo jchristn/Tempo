@@ -17,6 +17,12 @@ namespace Tempo.Core.Requests
         /// <summary>Filter by current state.</summary>
         public FlowRunStateEnum? State { get; set; } = null;
 
+        /// <summary>Filter to runs assigned to a specific worker.</summary>
+        public string? WorkerId { get; set; } = null;
+
+        /// <summary>Filter to runs observed from a specific client source IP.</summary>
+        public string? SourceIp { get; set; } = null;
+
         /// <summary>Inclusive lower UTC bound on CreatedUtc.</summary>
         public DateTime? FromUtc { get; set; } = null;
 

@@ -158,3 +158,32 @@ test('RunsView deletes the selected archived run log and refreshes the log list'
   await waitFor(() => expect(apiClient.deleteRunLog).toHaveBeenCalledWith('ten_1', 'run_1', 'run.log'));
   await waitFor(() => expect(apiClient.listRunLogs).toHaveBeenCalledTimes(2));
 });
+
+test('RunsView passes worker and source IP filters to listRuns', async () => {
+  const apiClient = createRunsApiClient();
+
+  render(<RunsView apiClient={apiClient} principal={{ tenantId: 'ten_1', type: 'user' }} />);
+
+  await waitFor(() => expect(apiClient.listRuns).toHaveBeenCalledWith('ten_1', expect.objectContaining({
+    pageNumber: 1,
+    pageSize: 25,
+    workerId: undefined,
+    sourceIp: undefined
+  })));
+
+  fireEvent.change(
+    screen.getByPlaceholderText('wrk_...'),
+    { target: { value: 'wrk_1' } }
+  );
+  fireEvent.change(
+    screen.getByPlaceholderText('198.51.100.10'),
+    { target: { value: '198.51.100.10' } }
+  );
+
+  await waitFor(() => expect(apiClient.listRuns).toHaveBeenLastCalledWith('ten_1', expect.objectContaining({
+    pageNumber: 1,
+    pageSize: 25,
+    workerId: 'wrk_1',
+    sourceIp: '198.51.100.10'
+  })));
+});

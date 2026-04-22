@@ -108,6 +108,8 @@ namespace Tempo.Core.Database.Common.Implementations
             if (!string.IsNullOrEmpty(filter.TenantId)) clauses.Add("tenant_id = " + _D.Quote(filter.TenantId));
             if (!string.IsNullOrEmpty(filter.DataFlowId)) clauses.Add("data_flow_id = " + _D.Quote(filter.DataFlowId));
             if (filter.State.HasValue) clauses.Add("state = " + _D.Quote(filter.State.Value.ToString()));
+            if (!string.IsNullOrWhiteSpace(filter.WorkerId)) clauses.Add("assigned_worker_id = " + _D.Quote(filter.WorkerId));
+            if (!string.IsNullOrWhiteSpace(filter.SourceIp)) clauses.Add("source_ip = " + _D.Quote(filter.SourceIp));
             if (filter.FromUtc.HasValue) clauses.Add("created_utc >= " + _D.Quote(filter.FromUtc));
             if (filter.ToUtc.HasValue) clauses.Add("created_utc < " + _D.Quote(filter.ToUtc));
             string where = clauses.Count == 0 ? "" : " WHERE " + string.Join(" AND ", clauses);

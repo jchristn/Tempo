@@ -1080,7 +1080,7 @@ Example bounded-read response:
   "downloadAllowed": true,
   "deleteMode": "Delete",
   "contentType": "text/plain; charset=utf-8",
-  "content": "2026-04-22T18:00:00.0000000Z [Info] Worker accepted the assignment and started execution.\n",
+  "content": "2026-04-22T18:00:00.0000000Z [Info] Worker accepted the assignment and started execution\n",
   "truncated": false,
   "tailLines": 200,
   "maxBytes": 131072,

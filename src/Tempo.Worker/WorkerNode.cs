@@ -239,15 +239,15 @@ namespace Tempo.Worker
             {
                 if (string.IsNullOrWhiteSpace(sessionId) || !string.Equals(assignment.WorkerSessionId, sessionId, StringComparison.Ordinal))
                 {
-                    rejectionMessage = "Assignment was issued for a different worker session.";
+                    rejectionMessage = "Assignment was issued for a different worker session";
                 }
                 else if (_DrainMode)
                 {
-                    rejectionMessage = "Worker is draining.";
+                    rejectionMessage = "Worker is draining";
                 }
                 else if (!WorkerDescriptorJson.SupportsPlan(WorkerDescriptorJson.SerializeCapabilities(BuildCapabilities()), plan))
                 {
-                    rejectionMessage = "Worker capabilities do not satisfy the execution plan.";
+                    rejectionMessage = "Worker capabilities do not satisfy the execution plan";
                 }
                 else
                 {
@@ -255,7 +255,7 @@ namespace Tempo.Worker
                     {
                         if (_ActiveAssignments.Count >= _Settings.MaxConcurrentRuns)
                         {
-                            rejectionMessage = "Worker is at max concurrency.";
+                            rejectionMessage = "Worker is at max concurrency";
                         }
                         else
                         {
@@ -399,7 +399,7 @@ namespace Tempo.Worker
             Stopwatch runtime = Stopwatch.StartNew();
             if (runLogs != null)
             {
-                await runLogs.AppendWorkerAsync("Info", "Worker accepted the assignment and started execution.", token).ConfigureAwait(false);
+                await runLogs.AppendWorkerAsync("Info", "Worker accepted the assignment and started execution", token).ConfigureAwait(false);
             }
 
             Task<StepResult> runTask = runner.Run(plan.Flow, request, plan.ExecutionSnapshot, executionCts.Token);
@@ -421,7 +421,7 @@ namespace Tempo.Worker
                     {
                         await runLogs.AppendWorkerAsync(
                             "Error",
-                            "Assignment exceeded maxTaskTimeoutMs of " + _Settings.MaxTaskTimeoutMs + " after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                            "Assignment exceeded maxTaskTimeoutMs of " + _Settings.MaxTaskTimeoutMs + " after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms",
                             token).ConfigureAwait(false);
                     }
 
@@ -433,7 +433,7 @@ namespace Tempo.Worker
                         WorkerSessionId = _WorkerSessionId,
                         LeaseToken = assignment.LeaseToken,
                         FinalState = FlowRunStateEnum.Exception,
-                        ErrorMessage = "Worker task exceeded maxTaskTimeoutMs of " + _Settings.MaxTaskTimeoutMs + ".",
+                        ErrorMessage = "Worker task exceeded maxTaskTimeoutMs of " + _Settings.MaxTaskTimeoutMs,
                         ExecutionSnapshotJson = FlowRunExecutionSnapshotSerializer.Serialize(plan.ExecutionSnapshot),
                         StepRuns = bufferedMetrics.Snapshot(),
                         CompletedUtc = DateTime.UtcNow
@@ -449,7 +449,7 @@ namespace Tempo.Worker
                     {
                         await runLogs.AppendWorkerAsync(
                             "Warning",
-                            "Assignment was cancelled after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                            "Assignment was cancelled after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms",
                             token).ConfigureAwait(false);
                     }
 
@@ -473,7 +473,7 @@ namespace Tempo.Worker
                 {
                     await runLogs.AppendWorkerAsync(
                         "Info",
-                        "Assignment completed with result " + result.Result + " in " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                        "Assignment completed with result " + result.Result + " in " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms",
                         token).ConfigureAwait(false);
                 }
                 return new RunCompletionReport
@@ -505,7 +505,7 @@ namespace Tempo.Worker
                 {
                     await runLogs.AppendWorkerAsync(
                         "Warning",
-                        "Assignment was cancelled after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                        "Assignment was cancelled after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms",
                         CancellationToken.None).ConfigureAwait(false);
                 }
                 return new RunCompletionReport

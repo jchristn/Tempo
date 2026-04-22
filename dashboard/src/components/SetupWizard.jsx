@@ -5,14 +5,14 @@ import CopyableId from './CopyableId';
 import CopyButton from './CopyButton';
 import { formatTime } from '../utils/formatters';
 
-function codeTemplate(language, kind = 'echo') {
+export function codeTemplate(language, kind = 'echo') {
   if (language === 'CSharp') {
     if (kind === 'random') {
       return {
         fileName: 'RandomNumberHandler.cs',
         function: 'run',
         handlerType: 'Tempo.UserSteps.RandomNumberHandler',
-        code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class RandomNumberHandler : ITempoStepHandler\n{\n    private static readonly Random Random = new Random();\n\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        int value = Random.Next(1, 11);\n        return Task.FromResult(TempoStepHost.Success(request, new { value, min = 1, max = 10 }));\n    }\n}\n'
+        code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class RandomNumberHandler : ITempoStepHandler\n{\n    private static readonly Random Random = new Random();\n\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        int value = Random.Next(1, 11);\n        Console.Error.WriteLine("Random number step generated value: " + value);\n        return Task.FromResult(TempoStepHost.Success(request, new { value, min = 1, max = 10 }));\n    }\n}\n'
       };
     }
     if (kind === 'double') {
@@ -20,14 +20,14 @@ function codeTemplate(language, kind = 'echo') {
         fileName: 'DoubleNumberHandler.cs',
         function: 'run',
         handlerType: 'Tempo.UserSteps.DoubleNumberHandler',
-        code: 'using System.Text.Json;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class DoubleNumberHandler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        double input = ReadNumber(request.Data);\n        return Task.FromResult(TempoStepHost.Success(request, new { input, value = input * 2 }));\n    }\n\n    private static double ReadNumber(object? data)\n    {\n        if (data is JsonElement element)\n        {\n            if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out double number)) return number;\n            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("value", out JsonElement value) && value.TryGetDouble(out double nested)) return nested;\n        }\n        return 0;\n    }\n}\n'
+        code: 'using System;\nusing System.Text.Json;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class DoubleNumberHandler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        double input = ReadNumber(request.Data);\n        Console.Error.WriteLine("Double number step received value: " + input);\n        return Task.FromResult(TempoStepHost.Success(request, new { input, value = input * 2 }));\n    }\n\n    private static double ReadNumber(object? data)\n    {\n        if (data is JsonElement element)\n        {\n            if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out double number)) return number;\n            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("value", out JsonElement value) && value.TryGetDouble(out double nested)) return nested;\n        }\n        return 0;\n    }\n}\n'
       };
     }
     return {
       fileName: 'Handler.cs',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'using System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        return Task.FromResult(TempoStepHost.Success(request, new { ok = true, input = request.Data }));\n    }\n}\n'
+      code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        Console.Error.WriteLine("Echo step received input: " + request.Data);\n        return Task.FromResult(TempoStepHost.Success(request, new { ok = true, input = request.Data }));\n    }\n}\n'
     };
   }
   if (language === 'Python') {
@@ -36,7 +36,7 @@ function codeTemplate(language, kind = 'echo') {
         fileName: 'random_number_handler.py',
         function: 'run',
         handlerType: 'Tempo.UserSteps.Handler',
-        code: 'import random\n\n\ndef run(req):\n    value = random.randint(1, 10)\n    return {\"value\": value, \"min\": 1, \"max\": 10}\n'
+        code: 'import random\n\n\ndef run(req):\n    value = random.randint(1, 10)\n    print(f"Random number step generated value: {value}")\n    return {\"value\": value, \"min\": 1, \"max\": 10}\n'
       };
     }
     if (kind === 'double') {
@@ -44,14 +44,14 @@ function codeTemplate(language, kind = 'echo') {
         fileName: 'double_number_handler.py',
         function: 'run',
         handlerType: 'Tempo.UserSteps.Handler',
-        code: 'def run(req):\n    data = req.get(\"data\") or {}\n    value = data if isinstance(data, (int, float)) else data.get(\"value\", 0)\n    return {\"input\": value, \"value\": value * 2}\n'
+        code: 'def run(req):\n    data = req.get(\"data\") or {}\n    value = data if isinstance(data, (int, float)) else data.get(\"value\", 0)\n    print(f"Double number step received value: {value}")\n    return {\"input\": value, \"value\": value * 2}\n'
       };
     }
     return {
       fileName: 'handler.py',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'def run(req):\n    return {\"ok\": True, \"input\": req.get(\"data\")}\n'
+      code: 'def run(req):\n    print("Echo step received input:", req.get("data"))\n    return {\"ok\": True, \"input\": req.get(\"data\")}\n'
     };
   }
   if (kind === 'random') {
@@ -59,7 +59,7 @@ function codeTemplate(language, kind = 'echo') {
       fileName: 'random-number-handler.js',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'exports.run = async function(req) {\n  const value = Math.floor(Math.random() * 10) + 1;\n  return { value, min: 1, max: 10 };\n};\n'
+      code: 'exports.run = async function(req) {\n  const value = Math.floor(Math.random() * 10) + 1;\n  console.log("Random number step generated value:", value);\n  return { value, min: 1, max: 10 };\n};\n'
     };
   }
   if (kind === 'double') {
@@ -67,14 +67,14 @@ function codeTemplate(language, kind = 'echo') {
       fileName: 'double-number-handler.js',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'exports.run = async function(req) {\n  const data = req.data || {};\n  const value = typeof data === "number" ? data : Number(data.value || 0);\n  return { input: value, value: value * 2 };\n};\n'
+      code: 'exports.run = async function(req) {\n  const data = req.data || {};\n  const value = typeof data === "number" ? data : Number(data.value || 0);\n  console.log("Double number step received value:", value);\n  return { input: value, value: value * 2 };\n};\n'
     };
   }
   return {
     fileName: 'handler.js',
     function: 'run',
     handlerType: 'Tempo.UserSteps.Handler',
-    code: 'exports.run = async function(req) {\n  return { ok: true, input: req.data };\n};\n'
+    code: 'exports.run = async function(req) {\n  console.log("Echo step received input:", req.data);\n  return { ok: true, input: req.data };\n};\n'
   };
 }
 

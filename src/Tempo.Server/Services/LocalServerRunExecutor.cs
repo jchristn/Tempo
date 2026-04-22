@@ -129,7 +129,7 @@ namespace Tempo.Server.Services
                 Stopwatch runtime = Stopwatch.StartNew();
                 if (runLogs != null)
                 {
-                    await runLogs.AppendWorkerAsync("Info", "Assignment started on the server-local executor.", token).ConfigureAwait(false);
+                    await runLogs.AppendWorkerAsync("Info", "Assignment started on the server-local executor", token).ConfigureAwait(false);
                 }
 
                 Tempo.StepResult result = await runner.Run(plan.Flow, request, plan.ExecutionSnapshot, token).ConfigureAwait(false);
@@ -138,7 +138,7 @@ namespace Tempo.Server.Services
                 {
                     await runLogs.AppendWorkerAsync(
                         "Info",
-                        "Assignment completed with result " + result.Result + " in " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                        "Assignment completed with result " + result.Result + " in " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms",
                         token).ConfigureAwait(false);
                 }
                 return new RunCompletionReport

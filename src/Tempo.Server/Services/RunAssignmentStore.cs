@@ -115,7 +115,7 @@ namespace Tempo.Server.Services
                 RunAssignmentId = assignment.Id,
                 EventType = "assigned",
                 Severity = "Info",
-                Message = "Run assigned to worker '" + executor.WorkerId + "'."
+                Message = "Run assigned to worker " + executor.WorkerId
             }, token).ConfigureAwait(false);
 
             return assignment;
@@ -228,7 +228,7 @@ namespace Tempo.Server.Services
                     RunAssignmentId = completion.RunAssignmentId,
                     EventType = "execution_completed",
                     Severity = completion.FinalState == FlowRunStateEnum.Succeeded ? "Info" : "Warning",
-                    Message = "Assignment completed with state '" + completion.FinalState + "'.",
+                    Message = "Assignment completed with state " + completion.FinalState,
                     PayloadJson = System.Text.Json.JsonSerializer.Serialize(completion, WorkerProtocolSerialization.Options)
                 }, token).ConfigureAwait(false);
             }
@@ -635,7 +635,7 @@ namespace Tempo.Server.Services
 
         private async Task<bool> RecoverAssignmentAsync(RunAssignmentRecord assignment, DateTime utcNow, string reason, CancellationToken token)
         {
-            string failureMessage = "Run assignment '" + assignment.Id + "' was recovered after " + reason.Replace('_', ' ') + ".";
+            string failureMessage = "Run assignment " + assignment.Id + " was recovered after " + reason.Replace('_', ' ');
             bool exhausted = assignment.AttemptNumber >= _Settings.MaxAssignmentAttempts;
 
             List<string> batch = new List<string>
@@ -650,7 +650,7 @@ namespace Tempo.Server.Services
                 batch.Add(
                     "UPDATE flow_runs SET state = " + _Dialect.Quote(FlowRunStateEnum.Failed.ToString()) +
                     ", dispatch_state = " + _Dialect.Quote(FlowRunDispatchStateEnum.Failed.ToString()) +
-                    ", error_message = " + _Dialect.Quote("Maximum assignment attempts reached. " + failureMessage) +
+                    ", error_message = " + _Dialect.Quote("Maximum assignment attempts reached: " + failureMessage) +
                     ", completed_utc = " + _Dialect.Quote(utcNow) +
                     ", assigned_worker_id = NULL, run_assignment_id = NULL, assigned_utc = NULL, lease_expires_utc = NULL, execution_node_kind = NULL, started_utc = NULL, last_update_utc = " + _Dialect.Quote(utcNow) +
                     " WHERE id = " + _Dialect.Quote(assignment.FlowRunId) + " AND run_assignment_id = " + _Dialect.Quote(assignment.Id) + ";");
