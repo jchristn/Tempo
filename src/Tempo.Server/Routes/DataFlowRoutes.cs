@@ -6,6 +6,7 @@ namespace Tempo.Server.Routes
     using Tempo.Core.Requests;
     using Tempo.Core.Security;
     using Tempo.Core.Services;
+    using Tempo.Server.Helpers;
     using WatsonWebserver;
     using WatsonWebserver.Core;
     using WatsonWebserver.Core.OpenApi;
@@ -122,7 +123,8 @@ namespace Tempo.Server.Routes
             string? inputJson = body != null ? FlowDispatchService.SerializeData(body.Data) : null;
             try
             {
-                var run = await _Host.Dispatch.EnqueueAsync(tid, id, inputJson, rc.UserId);
+                string? sourceIp = ClientIpResolver.Resolve(ctx);
+                var run = await _Host.Dispatch.EnqueueAsync(tid, id, inputJson, rc.UserId, null, sourceIp);
                 await RouteHelpers.JsonAsync(ctx, 202, run);
             }
             catch (InvalidOperationException ex)

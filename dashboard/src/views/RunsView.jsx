@@ -7,6 +7,7 @@ import CopyableId from '../components/CopyableId';
 import JsonViewerModal from '../components/JsonViewerModal';
 import RowActions from '../components/RowActions';
 import ConfirmModal from '../components/ConfirmModal';
+import ModalRecordId from '../components/ModalRecordId';
 import { formatDuration, formatTime } from '../utils/formatters';
 
 const STATE_PILL = {
@@ -101,7 +102,25 @@ function RunsView({ apiClient, principal }) {
   const columns = [
     { key: 'createdUtc', label: 'Queued', tip: 'When this run was enqueued', render: (r) => formatTime(r.createdUtc) },
     { key: 'state', label: 'State', tip: 'Lifecycle state: Queued → Running → Succeeded / Failed / Exception / Cancelled', render: (r) => <span className={'pill ' + (STATE_PILL[r.state] || 'pill-neutral')}>{r.state}</span> },
+    { key: 'dispatchState', label: 'Dispatch', tip: 'Fine-grained dispatch and recovery state', render: (r) => <span className="pill pill-neutral">{pick(r, 'dispatchState', 'DispatchState', '-')}</span> },
     { key: 'dataFlowId', label: 'Flow', tip: 'The data flow being executed', render: (r) => <CopyableId value={r.dataFlowId} /> },
+    { key: 'sourceIp', label: 'Source IP', tip: 'Client IP observed by the server when this run was enqueued', render: (r) => <span className="monospace">{pick(r, 'sourceIp', 'SourceIp', '-')}</span> },
+    {
+      key: 'assignedWorkerId',
+      label: 'Placement',
+      tip: 'Assigned worker and execution node kind',
+      render: (r) => {
+        const workerId = pick(r, 'assignedWorkerId', 'AssignedWorkerId', '');
+        const nodeKind = pick(r, 'executionNodeKind', 'ExecutionNodeKind', '');
+        if (!workerId) return '-';
+        return (
+          <div>
+            <div><CopyableId value={workerId} max={16} /></div>
+            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>{nodeKind || 'Worker'}</div>
+          </div>
+        );
+      }
+    },
     { key: 'id', label: 'Run', tip: 'Globally unique run id (prefix run_)', render: (r) => <CopyableId value={r.id} /> },
     { key: 'duration', label: 'Duration', tip: 'Time from start to completion (started → completed)', cellClass: 'right', render: (r) => r.startedUtc && r.completedUtc ? formatDuration(new Date(r.completedUtc) - new Date(r.startedUtc)) : '-' },
     { key: 'actions', label: '', style: { width: 48 }, render: (r) => (
@@ -124,7 +143,7 @@ function RunsView({ apiClient, principal }) {
         actions={
           <>
             <TenantPicker apiClient={apiClient} value={tenantId} onChange={setTenantId} />
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }} title="Refresh the run list automatically every few seconds">
               <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} style={{ width: 'auto' }} />
               Auto-refresh
             </label>
@@ -145,9 +164,9 @@ function RunsView({ apiClient, principal }) {
           <input value={flowIdFilter} onChange={(e) => setFlowIdFilter(e.target.value)} placeholder="flow_…" />
         </div>
         <div style={{ display: 'flex', alignItems: 'end' }}>
-          <button className="button-secondary" onClick={() => { setStateFilter(''); setFlowIdFilter(''); }} style={{ width: '100%' }}>Clear</button>
+            <button className="button-secondary" onClick={() => { setStateFilter(''); setFlowIdFilter(''); }} style={{ width: '100%' }} title="Clear all run filters">Clear</button>
+          </div>
         </div>
-      </div>
 
       <TableFrame
         columns={columns}
@@ -165,13 +184,27 @@ function RunsView({ apiClient, principal }) {
       />
 
       {viewing && (
-        <Modal open onClose={() => setViewing(null)} title={'Run · ' + viewing.id.slice(0, 16)} size="large">
+        <Modal
+          open
+          onClose={() => setViewing(null)}
+          title={'Run - ' + viewing.id.slice(0, 16)}
+          size="large"
+          headerMeta={<ModalRecordId label="Run ID" value={viewing.id} />}
+        >
           <dl className="details-kv">
             <dt>State</dt><dd><span className={'pill ' + (STATE_PILL[viewing.state] || 'pill-neutral')}>{viewing.state}</span></dd>
             <dt>Flow</dt><dd><CopyableId value={viewing.dataFlowId} /></dd>
+            <dt>Source IP</dt><dd><span className="monospace">{pick(viewing, 'sourceIp', 'SourceIp', '-')}</span></dd>
+            <dt>Dispatch</dt><dd><span className="pill pill-neutral">{pick(viewing, 'dispatchState', 'DispatchState', '-')}</span></dd>
+            <dt>Worker</dt><dd>{pick(viewing, 'assignedWorkerId', 'AssignedWorkerId') ? <CopyableId value={pick(viewing, 'assignedWorkerId', 'AssignedWorkerId')} /> : '-'}</dd>
+            <dt>Node kind</dt><dd>{pick(viewing, 'executionNodeKind', 'ExecutionNodeKind', '-')}</dd>
+            <dt>Assignment</dt><dd>{pick(viewing, 'runAssignmentId', 'RunAssignmentId') ? <CopyableId value={pick(viewing, 'runAssignmentId', 'RunAssignmentId')} /> : '-'}</dd>
+            <dt>Attempts</dt><dd>{pick(viewing, 'dispatchAttempt', 'DispatchAttempt', 0)}</dd>
             <dt>Queued</dt><dd>{formatTime(viewing.createdUtc)}</dd>
+            <dt>Assigned</dt><dd>{formatTime(pick(viewing, 'assignedUtc', 'AssignedUtc'))}</dd>
             <dt>Started</dt><dd>{formatTime(viewing.startedUtc)}</dd>
             <dt>Completed</dt><dd>{formatTime(viewing.completedUtc)}</dd>
+            <dt>Lease expiry</dt><dd>{formatTime(pick(viewing, 'leaseExpiresUtc', 'LeaseExpiresUtc'))}</dd>
             <dt>Input</dt><dd><pre className="code-block">{viewing.inputData || '(empty)'}</pre></dd>
             <dt>Output</dt><dd><pre className="code-block">{viewing.outputData || '(empty)'}</pre></dd>
             {viewing.errorMessage && (<><dt>Error</dt><dd style={{ color: 'var(--color-danger)' }}>{viewing.errorMessage}</dd></>)}
@@ -222,6 +255,8 @@ function RunsView({ apiClient, principal }) {
 
       <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Run JSON" />
       <ConfirmModal open={!!confirmDelete} danger title="Delete run"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Run ID"
         message={'Delete this run? Step runs will also be removed.'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteRun(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}

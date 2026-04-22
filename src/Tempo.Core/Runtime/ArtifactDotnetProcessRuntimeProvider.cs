@@ -75,8 +75,8 @@ namespace Tempo.Core.Runtime
         {
             if (_Descriptor.Availability != StepRuntimeAvailabilityStateEnum.Available)
                 throw new NotSupportedException("Runtime '" + RuntimeKey + "' is not available: " + _Descriptor.Availability + ". " + _Descriptor.SecurityNotes);
-            if (_Database == null || _BlobStore == null || _Capacity == null)
-                throw new NotSupportedException("Artifact .NET process runtime requires database, artifact blob store, and capacity manager services.");
+            if (_BlobStore == null || _Capacity == null)
+                throw new NotSupportedException("Artifact .NET process runtime requires artifact blob store and capacity manager services.");
             if (config is not ArtifactDotnetProcessRuntimeConfig dotnetConfig)
                 throw new ArgumentException("config type must be ArtifactDotnetProcessRuntimeConfig.", nameof(config));
 
@@ -88,7 +88,9 @@ namespace Tempo.Core.Runtime
                 Arguments = new List<string>(dotnetConfig.Arguments),
                 EnvironmentReferences = new List<string>(dotnetConfig.EnvironmentReferences)
             };
-            ArtifactRuntimePlan plan = await ArtifactRuntimePlan.ResolveAsync(_Database, _BlobStore, _Settings, context, step, processShape, RuntimeKey, token).ConfigureAwait(false);
+            ArtifactRuntimePlan plan = _Database != null
+                ? await ArtifactRuntimePlan.ResolveAsync(_Database, _BlobStore, _Settings, context, step, processShape, RuntimeKey, token).ConfigureAwait(false)
+                : await ArtifactRuntimePlan.ResolveAsync(_BlobStore, _Settings, context, step, processShape, RuntimeKey, token).ConfigureAwait(false);
             ArtifactManifestEntrypoint entrypoint = plan.Entrypoint;
             string command = entrypoint.Command ?? throw new InvalidOperationException("Artifact.DotnetProcess entrypoint requires command.");
             if (string.IsNullOrWhiteSpace(entrypoint.HandlerType)) throw new InvalidOperationException("Artifact.DotnetProcess entrypoint requires handlerType.");

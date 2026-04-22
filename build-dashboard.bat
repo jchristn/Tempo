@@ -17,7 +17,7 @@ GOTO :Done
 :Usage
 ECHO.
 ECHO Provide a tag argument
-ECHO Example: build-dashboard.bat v0.2.0
+ECHO Example: build-dashboard.bat v0.3.0
 GOTO :Exit
 
 :Error

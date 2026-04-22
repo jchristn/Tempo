@@ -75,12 +75,14 @@ namespace Tempo.Core.Runtime
         {
             if (_Descriptor.Availability == StepRuntimeAvailabilityStateEnum.DisabledBySettings)
                 throw new NotSupportedException("Runtime '" + RuntimeKey + "' is disabled by settings.");
-            if (_Database == null || _BlobStore == null || _Capacity == null)
-                throw new NotSupportedException("Artifact process runtime requires database, artifact blob store, and capacity manager services.");
+            if (_BlobStore == null || _Capacity == null)
+                throw new NotSupportedException("Artifact process runtime requires artifact blob store and capacity manager services.");
             if (config is not ArtifactProcessRuntimeConfig processConfig)
                 throw new ArgumentException("config type must be ArtifactProcessRuntimeConfig.", nameof(config));
 
-            ArtifactRuntimePlan plan = await ArtifactRuntimePlan.ResolveAsync(_Database, _BlobStore, _Settings, context, step, processConfig, RuntimeKey, token).ConfigureAwait(false);
+            ArtifactRuntimePlan plan = _Database != null
+                ? await ArtifactRuntimePlan.ResolveAsync(_Database, _BlobStore, _Settings, context, step, processConfig, RuntimeKey, token).ConfigureAwait(false)
+                : await ArtifactRuntimePlan.ResolveAsync(_BlobStore, _Settings, context, step, processConfig, RuntimeKey, token).ConfigureAwait(false);
             ArtifactManifestEntrypoint entrypoint = plan.Entrypoint;
             string command = entrypoint.Command ?? throw new InvalidOperationException("Artifact.Process entrypoint requires command.");
             List<string> args = new List<string>(entrypoint.Args);

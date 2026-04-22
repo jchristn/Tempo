@@ -6,6 +6,7 @@ import TenantPicker from '../components/TenantPicker';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
 
@@ -80,11 +81,17 @@ function RolesView({ apiClient, principal }) {
       />
 
       {editing && (
-        <Modal open size="small" onClose={() => setEditing(null)} title={editing.id ? 'Edit role' : 'Create role'}
+        <Modal
+          open
+          size="small"
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit role' : 'Create role'}
+          headerMeta={<ModalRecordId label="Role ID" value={editing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
             <button className="button-primary" onClick={save}>Save</button>
-          </>}>
+          </>}
+        >
           <div className="form-row"><label title="Role name; users assigned to this role inherit its mapped permissions">Name</label><input value={editing.name || ''} placeholder="DevOps" onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
           <div className="form-row"><label title="Optional description of what this role allows">Description</label><input value={editing.description || ''} placeholder="Can run flows but cannot edit them" onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
           <div className="form-row"><label title="Inactive roles do not contribute permissions to users they're mapped to"><input type="checkbox" checked={!!editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} style={{ width: 'auto' }} /> Active</label></div>
@@ -93,6 +100,8 @@ function RolesView({ apiClient, principal }) {
 
       <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Role JSON" />
       <ConfirmModal open={!!confirmDelete} danger title="Delete role"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Role ID"
         message={'Delete role "' + (confirmDelete?.name || '') + '"? Role mappings will also be removed.'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteRole(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}

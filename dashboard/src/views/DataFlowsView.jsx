@@ -6,6 +6,7 @@ import TenantPicker from '../components/TenantPicker';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import DataFlowGraphEditor from '../components/DataFlowGraphEditor';
 import { formatTime } from '../utils/formatters';
@@ -127,11 +128,17 @@ function DataFlowsView({ apiClient, principal }) {
       />
 
       {editing && (
-        <Modal open size="large" onClose={() => setEditing(null)} title={editing.id ? 'Edit flow' : 'Create flow'}
+        <Modal
+          open
+          size="large"
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit flow' : 'Create flow'}
+          headerMeta={<ModalRecordId label="Flow ID" value={editing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
             <button className="button-primary" onClick={save}>Save</button>
-          </>}>
+          </>}
+        >
           <div className="grid-2">
             <div className="form-row"><label title="Flow name; shown when wiring up triggers and runs">Name</label><input value={editing.name || ''} placeholder="Order Fulfillment" onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
             <div className="form-row"><label title="Identifier (or name) of the step that runs first">Start step</label><input value={editing.startStepId || ''} placeholder="start" onChange={(e) => setEditing({ ...editing, startStepId: e.target.value })} /></div>
@@ -177,6 +184,8 @@ function DataFlowsView({ apiClient, principal }) {
 
       <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Flow JSON" />
       <ConfirmModal open={!!confirmDelete} danger title="Delete flow"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Flow ID"
         message={'Delete flow "' + (confirmDelete?.name || '') + '"?'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteFlow(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}

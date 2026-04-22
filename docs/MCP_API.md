@@ -122,7 +122,7 @@ Root settings shape:
 
 ```json
 {
-  "softwareVersion": "0.2.0",
+  "softwareVersion": "0.3.0",
   "tempo": {
     "endpoint": "http://localhost:8901",
     "timeoutMs": 30000,
@@ -212,7 +212,7 @@ All REST-backed tools return the same response envelope:
 | `body` | Parsed JSON response when possible |
 | `text` | Plain text response for non-JSON bodies |
 
-For HTTP trigger invocation, run metadata such as `x-run-id`, `x-dataflow-id`, `x-trigger-id`, and `x-runtime-ms` is in `headers`. The flow output is in `body`.
+For HTTP trigger invocation, run metadata such as `x-worker-id`, `x-run-id`, `x-dataflow-id`, `x-trigger-id`, and `x-runtime-ms` is in `headers`. The flow output is in `body`.
 
 ## Tool Catalog
 
@@ -226,6 +226,89 @@ For HTTP trigger invocation, run metadata such as `x-run-id`, `x-dataflow-id`, `
 | `tempo_request` | `method`, `path`, optional `body` | Generic REST call for endpoints not covered by typed tools |
 
 `tempo_request.path` must be `/` or start with `/v1.0/`. Supported methods are `GET`, `POST`, `PUT`, and `DELETE`.
+
+### Worker Tools
+
+| Tool | Arguments | Purpose |
+| --- | --- | --- |
+| `listWorkers` | optional `pageNumber`, `pageSize`, `state`, `search`, `enabled`, `drainMode` | List Tempo workers visible to an administrator |
+| `readWorker` | `id` | Read one worker |
+| `drainWorker` | `id` | Put a worker into drain mode |
+| `resumeWorker` | `id` | Resume a drained worker |
+| `blockWorker` | `id` | Block a worker, disconnect it, and deny future connects |
+| `unblockWorker` | `id` | Unblock a worker so it can reconnect |
+
+These tools are not tenant-scoped. They require the MCP server to authenticate to Tempo.Server as an administrator, typically through `tempo.apiKey`.
+
+### Log Tools
+
+| Tool | Arguments | Purpose |
+| --- | --- | --- |
+| `listLogSources` | none | List admin-visible server and worker log sources |
+| `listLogFiles` | `sourceKind`, `sourceId` | List available log files for one source |
+| `readLogFile` | `sourceKind`, `sourceId`, `path`, optional `tailLines`, optional `maxBytes` | Read a bounded tail from one log file |
+| `downloadLogFile` | `sourceKind`, `sourceId`, `path` | Download the complete log file as plain text |
+| `deleteLogFile` | `sourceKind`, `sourceId`, `path` | Delete an archived log file or clear the current one |
+
+These tools are also not tenant-scoped and require administrator credentials.
+
+List sources:
+
+```json
+{}
+```
+
+List worker log files:
+
+```json
+{
+  "sourceKind": "worker",
+  "sourceId": "wrk_docker_1"
+}
+```
+
+Read a bounded tail:
+
+```json
+{
+  "sourceKind": "server",
+  "sourceId": "server",
+  "path": "tempo.log",
+  "tailLines": 200,
+  "maxBytes": 131072
+}
+```
+
+Download a complete file:
+
+```json
+{
+  "sourceKind": "worker",
+  "sourceId": "wrk_docker_1",
+  "path": "tempo-worker.log"
+}
+```
+
+`downloadLogFile` returns the normal MCP response envelope. Because the REST
+route responds with `text/plain`, the complete log file is exposed in the
+envelope's `text` field rather than `body`.
+
+Delete or clear a file:
+
+```json
+{
+  "sourceKind": "worker",
+  "sourceId": "wrk_docker_1",
+  "path": "tempo-worker.1.log"
+}
+```
+
+Delete behavior matches REST:
+
+| Target | Result |
+| --- | --- |
+| Current log file | Cleared by truncation |
+| Archived log file | Deleted from disk |
 
 ### Tenant Tools
 

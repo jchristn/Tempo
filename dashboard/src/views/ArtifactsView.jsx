@@ -6,6 +6,7 @@ import TenantPicker from '../components/TenantPicker';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
 
@@ -446,11 +447,17 @@ function ArtifactsView({ apiClient, principal }) {
       )}
 
       {editingArtifact && (
-        <Modal open size="small" onClose={() => setEditingArtifact(null)} title={editingArtifact.id ? 'Edit artifact' : 'Create artifact'}
+        <Modal
+          open
+          size="small"
+          onClose={() => setEditingArtifact(null)}
+          title={editingArtifact.id ? 'Edit artifact' : 'Create artifact'}
+          headerMeta={<ModalRecordId label="Artifact ID" value={editingArtifact.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditingArtifact(null)}>Cancel</button>
             <button className="button-primary" onClick={saveArtifact}>Save</button>
-          </>}>
+          </>}
+        >
           {formError && <div className="login-error">{formError}</div>}
           <div className="form-row"><label>Name</label><input value={editingArtifact.name || ''} placeholder="python-order-enricher" onChange={(e) => setEditingArtifact({ ...editingArtifact, name: e.target.value })} /></div>
           <div className="form-row"><label>Description</label><textarea rows={3} value={editingArtifact.description || ''} onChange={(e) => setEditingArtifact({ ...editingArtifact, description: e.target.value })} /></div>
@@ -459,11 +466,17 @@ function ArtifactsView({ apiClient, principal }) {
       )}
 
       {importing && (
-        <Modal open size="small" onClose={() => setImporting(null)} title={'Import ZIP into ' + importing.name}
+        <Modal
+          open
+          size="small"
+          onClose={() => setImporting(null)}
+          title={'Import ZIP into ' + importing.name}
+          headerMeta={<ModalRecordId label="Artifact ID" value={importing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setImporting(null)}>Cancel</button>
             <button className="button-primary" onClick={importZip}>Import</button>
-          </>}>
+          </>}
+        >
           {formError && <div className="login-error">{formError}</div>}
           <div className="callout callout-warning">Importing replaces the editable files for this artifact and rebuilds the current snapshot.</div>
           <div className="form-row"><label>Archive file</label><input type="file" accept=".zip,application/zip" onChange={async (e) => {
@@ -485,6 +498,8 @@ function ArtifactsView({ apiClient, principal }) {
         open={!!confirmDelete}
         danger
         title="Delete artifact"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Artifact ID"
         message={'Delete artifact "' + (confirmDelete?.name || '') + '"? Artifacts referenced by steps cannot be deleted.'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteArtifact(tenantId, confirmDelete.id); setConfirmDelete(null); setSelected(null); refresh(); }}

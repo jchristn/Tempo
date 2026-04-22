@@ -42,8 +42,11 @@ function HomeView({ apiClient }) {
 
   return (
     <div>
-      <PageHeader title="Home" subtitle="Monitor request activity, runtime pressure, and recent health at a glance." />
-
+      <PageHeader
+        title="Home"
+        subtitle="Monitor request activity, runtime pressure, and recent health at a glance."
+        actions={<button className="button-secondary" onClick={() => navigate('/dashboard/logs?sourceKind=server&sourceId=server')} title="Open the current Tempo Server logs">Server logs</button>}
+      />
       <div className="summary-tiles">
         <div className="summary-tile"><div className="label">Total requests</div><div className="value">{summary ? summary.totalCount.toLocaleString() : '—'}</div></div>
         <div className="summary-tile success"><div className="label">Successful</div><div className="value">{summary ? summary.totalSuccess.toLocaleString() : '—'}</div></div>
@@ -79,6 +82,13 @@ function HomeView({ apiClient }) {
         onRangeChange={setRangeId}
         onBucketClick={handleBucketClick}
         onRefresh={() => setRefreshKey((k) => k + 1)}
+        title="Request Activity"
+        totalLabel="Total"
+        successLabel="Success"
+        failureLabel="Failed"
+        successLegend="Success (1xx-3xx)"
+        failureLegend="Failed (4xx-5xx)"
+        emptyMessage="No request data for this time range"
       />
     </div>
   );

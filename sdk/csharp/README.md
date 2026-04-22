@@ -12,6 +12,8 @@ Protocol v1 SDK for .NET artifact step handlers.
 - `ITempoStepHandler`: async handler interface.
 - `TempoStepHost`: JSON serialization, result helpers, correlation, and
   stdin/stdout runner.
+- `Tempo.Sdk.Workers.*`: worker-protocol frame DTOs and JSON options for
+  building custom C# worker clients.
 
 ## Handler
 
@@ -32,6 +34,27 @@ return await TempoStepHost.RunAsync(new Handler());
 `TempoStepHost.RunAsync` reads one `StepRequest` JSON object from stdin and
 writes one `StepResult` JSON object to stdout. Helper results preserve
 `protocolVersion`, tenant, run, step-run, and request correlation fields.
+
+## Worker Protocol DTOs
+
+The SDK also includes the v0.3.0 worker websocket DTOs under
+`Tempo.Sdk.Workers`:
+
+- `WorkerProtocolJson`
+- `WorkerFrameTypes`
+- `WorkerHelloMessage`
+- `WorkerHelloAckMessage`
+- `WorkerHeartbeatMessage`
+- `WorkerAssignMessage`
+- `WorkerAssignAckMessage`
+- `WorkerRunCompletedMessage`
+- `WorkerDrainMessage`
+- `WorkerResumeMessage`
+
+`WorkerAssignMessage.Assignment`, `WorkerAssignMessage.Plan`, and
+`WorkerRunCompletedMessage.Completion` are exposed as raw `JsonElement`
+payloads so the SDK can stay aligned with the wire contract without taking a
+dependency on Tempo.Server or Tempo.Core orchestration types.
 
 ## Test App
 

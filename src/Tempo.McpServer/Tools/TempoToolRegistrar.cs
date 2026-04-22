@@ -81,6 +81,72 @@ namespace Tempo.McpServer.Tools
                 async (args, token) => await client.GetAsync("/v1.0/settings/meta", token).ConfigureAwait(false)));
 
             tools.Add(new TempoToolDefinition(
+                "listWorkers",
+                "List Tempo workers visible to an administrator",
+                WorkerListSchema(),
+                async (args, token) => await client.GetAsync(WorkerListPath(args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "readWorker",
+                "Read one Tempo worker by identifier",
+                IdOnlySchema(),
+                async (args, token) => await client.GetAsync("/v1.0/workers/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "drainWorker",
+                "Set a Tempo worker into drain mode so it stops accepting new assignments",
+                IdOnlySchema(),
+                async (args, token) => await client.PostAsync("/v1.0/workers/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/drain", null, token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "resumeWorker",
+                "Resume a drained Tempo worker so it can accept new assignments again",
+                IdOnlySchema(),
+                async (args, token) => await client.PostAsync("/v1.0/workers/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/resume", null, token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "blockWorker",
+                "Block a Tempo worker, disconnect any active session, and deny future connection attempts",
+                IdOnlySchema(),
+                async (args, token) => await client.PostAsync("/v1.0/workers/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/block", null, token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "unblockWorker",
+                "Unblock a Tempo worker so it can reconnect and accept assignments again",
+                IdOnlySchema(),
+                async (args, token) => await client.PostAsync("/v1.0/workers/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/unblock", null, token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "listLogSources",
+                "List admin-visible Tempo log sources for the server and workers",
+                ToolSchemas.Empty(),
+                async (args, token) => await client.GetAsync("/v1.0/logs/sources", token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "listLogFiles",
+                "List available log files for one Tempo log source",
+                ToolSchemas.LogFiles(),
+                async (args, token) => await client.GetAsync(LogFileListPath(args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "readLogFile",
+                "Read a bounded tail from one Tempo log file",
+                ToolSchemas.LogFileRead(),
+                async (args, token) => await client.GetAsync(LogFileReadPath(args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "downloadLogFile",
+                "Download one complete Tempo log file as plain text",
+                ToolSchemas.LogFileRead(),
+                async (args, token) => await client.GetAsync(LogFileDownloadPath(args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "deleteLogFile",
+                "Delete one Tempo log file, or clear it by truncation when it is the current active file",
+                ToolSchemas.LogFileRead(),
+                async (args, token) => await client.DeleteAsync(LogFileDeletePath(args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
                 "tenant_list",
                 "List Tempo tenants",
                 PagedListWithoutTenantSchema(),
@@ -160,7 +226,7 @@ namespace Tempo.McpServer.Tools
 
             tools.Add(new TempoToolDefinition(
                 "trigger_fire",
-                "Fire an HTTP trigger and return the response body plus run metadata headers",
+                "Fire an HTTP trigger and return the response body plus run metadata headers, including the assigned worker id when available",
                 ToolSchemas.TriggerFire(),
                 async (args, token) => await FireTriggerAsync(client, args, token).ConfigureAwait(false)));
 
@@ -279,6 +345,68 @@ namespace Tempo.McpServer.Tools
             return TempoApiClient.AddQuery(path, query);
         }
 
+        private static string WorkerListPath(JsonElement? args)
+        {
+            Dictionary<string, string?> query = new Dictionary<string, string?>();
+            AddPagingQuery(query, args);
+            if (JsonArgumentReader.HasProperty(args, "state"))
+                query["state"] = JsonArgumentReader.OptionalString(args, "state");
+            if (JsonArgumentReader.HasProperty(args, "search"))
+                query["search"] = JsonArgumentReader.OptionalString(args, "search");
+            if (JsonArgumentReader.HasProperty(args, "enabled"))
+                query["enabled"] = JsonArgumentReader.OptionalBool(args, "enabled", false).ToString().ToLowerInvariant();
+            if (JsonArgumentReader.HasProperty(args, "drainMode"))
+                query["drainMode"] = JsonArgumentReader.OptionalBool(args, "drainMode", false).ToString().ToLowerInvariant();
+            return TempoApiClient.AddQuery("/v1.0/workers", query);
+        }
+
+        private static string LogFileListPath(JsonElement? args)
+        {
+            Dictionary<string, string?> query = new Dictionary<string, string?>
+            {
+                ["sourceKind"] = JsonArgumentReader.RequiredString(args, "sourceKind"),
+                ["sourceId"] = JsonArgumentReader.RequiredString(args, "sourceId")
+            };
+            return TempoApiClient.AddQuery("/v1.0/logs/files", query);
+        }
+
+        private static string LogFileReadPath(JsonElement? args)
+        {
+            Dictionary<string, string?> query = new Dictionary<string, string?>
+            {
+                ["sourceKind"] = JsonArgumentReader.RequiredString(args, "sourceKind"),
+                ["sourceId"] = JsonArgumentReader.RequiredString(args, "sourceId"),
+                ["path"] = JsonArgumentReader.RequiredString(args, "path")
+            };
+            if (JsonArgumentReader.HasProperty(args, "tailLines"))
+                query["tailLines"] = Math.Max(1, JsonArgumentReader.OptionalInt(args, "tailLines", 1)).ToString();
+            if (JsonArgumentReader.HasProperty(args, "maxBytes"))
+                query["maxBytes"] = Math.Max(1, JsonArgumentReader.OptionalInt(args, "maxBytes", 1)).ToString();
+            return TempoApiClient.AddQuery("/v1.0/logs/files/content", query);
+        }
+
+        private static string LogFileDownloadPath(JsonElement? args)
+        {
+            Dictionary<string, string?> query = new Dictionary<string, string?>
+            {
+                ["sourceKind"] = JsonArgumentReader.RequiredString(args, "sourceKind"),
+                ["sourceId"] = JsonArgumentReader.RequiredString(args, "sourceId"),
+                ["path"] = JsonArgumentReader.RequiredString(args, "path")
+            };
+            return TempoApiClient.AddQuery("/v1.0/logs/files/download", query);
+        }
+
+        private static string LogFileDeletePath(JsonElement? args)
+        {
+            Dictionary<string, string?> query = new Dictionary<string, string?>
+            {
+                ["sourceKind"] = JsonArgumentReader.RequiredString(args, "sourceKind"),
+                ["sourceId"] = JsonArgumentReader.RequiredString(args, "sourceId"),
+                ["path"] = JsonArgumentReader.RequiredString(args, "path")
+            };
+            return TempoApiClient.AddQuery("/v1.0/logs/files/content", query);
+        }
+
         private static string PagedTenantPath(TempoApiClient client, JsonElement? args, string tenantRelativePath)
         {
             return PagedPath(TenantPath(client, args, tenantRelativePath), args);
@@ -374,6 +502,24 @@ namespace Tempo.McpServer.Tools
                     artifactId = new { type = "string", description = "Artifact identifier." }
                 },
                 required = new[] { "artifactId" }
+            };
+        }
+
+        private static object WorkerListSchema()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    pageNumber = new { type = "integer", description = "Page number, starting at 1." },
+                    pageSize = new { type = "integer", description = "Page size." },
+                    state = new { type = "string", description = "Optional worker state filter, for example Online or Draining." },
+                    search = new { type = "string", description = "Optional search term matched against worker id, name, or host name." },
+                    enabled = new { type = "boolean", description = "Optional enabled filter." },
+                    drainMode = new { type = "boolean", description = "Optional drain-mode filter." }
+                },
+                required = new string[] { }
             };
         }
     }

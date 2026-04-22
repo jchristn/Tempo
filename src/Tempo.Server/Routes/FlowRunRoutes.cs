@@ -108,13 +108,15 @@ namespace Tempo.Server.Routes
             if (existing == null) { await RouteHelpers.NotFoundAsync(ctx); return; }
             if (existing.State == FlowRunStateEnum.Queued)
             {
-                await _Host.Database.FlowRuns.TransitionStateAsync(id, FlowRunStateEnum.Cancelled);
-                await RouteHelpers.JsonAsync(ctx, 200, new { cancelled = true });
+                bool cancelled = await _Host.Dispatch.CancelQueuedAsync(tid, id).ConfigureAwait(false);
+                if (cancelled)
+                {
+                    await RouteHelpers.JsonAsync(ctx, 200, new { cancelled = true });
+                    return;
+                }
             }
-            else
-            {
-                await RouteHelpers.ErrorAsync(ctx, 409, "CannotCancel", "Run is no longer queued.");
-            }
+
+            await RouteHelpers.ErrorAsync(ctx, 409, "CannotCancel", "Run is no longer queued.");
         }
 
         private async Task DeleteAsync(HttpContextBase ctx)

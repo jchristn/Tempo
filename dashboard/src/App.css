@@ -187,10 +187,24 @@
 }
 .modal.small { max-width: 500px; }
 .modal.large { max-width: 1380px; }
+.modal.drawer {
+  margin-left: auto;
+  max-width: min(720px, 100%);
+  height: min(96vh, 100%);
+  max-height: none;
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: var(--spacing-md) var(--spacing-lg); border-bottom: 1px solid var(--color-border); }
+.modal-heading { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }
 .modal-title { font-size: var(--font-size-lg); font-weight: 600; }
+.modal-header-meta { min-width: 0; }
+.modal-record-id { display: inline-flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.modal-record-id-label { font-size: var(--font-size-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .modal-body { flex: 1; overflow: auto; padding: var(--spacing-lg); }
 .modal-footer { padding: var(--spacing-md) var(--spacing-lg); border-top: 1px solid var(--color-border); display: flex; gap: var(--spacing-sm); justify-content: flex-end; }
+.drawer-actions { display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-md); flex-wrap: wrap; }
+.drawer-section { border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--spacing-md); margin-bottom: var(--spacing-md); background: var(--color-surface-alt); }
+.drawer-section-title { font-size: var(--font-size-sm); font-weight: 700; margin-bottom: var(--spacing-sm); text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted); }
 
 .details-section { border: 1px solid var(--color-border); border-radius: var(--radius-md); margin-bottom: var(--spacing-md); overflow: hidden; }
 .details-section-header { background: var(--color-surface-alt); padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-size: var(--font-size-sm); font-weight: 600; }
@@ -518,3 +532,83 @@
 .explorer-op-card .explorer-method { grid-row: 1; grid-column: 1; align-self: center; }
 .explorer-op-path { grid-row: 1; grid-column: 2; font-family: var(--font-mono); font-size: var(--font-size-sm); color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .explorer-op-summary { grid-row: 2; grid-column: 2; font-size: var(--font-size-xs); color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Logs */
+.logs-page-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  margin: calc(var(--spacing-md) * -1) 0 var(--spacing-lg);
+}
+.logs-page-controls-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.logs-page-source-picker,
+.logs-page-auto-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.logs-page-source-picker select {
+  min-width: 260px;
+}
+.logs-workspace {
+  display: grid;
+  grid-template-columns: minmax(420px, 585px) minmax(0, 1fr);
+  gap: var(--spacing-md);
+  align-items: start;
+}
+.logs-sidebar-panel,
+.log-viewer-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+}
+.logs-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+.log-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+.logs-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+.log-viewer-content {
+  min-height: 420px;
+  max-height: calc(100vh - 360px);
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  padding: var(--spacing-md);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+@media (max-width: 1100px) {
+  .logs-workspace { grid-template-columns: 1fr; }
+  .log-viewer-content { max-height: none; }
+}

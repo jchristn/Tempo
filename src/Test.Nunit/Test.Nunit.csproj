@@ -8,7 +8,7 @@
     <IsPackable>false</IsPackable>
     <AssemblyName>Test.Nunit</AssemblyName>
     <RootNamespace>Test.Nunit</RootNamespace>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

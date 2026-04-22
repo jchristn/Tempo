@@ -113,9 +113,11 @@ namespace Test.Shared.Suites
                             Tenant t = await driver.Tenants.CreateAsync(new Tenant { Name = "T" }, ct);
                             DataFlowRecord flow = await driver.DataFlows.CreateAsync(new DataFlowRecord { TenantId = t.Id, Name = "f", StartStepId = "s" }, ct);
                             FlowDispatchService svc = new FlowDispatchService(driver);
-                            FlowRun run = await svc.EnqueueAsync(t.Id, flow.Id, "{\"v\":1}", "usr_x", null, ct);
+                            FlowRun run = await svc.EnqueueAsync(t.Id, flow.Id, "{\"v\":1}", "usr_x", null, "203.0.113.10", ct);
                             Assert2.Equal(FlowRunStateEnum.Queued, run.State, "queued");
+                            Assert2.Equal(FlowRunDispatchStateEnum.Pending, run.DispatchState, "dispatch pending");
                             Assert2.Equal("{\"v\":1}", run.InputData!, "input persisted");
+                            Assert2.Equal("203.0.113.10", run.SourceIp!, "source ip persisted");
                         }
                         finally { await TempTestStore.DisposeAsync(driver); }
                     }),
@@ -128,27 +130,9 @@ namespace Test.Shared.Suites
                             DataFlowRecord flow = await driver.DataFlows.CreateAsync(new DataFlowRecord { TenantId = t.Id, Name = "f", StartStepId = "s", Active = false }, ct);
                             FlowDispatchService svc = new FlowDispatchService(driver);
                             bool threw = false;
-                            try { await svc.EnqueueAsync(t.Id, flow.Id, null, null, null, ct); }
+                            try { await svc.EnqueueAsync(t.Id, flow.Id, null, null, null, null, ct); }
                             catch (System.InvalidOperationException) { threw = true; }
                             Assert2.True(threw, "inactive flow rejected");
-                        }
-                        finally { await TempTestStore.DisposeAsync(driver); }
-                    }),
-                    new TestCaseDescriptor("DataFlows", "ClaimNextQueued", "Claim transitions queued → running", async ct =>
-                    {
-                        SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct);
-                        try
-                        {
-                            Tenant t = await driver.Tenants.CreateAsync(new Tenant { Name = "T" }, ct);
-                            DataFlowRecord flow = await driver.DataFlows.CreateAsync(new DataFlowRecord { TenantId = t.Id, Name = "f", StartStepId = "s" }, ct);
-                            FlowDispatchService svc = new FlowDispatchService(driver);
-                            FlowRun queued = await svc.EnqueueAsync(t.Id, flow.Id, null, null, null, ct);
-                            FlowRun? claimed = await driver.FlowRuns.ClaimNextQueuedAsync(ct);
-                            Assert2.NotNull(claimed, "claimed");
-                            Assert2.Equal(queued.Id, claimed!.Id, "same run claimed");
-                            Assert2.Equal(FlowRunStateEnum.Running, claimed.State, "state running");
-                            FlowRun? noMore = await driver.FlowRuns.ClaimNextQueuedAsync(ct);
-                            Assert2.IsNull(noMore, "no more queued");
                         }
                         finally { await TempTestStore.DisposeAsync(driver); }
                     }),

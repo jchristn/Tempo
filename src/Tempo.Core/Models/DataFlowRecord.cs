@@ -93,6 +93,9 @@ namespace Tempo.Core.Models
         /// <summary>Whether the flow is active.</summary>
         public bool Active { get; set; } = true;
 
+        /// <summary>Optional placement label used by label-pinned scheduling.</summary>
+        public string? RoutingHintLabel { get; set; } = null;
+
         /// <summary>Whether the flow is protected from deletion.</summary>
         public bool IsProtected { get; set; } = false;
 

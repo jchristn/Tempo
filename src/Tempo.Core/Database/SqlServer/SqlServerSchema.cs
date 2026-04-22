@@ -338,6 +338,140 @@ namespace Tempo.Core.Database.SqlServer
             });
             list.Add(m9);
 
+            SchemaMigration m10 = new SchemaMigration { Version = 10, Description = "distributed execution foundation" };
+            m10.Statements.AddRange(new[]
+            {
+                @"IF OBJECT_ID(N'dbo.workers', N'U') IS NULL
+                  CREATE TABLE workers (
+                    id NVARCHAR(64) PRIMARY KEY,
+                    name NVARCHAR(255) NOT NULL,
+                    kind NVARCHAR(64) NOT NULL,
+                    state NVARCHAR(64) NOT NULL,
+                    enabled BIT NOT NULL DEFAULT 1,
+                    drain_mode BIT NOT NULL DEFAULT 0,
+                    version NVARCHAR(64) NULL,
+                    host_name NVARCHAR(255) NULL,
+                    labels_json NVARCHAR(MAX) NULL,
+                    max_concurrent_runs INT NOT NULL DEFAULT 1,
+                    last_heartbeat_utc DATETIME2 NULL,
+                    created_utc DATETIME2 NOT NULL
+                  );",
+                @"IF OBJECT_ID(N'dbo.worker_sessions', N'U') IS NULL
+                  CREATE TABLE worker_sessions (
+                    id NVARCHAR(64) PRIMARY KEY,
+                    worker_id NVARCHAR(64) NOT NULL,
+                    connected_utc DATETIME2 NOT NULL,
+                    disconnected_utc DATETIME2 NULL,
+                    disconnect_reason NVARCHAR(MAX) NULL,
+                    protocol_version NVARCHAR(32) NULL
+                  );",
+                @"IF OBJECT_ID(N'dbo.run_assignments', N'U') IS NULL
+                  CREATE TABLE run_assignments (
+                    id NVARCHAR(64) PRIMARY KEY,
+                    flow_run_id NVARCHAR(64) NOT NULL,
+                    worker_id NVARCHAR(64) NOT NULL,
+                    worker_session_id NVARCHAR(64) NULL,
+                    attempt_number INT NOT NULL DEFAULT 1,
+                    state NVARCHAR(32) NOT NULL,
+                    lease_token NVARCHAR(64) NOT NULL,
+                    lease_expires_utc DATETIME2 NOT NULL,
+                    assigned_utc DATETIME2 NOT NULL,
+                    completed_utc DATETIME2 NULL
+                  );",
+                @"IF OBJECT_ID(N'dbo.worker_activity', N'U') IS NULL
+                  CREATE TABLE worker_activity (
+                    id NVARCHAR(64) PRIMARY KEY,
+                    worker_id NVARCHAR(64) NOT NULL,
+                    worker_session_id NVARCHAR(64) NULL,
+                    flow_run_id NVARCHAR(64) NULL,
+                    run_assignment_id NVARCHAR(64) NULL,
+                    event_type NVARCHAR(64) NOT NULL,
+                    severity NVARCHAR(32) NULL,
+                    message NVARCHAR(MAX) NULL,
+                    payload_json NVARCHAR(MAX) NULL,
+                    created_utc DATETIME2 NOT NULL
+                  );",
+                @"IF OBJECT_ID(N'dbo.server_instances', N'U') IS NULL
+                  CREATE TABLE server_instances (
+                    id NVARCHAR(64) PRIMARY KEY,
+                    started_utc DATETIME2 NOT NULL,
+                    last_heartbeat_utc DATETIME2 NOT NULL,
+                    version NVARCHAR(64) NULL
+                  );",
+                @"IF COL_LENGTH('dbo.flow_runs', 'dispatch_state') IS NULL
+                  ALTER TABLE flow_runs ADD dispatch_state NVARCHAR(32) NULL;",
+                @"IF COL_LENGTH('dbo.flow_runs', 'dispatch_attempt') IS NULL
+                  ALTER TABLE flow_runs ADD dispatch_attempt INT NOT NULL DEFAULT 0;",
+                @"IF COL_LENGTH('dbo.flow_runs', 'assigned_worker_id') IS NULL
+                  ALTER TABLE flow_runs ADD assigned_worker_id NVARCHAR(64) NULL;",
+                @"IF COL_LENGTH('dbo.flow_runs', 'run_assignment_id') IS NULL
+                  ALTER TABLE flow_runs ADD run_assignment_id NVARCHAR(64) NULL;",
+                @"IF COL_LENGTH('dbo.flow_runs', 'queue_wait_ms') IS NULL
+                  ALTER TABLE flow_runs ADD queue_wait_ms BIGINT NULL;",
+                @"IF COL_LENGTH('dbo.flow_runs', 'assigned_utc') IS NULL
+                  ALTER TABLE flow_runs ADD assigned_utc DATETIME2 NULL;",
+                @"IF COL_LENGTH('dbo.flow_runs', 'lease_expires_utc') IS NULL
+                  ALTER TABLE flow_runs ADD lease_expires_utc DATETIME2 NULL;",
+                @"IF COL_LENGTH('dbo.flow_runs', 'execution_node_kind') IS NULL
+                  ALTER TABLE flow_runs ADD execution_node_kind NVARCHAR(32) NULL;",
+                @"UPDATE flow_runs SET dispatch_state = 'Pending' WHERE dispatch_state IS NULL OR LTRIM(RTRIM(dispatch_state)) = '';",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_flow_runs_dispatch_pending')
+                  CREATE INDEX idx_flow_runs_dispatch_pending ON flow_runs(dispatch_state, state, created_utc);",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_workers_online')
+                  CREATE INDEX idx_workers_online ON workers(enabled, drain_mode, state, last_heartbeat_utc);",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_worker_sessions_stale')
+                  CREATE INDEX idx_worker_sessions_stale ON worker_sessions(worker_id, disconnected_utc, connected_utc);",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_run_assignments_lease')
+                  CREATE INDEX idx_run_assignments_lease ON run_assignments(state, lease_expires_utc);",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_run_assignments_flow_run')
+                  CREATE INDEX idx_run_assignments_flow_run ON run_assignments(flow_run_id, attempt_number);",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_worker_activity_worker')
+                  CREATE INDEX idx_worker_activity_worker ON worker_activity(worker_id, created_utc);",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_worker_activity_run')
+                  CREATE INDEX idx_worker_activity_run ON worker_activity(flow_run_id, created_utc);",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_server_instances_heartbeat')
+                  CREATE INDEX idx_server_instances_heartbeat ON server_instances(last_heartbeat_utc);"
+            });
+            list.Add(m10);
+
+            SchemaMigration m11 = new SchemaMigration { Version = 11, Description = "distributed execution worker auth and placement" };
+            m11.Statements.AddRange(new[]
+            {
+                @"IF COL_LENGTH('dbo.workers', 'capabilities_json') IS NULL
+                  ALTER TABLE workers ADD capabilities_json NVARCHAR(MAX) NULL;",
+                @"IF COL_LENGTH('dbo.workers', 'token_hash') IS NULL
+                  ALTER TABLE workers ADD token_hash NVARCHAR(128) NULL;",
+                @"IF COL_LENGTH('dbo.workers', 'token_last_rotated_utc') IS NULL
+                  ALTER TABLE workers ADD token_last_rotated_utc DATETIME2 NULL;",
+                @"IF COL_LENGTH('dbo.data_flows', 'routing_hint_label') IS NULL
+                  ALTER TABLE data_flows ADD routing_hint_label NVARCHAR(255) NULL;",
+                @"IF COL_LENGTH('dbo.server_instances', 'host_name') IS NULL
+                  ALTER TABLE server_instances ADD host_name NVARCHAR(255) NULL;",
+                @"UPDATE workers SET capabilities_json = '[]' WHERE capabilities_json IS NULL OR LTRIM(RTRIM(capabilities_json)) = '';",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_workers_token_hash')
+                  CREATE INDEX idx_workers_token_hash ON workers(token_hash);",
+                @"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_data_flows_routing_label')
+                  CREATE INDEX idx_data_flows_routing_label ON data_flows(routing_hint_label);"
+            });
+            list.Add(m11);
+
+            SchemaMigration m12 = new SchemaMigration { Version = 12, Description = "worker task timeout metadata" };
+            m12.Statements.AddRange(new[]
+            {
+                @"IF COL_LENGTH('dbo.workers', 'max_task_timeout_ms') IS NULL
+                  ALTER TABLE workers ADD max_task_timeout_ms INT NOT NULL CONSTRAINT DF_workers_max_task_timeout_ms DEFAULT 0;",
+                @"UPDATE workers SET max_task_timeout_ms = 0 WHERE max_task_timeout_ms IS NULL;"
+            });
+            list.Add(m12);
+
+            SchemaMigration m13 = new SchemaMigration { Version = 13, Description = "flow run source ip" };
+            m13.Statements.AddRange(new[]
+            {
+                @"IF COL_LENGTH('dbo.flow_runs', 'source_ip') IS NULL
+                  ALTER TABLE flow_runs ADD source_ip NVARCHAR(64) NULL;"
+            });
+            list.Add(m13);
+
             return list;
         }
     }

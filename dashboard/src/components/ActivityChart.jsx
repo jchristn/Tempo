@@ -52,7 +52,23 @@ function mergeBuckets(allBuckets, apiBuckets, stepMs) {
  * and merges with whatever the server returns. Hour/Day/Week/Month always
  * show the right bucket count regardless of server bucketing.
  */
-function ActivityChart({ summary, rangeId = 'day', onRangeChange, onBucketClick, onRefresh, loading = false }) {
+function ActivityChart({
+  summary,
+  rangeId = 'day',
+  onRangeChange,
+  onBucketClick,
+  onRefresh,
+  loading = false,
+  title = 'Activity',
+  totalLabel = 'Total',
+  successLabel = 'Success',
+  failureLabel = 'Failed',
+  successLegend = 'Success',
+  failureLegend = 'Failed',
+  emptyMessage = 'No activity data for this time range',
+  successColor = 'var(--color-success)',
+  failureColor = 'var(--color-danger)'
+}) {
   const [hovered, setHovered] = useState(null);
   const range = getTimeRange(rangeId);
 
@@ -79,7 +95,7 @@ function ActivityChart({ summary, rangeId = 'day', onRangeChange, onBucketClick,
   return (
     <div className="rh-chart">
       <div className="rh-chart-header">
-        <h2>Request Activity</h2>
+        <h2>{title}</h2>
         <div className="rh-chart-controls">
           <div className="rh-time-tabs">
             {TIME_RANGES.map((r) => (
@@ -97,13 +113,13 @@ function ActivityChart({ summary, rangeId = 'day', onRangeChange, onBucketClick,
       </div>
 
       <div className="rh-stats">
-        <div className="rh-stat"><span className="rh-stat-value">{totalCount.toLocaleString()}</span><span className="rh-stat-label">Total</span></div>
-        <div className="rh-stat"><span className="rh-stat-value" style={{ color: 'var(--color-success)' }}>{totalSuccess.toLocaleString()}</span><span className="rh-stat-label">Success</span></div>
-        <div className="rh-stat"><span className="rh-stat-value" style={{ color: 'var(--color-danger)' }}>{totalFailure.toLocaleString()}</span><span className="rh-stat-label">Failed</span></div>
+        <div className="rh-stat"><span className="rh-stat-value">{totalCount.toLocaleString()}</span><span className="rh-stat-label">{totalLabel}</span></div>
+        <div className="rh-stat"><span className="rh-stat-value" style={{ color: successColor }}>{totalSuccess.toLocaleString()}</span><span className="rh-stat-label">{successLabel}</span></div>
+        <div className="rh-stat"><span className="rh-stat-value" style={{ color: failureColor }}>{totalFailure.toLocaleString()}</span><span className="rh-stat-label">{failureLabel}</span></div>
       </div>
 
       {buckets.length === 0 ? (
-        <div className="rh-chart-empty">No request data for this time range</div>
+        <div className="rh-chart-empty">{emptyMessage}</div>
       ) : (
         <div className="rh-chart-canvas">
           <svg width="100%" viewBox={'0 0 ' + width + ' ' + height} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
@@ -138,8 +154,8 @@ function ActivityChart({ summary, rangeId = 'day', onRangeChange, onBucketClick,
                    onClick={() => onBucketClick?.(b)}
                    style={{ cursor: onBucketClick ? 'pointer' : 'default' }}>
                   <rect x={padLeft + i * barGroupW} y={padTop} width={barGroupW} height={plotH + padBottom} fill="transparent" />
-                  {success > 0 && <rect x={x} y={successY} width={barW} height={successH} rx="2" fill="var(--color-success)" opacity={hovered === i ? 1 : 0.85} />}
-                  {failure > 0 && <rect x={x} y={failureY} width={barW} height={failureH} rx="2" fill="var(--color-danger)" opacity={hovered === i ? 1 : 0.85} />}
+                  {success > 0 && <rect x={x} y={successY} width={barW} height={successH} rx="2" fill={successColor} opacity={hovered === i ? 1 : 0.85} />}
+                  {failure > 0 && <rect x={x} y={failureY} width={barW} height={failureH} rx="2" fill={failureColor} opacity={hovered === i ? 1 : 0.85} />}
                   {showLabel && (
                     <text x={padLeft + i * barGroupW + barGroupW / 2} y={height - 6} textAnchor="middle" fontSize="10" fill="var(--color-text-muted)">
                       {formatBucketLabel(b.bucketStartUtc, range)}
@@ -153,8 +169,8 @@ function ActivityChart({ summary, rangeId = 'day', onRangeChange, onBucketClick,
           {hovered !== null && buckets[hovered] && (
             <div className="rh-chart-tooltip" style={{ left: ((hovered + 0.5) / buckets.length) * 100 + '%' }}>
               <div style={{ fontWeight: 600, marginBottom: 4 }}>{formatTooltipTime(buckets[hovered].bucketStartUtc, range)}</div>
-              <div><span style={{ color: 'var(--color-success)' }}>Success:</span> {(buckets[hovered].successCount || 0).toLocaleString()}</div>
-              <div><span style={{ color: 'var(--color-danger)' }}>Failed:</span> {(buckets[hovered].failureCount || 0).toLocaleString()}</div>
+              <div><span style={{ color: successColor }}>{successLabel}:</span> {(buckets[hovered].successCount || 0).toLocaleString()}</div>
+              <div><span style={{ color: failureColor }}>{failureLabel}:</span> {(buckets[hovered].failureCount || 0).toLocaleString()}</div>
               <div>Total: {((buckets[hovered].successCount || 0) + (buckets[hovered].failureCount || 0)).toLocaleString()}</div>
             </div>
           )}
@@ -162,8 +178,8 @@ function ActivityChart({ summary, rangeId = 'day', onRangeChange, onBucketClick,
       )}
 
       <div className="rh-chart-legend">
-        <span className="rh-legend-item"><span className="rh-legend-color" style={{ background: 'var(--color-success)' }} /> Success (1xx-3xx)</span>
-        <span className="rh-legend-item"><span className="rh-legend-color" style={{ background: 'var(--color-danger)' }} /> Failed (4xx-5xx)</span>
+        <span className="rh-legend-item"><span className="rh-legend-color" style={{ background: successColor }} /> {successLegend}</span>
+        <span className="rh-legend-item"><span className="rh-legend-color" style={{ background: failureColor }} /> {failureLegend}</span>
       </div>
     </div>
   );

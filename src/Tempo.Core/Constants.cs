@@ -65,6 +65,21 @@ namespace Tempo.Core
         /// <summary>Identifier prefix for flow runs.</summary>
         public const string FlowRunIdPrefix = "run_";
 
+        /// <summary>Identifier prefix for workers.</summary>
+        public const string WorkerIdPrefix = "wrk_";
+
+        /// <summary>Identifier prefix for worker sessions.</summary>
+        public const string WorkerSessionIdPrefix = "wse_";
+
+        /// <summary>Identifier prefix for run assignments.</summary>
+        public const string RunAssignmentIdPrefix = "ras_";
+
+        /// <summary>Identifier prefix for worker activity rows.</summary>
+        public const string WorkerActivityIdPrefix = "wac_";
+
+        /// <summary>Identifier prefix for server instance rows.</summary>
+        public const string ServerInstanceIdPrefix = "srv_";
+
         /// <summary>Identifier prefix for step runs.</summary>
         public const string StepRunIdPrefix = "sru_";
 
@@ -107,6 +122,12 @@ namespace Tempo.Core
         /// <summary>Header for the tenant identifier.</summary>
         public const string HeaderTenantId = "x-tenant-id";
 
+        /// <summary>Header for the worker identifier.</summary>
+        public const string HeaderWorkerId = "x-worker-id";
+
+        /// <summary>Header for the worker token.</summary>
+        public const string HeaderWorkerToken = "x-worker-token";
+
         /// <summary>Response header for the flow run identifier.</summary>
         public const string HeaderRunId = "x-run-id";
 
@@ -140,6 +161,7 @@ namespace Tempo.Core
         /// <summary>CORS-exposed run metadata response headers.</summary>
         public const string HeaderRunMetadataExposeList =
             HeaderTenantId + ", " +
+            HeaderWorkerId + ", " +
             HeaderRunId + ", " +
             HeaderDataFlowId + ", " +
             HeaderTriggerId + ", " +

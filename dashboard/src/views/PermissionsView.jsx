@@ -6,6 +6,7 @@ import TenantPicker from '../components/TenantPicker';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
 
@@ -90,11 +91,16 @@ function PermissionsView({ apiClient, principal }) {
       />
 
       {editing && (
-        <Modal open onClose={() => setEditing(null)} title={editing.id ? 'Edit permission' : 'Create permission'}
+        <Modal
+          open
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit permission' : 'Create permission'}
+          headerMeta={<ModalRecordId label="Permission ID" value={editing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
             <button className="button-primary" onClick={save}>Save</button>
-          </>}>
+          </>}
+        >
           <div className="form-row"><label title="Permission name; map this to a role to grant the access it describes">Name</label><input value={editing.name || ''} placeholder="Read-only flows" onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
           <div className="form-row">
             <label title="Permit grants access; Deny revokes it. Deny always wins when both apply">Effect</label>
@@ -131,6 +137,8 @@ function PermissionsView({ apiClient, principal }) {
 
       <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Permission JSON" />
       <ConfirmModal open={!!confirmDelete} danger title="Delete permission"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Permission ID"
         message={'Delete permission "' + (confirmDelete?.name || '') + '"?'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deletePermission(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}

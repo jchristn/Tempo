@@ -227,7 +227,7 @@ function RequestHistoryView({ apiClient, principal }) {
 
       <RequestDetailsModal entryId={selectedId} open={!!selectedId} onClose={() => setSelectedId(null)} apiClient={apiClient} />
       <JsonViewerModal open={!!jsonEntry} onClose={() => setJsonEntry(null)} value={jsonEntry} title="Request history entry" />
-      <ConfirmModal open={!!confirmRow} danger title="Delete request" message={'Delete this request entry?'} confirmLabel="Delete"
+      <ConfirmModal open={!!confirmRow} danger title="Delete request" recordId={confirmRow?.id || ''} recordIdLabel="Request ID" message={'Delete this request entry?'} confirmLabel="Delete"
         onConfirm={handleDeleteRow} onCancel={() => setConfirmRow(null)} />
       <ConfirmModal open={confirmBulk} danger title="Delete matching requests"
         message={'Delete all request-history rows matching the current filters? This cannot be undone.'}

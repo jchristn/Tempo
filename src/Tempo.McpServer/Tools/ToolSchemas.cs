@@ -174,5 +174,40 @@ namespace Tempo.McpServer.Tools
                 required = new[] { "method", "path" }
             };
         }
+
+        /// <summary>Log source list schema.</summary>
+        /// <returns>Schema.</returns>
+        public static object LogFiles()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    sourceKind = new { type = "string", description = "Log source kind: server or worker." },
+                    sourceId = new { type = "string", description = "Log source identifier." }
+                },
+                required = new[] { "sourceKind", "sourceId" }
+            };
+        }
+
+        /// <summary>Bounded log file read schema.</summary>
+        /// <returns>Schema.</returns>
+        public static object LogFileRead()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    sourceKind = new { type = "string", description = "Log source kind: server or worker." },
+                    sourceId = new { type = "string", description = "Log source identifier." },
+                    path = new { type = "string", description = "Log file path relative to the source root." },
+                    tailLines = new { type = "integer", description = "Optional tail line count for bounded reads." },
+                    maxBytes = new { type = "integer", description = "Optional maximum UTF-8 bytes returned for bounded reads." }
+                },
+                required = new[] { "sourceKind", "sourceId", "path" }
+            };
+        }
     }
 }

@@ -1,6 +1,7 @@
 namespace Test.Shared.Suites
 {
     using System;
+    using System.Collections.Specialized;
     using System.Collections.Generic;
     using System.Linq;
     using System.Threading.Tasks;
@@ -18,6 +19,7 @@ namespace Test.Shared.Suites
     using System.Text;
     using SyslogLogging;
     using Tempo.Server;
+    using Tempo.Server.Helpers;
 #endif
 
     public static class RequestHistorySuite
@@ -199,6 +201,25 @@ namespace Test.Shared.Suites
                         Assert2.Equal(6, remaining.TotalCount, "6 remain");
                     }
                     finally { await TempTestStore.DisposeAsync(driver); }
+                }),
+                new TestCaseDescriptor("RequestHistory", "ClientIpResolver", "Client IP resolution prefers Forwarded, then X-Forwarded-For, then the direct socket IP", async ct =>
+                {
+                    await Task.CompletedTask;
+
+                    NameValueCollection headers = new NameValueCollection();
+                    headers["Forwarded"] = "for=\"[2001:db8:cafe::17]:4711\";proto=https";
+                    headers["X-Forwarded-For"] = "198.51.100.11:4321, 203.0.113.44";
+
+                    string? resolved = ClientIpResolver.Resolve(headers, "127.0.0.1");
+                    Assert2.Equal("2001:db8:cafe::17", resolved, "forwarded preferred");
+
+                    headers["Forwarded"] = "for=unknown";
+                    resolved = ClientIpResolver.Resolve(headers, "127.0.0.1");
+                    Assert2.Equal("198.51.100.11", resolved, "xff fallback");
+
+                    headers.Remove("X-Forwarded-For");
+                    resolved = ClientIpResolver.Resolve(headers, "127.0.0.1");
+                    Assert2.Equal("127.0.0.1", resolved, "remote fallback");
                 })
             };
 
@@ -282,6 +303,99 @@ namespace Test.Shared.Suites
                     }
 
                     Assert2.True(false, "request history did not persist the trigger response");
+                }
+                finally
+                {
+                    try { server?.Dispose(); } catch { }
+                    await TempTestStore.DisposeAsync(driver);
+                }
+            }));
+            cases.Add(new TestCaseDescriptor("RequestHistory", "TriggerCapturesForwardedSourceIp", "Trigger runs and request-history rows persist proxy-aware source IPs", async ct =>
+            {
+                SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct);
+                TempoServer? server = null;
+                try
+                {
+                    int port = FreePort();
+                    Settings settings = new Settings();
+                    settings.Rest.Port = port;
+                    settings.Rest.Hostname = "127.0.0.1";
+                    settings.Auth.AdminApiKey = "request-history-key";
+                    settings.RequestHistory.Enabled = true;
+                    settings.Engine.PollIntervalMs = 25;
+
+                    LoggingModule logging = new LoggingModule();
+                    logging.Settings.EnableConsole = false;
+
+                    Tenant tenant = await driver.Tenants.CreateAsync(new Tenant { Name = "Forwarded Header Tenant" }, ct);
+                    Tempo.StepManager stepManager = new Tempo.StepManager();
+                    stepManager.Add(new RequestHistoryEchoStep(tenant.Id));
+
+                    server = new TempoServer(settings, logging, driver, stepManager);
+                    await server.StartAsync();
+
+                    await driver.Steps.CreateAsync(new StepRecord
+                    {
+                        TenantId = tenant.Id,
+                        ExecutionKey = EchoExecutionKey,
+                        Name = "Forwarded header echo step",
+                        RuntimeKey = StepRuntimeKeys.BuiltinClass,
+                        RuntimeConfig = new BuiltinClassRuntimeConfig { Identifier = EchoExecutionKey }
+                    }, ct);
+
+                    DataFlowRecord flow = await driver.DataFlows.CreateAsync(new DataFlowRecord
+                    {
+                        TenantId = tenant.Id,
+                        Name = "Forwarded header flow",
+                        StartStepId = EchoExecutionKey,
+                        Transitions = new Dictionary<string, Tempo.StepTransition>
+                        {
+                            [EchoExecutionKey] = new Tempo.StepTransition()
+                        }
+                    }, ct);
+
+                    TriggerRecord trigger = await driver.Triggers.CreateAsync(new TriggerRecord
+                    {
+                        TenantId = tenant.Id,
+                        Name = "Forwarded header trigger",
+                        DataFlowId = flow.Id,
+                        Configuration = "{\"allowedMethods\":[\"POST\"]}"
+                    }, ct);
+
+                    using HttpClient client = new HttpClient();
+                    client.BaseAddress = new Uri("http://127.0.0.1:" + port);
+
+                    using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, "/v1.0/triggers/http/" + trigger.Id);
+                    request.Headers.TryAddWithoutValidation("Forwarded", "for=\"198.51.100.77:5123\";proto=https");
+                    request.Headers.TryAddWithoutValidation("X-Forwarded-For", "203.0.113.44, 127.0.0.1");
+                    request.Content = new StringContent("{\"value\":\"forwarded\"}", Encoding.UTF8, "application/json");
+
+                    HttpResponseMessage response = await client.SendAsync(request, ct);
+                    Assert2.Equal(HttpStatusCode.OK, response.StatusCode, "trigger invocation status");
+
+                    bool hasRunId = response.Headers.TryGetValues(Tempo.Core.Constants.HeaderRunId, out IEnumerable<string>? runIdValues);
+                    IEnumerable<string> confirmedRunIdValues = runIdValues ?? Array.Empty<string>();
+                    Assert2.True(hasRunId && confirmedRunIdValues.Any(), "run id header present");
+                    string runId = confirmedRunIdValues.First();
+
+                    for (int i = 0; i < 40; i++)
+                    {
+                        FlowRun? run = await driver.FlowRuns.ReadAsync(tenant.Id, runId, ct);
+                        var page = await driver.RequestHistory.EnumerateAsync(new RequestHistoryFilter { PageSize = 10 }, ct);
+                        RequestHistoryEntry? summary = page.Items.FirstOrDefault(item => string.Equals(item.Url, "/v1.0/triggers/http/" + trigger.Id, StringComparison.Ordinal));
+                        RequestHistoryEntry? full = summary != null ? await driver.RequestHistory.ReadAsync(null, summary.Id, ct) : null;
+
+                        if (run != null && full != null)
+                        {
+                            Assert2.Equal("198.51.100.77", run.SourceIp, "flow run source ip");
+                            Assert2.Equal("198.51.100.77", full.SourceIp, "request history source ip");
+                            return;
+                        }
+
+                        await Task.Delay(50, ct);
+                    }
+
+                    Assert2.True(false, "proxy-aware source IP was not persisted");
                 }
                 finally
                 {

@@ -1,0 +1,45 @@
+{
+  "createdUtc": "2026-04-21T00:00:00.000Z",
+  "serverEndpoint": "http://127.0.0.1:8901",
+  "workerId": "wrk_worker_1",
+  "workerToken": "",
+  "name": "tempo-worker-1",
+  "kind": "Worker",
+  "maxConcurrentRuns": 2,
+  "maxTaskTimeoutMs": 0,
+  "reconnectDelayMs": 5000,
+  "requestTimeoutMs": 30000,
+  "labels": [
+    "default"
+  ],
+  "logging": {
+    "consoleLogging": true,
+    "fileLogging": true,
+    "logDirectory": "./logs",
+    "logFilename": "tempo-worker.log"
+  },
+  "runtimes": {
+    "externalExecution": {
+      "maxConcurrentProcessesServerWide": 4,
+      "maxConcurrentProcessesPerTenant": 2,
+      "defaultMaxRuntimeMs": 30000,
+      "maxStdoutBytes": 1048576,
+      "maxStderrBytes": 1048576,
+      "maxInputBytes": 1048576,
+      "maxOutputBytes": 1048576,
+      "scratchRoot": "./scratch",
+      "cacheRoot": "./runtime-cache",
+      "environmentAllowList": [],
+      "networkPolicyMode": "disabled",
+      "killProcessTreeOnCancel": true,
+      "pythonExecutable": "python",
+      "nodeExecutable": "node",
+      "dotnetExecutable": "dotnet",
+      "allowPythonDependencyInstall": false
+    },
+    "hostExecutables": {
+      "enabled": false,
+      "allowList": []
+    }
+  }
+}

@@ -358,6 +358,110 @@ namespace Tempo.Core.Database.Sqlite.Queries
             });
             list.Add(m9);
 
+            SchemaMigration m10 = new SchemaMigration { Version = 10, Description = "distributed execution foundation" };
+            m10.Statements.AddRange(new[]
+            {
+                @"CREATE TABLE IF NOT EXISTS workers (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    drain_mode INTEGER NOT NULL DEFAULT 0,
+                    version TEXT NULL,
+                    host_name TEXT NULL,
+                    labels_json TEXT NULL,
+                    max_concurrent_runs INTEGER NOT NULL DEFAULT 1,
+                    last_heartbeat_utc TEXT NULL,
+                    created_utc TEXT NOT NULL
+                );",
+                @"CREATE TABLE IF NOT EXISTS worker_sessions (
+                    id TEXT PRIMARY KEY,
+                    worker_id TEXT NOT NULL,
+                    connected_utc TEXT NOT NULL,
+                    disconnected_utc TEXT NULL,
+                    disconnect_reason TEXT NULL,
+                    protocol_version TEXT NULL
+                );",
+                @"CREATE TABLE IF NOT EXISTS run_assignments (
+                    id TEXT PRIMARY KEY,
+                    flow_run_id TEXT NOT NULL,
+                    worker_id TEXT NOT NULL,
+                    worker_session_id TEXT NULL,
+                    attempt_number INTEGER NOT NULL DEFAULT 1,
+                    state TEXT NOT NULL,
+                    lease_token TEXT NOT NULL,
+                    lease_expires_utc TEXT NOT NULL,
+                    assigned_utc TEXT NOT NULL,
+                    completed_utc TEXT NULL
+                );",
+                @"CREATE TABLE IF NOT EXISTS worker_activity (
+                    id TEXT PRIMARY KEY,
+                    worker_id TEXT NOT NULL,
+                    worker_session_id TEXT NULL,
+                    flow_run_id TEXT NULL,
+                    run_assignment_id TEXT NULL,
+                    event_type TEXT NOT NULL,
+                    severity TEXT NULL,
+                    message TEXT NULL,
+                    payload_json TEXT NULL,
+                    created_utc TEXT NOT NULL
+                );",
+                @"CREATE TABLE IF NOT EXISTS server_instances (
+                    id TEXT PRIMARY KEY,
+                    started_utc TEXT NOT NULL,
+                    last_heartbeat_utc TEXT NOT NULL,
+                    version TEXT NULL
+                );",
+                "ALTER TABLE flow_runs ADD COLUMN dispatch_state TEXT NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN dispatch_attempt INTEGER NOT NULL DEFAULT 0;",
+                "ALTER TABLE flow_runs ADD COLUMN assigned_worker_id TEXT NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN run_assignment_id TEXT NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN queue_wait_ms INTEGER NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN assigned_utc TEXT NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN lease_expires_utc TEXT NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN execution_node_kind TEXT NULL;",
+                "UPDATE flow_runs SET dispatch_state = 'Pending' WHERE dispatch_state IS NULL OR length(trim(dispatch_state)) = 0;",
+                "CREATE INDEX IF NOT EXISTS idx_flow_runs_dispatch_pending ON flow_runs(dispatch_state, state, created_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_workers_online ON workers(enabled, drain_mode, state, last_heartbeat_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_worker_sessions_stale ON worker_sessions(worker_id, disconnected_utc, connected_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_run_assignments_lease ON run_assignments(state, lease_expires_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_run_assignments_flow_run ON run_assignments(flow_run_id, attempt_number);",
+                "CREATE INDEX IF NOT EXISTS idx_worker_activity_worker ON worker_activity(worker_id, created_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_worker_activity_run ON worker_activity(flow_run_id, created_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_server_instances_heartbeat ON server_instances(last_heartbeat_utc);"
+            });
+            list.Add(m10);
+
+            SchemaMigration m11 = new SchemaMigration { Version = 11, Description = "distributed execution worker auth and placement" };
+            m11.Statements.AddRange(new[]
+            {
+                "ALTER TABLE workers ADD COLUMN capabilities_json TEXT NULL;",
+                "ALTER TABLE workers ADD COLUMN token_hash TEXT NULL;",
+                "ALTER TABLE workers ADD COLUMN token_last_rotated_utc TEXT NULL;",
+                "ALTER TABLE data_flows ADD COLUMN routing_hint_label TEXT NULL;",
+                "ALTER TABLE server_instances ADD COLUMN host_name TEXT NULL;",
+                "UPDATE workers SET capabilities_json = '[]' WHERE capabilities_json IS NULL OR length(trim(capabilities_json)) = 0;",
+                "CREATE INDEX IF NOT EXISTS idx_workers_token_hash ON workers(token_hash);",
+                "CREATE INDEX IF NOT EXISTS idx_data_flows_routing_label ON data_flows(routing_hint_label);"
+            });
+            list.Add(m11);
+
+            SchemaMigration m12 = new SchemaMigration { Version = 12, Description = "worker task timeout metadata" };
+            m12.Statements.AddRange(new[]
+            {
+                "ALTER TABLE workers ADD COLUMN max_task_timeout_ms INTEGER NOT NULL DEFAULT 0;",
+                "UPDATE workers SET max_task_timeout_ms = 0 WHERE max_task_timeout_ms IS NULL;"
+            });
+            list.Add(m12);
+
+            SchemaMigration m13 = new SchemaMigration { Version = 13, Description = "flow run source ip" };
+            m13.Statements.AddRange(new[]
+            {
+                "ALTER TABLE flow_runs ADD COLUMN source_ip TEXT NULL;"
+            });
+            list.Add(m13);
+
             return list;
         }
     }

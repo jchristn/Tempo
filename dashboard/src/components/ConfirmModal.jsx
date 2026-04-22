@@ -1,12 +1,25 @@
 import Modal from './Modal';
+import ModalRecordId from './ModalRecordId';
 
-function ConfirmModal({ open, title = 'Confirm', message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, onConfirm, onCancel }) {
+function ConfirmModal({
+  open,
+  title = 'Confirm',
+  message,
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  danger = false,
+  recordId = '',
+  recordIdLabel = 'ID',
+  onConfirm,
+  onCancel
+}) {
   return (
     <Modal
       open={open}
       size="small"
       onClose={onCancel}
       title={title}
+      headerMeta={recordId ? <ModalRecordId label={recordIdLabel} value={recordId} /> : null}
       footer={
         <>
           <button className="button-secondary" onClick={onCancel}>{cancelLabel}</button>

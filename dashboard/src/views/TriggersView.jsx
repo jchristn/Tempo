@@ -8,6 +8,7 @@ import CopyableId from '../components/CopyableId';
 import CopyButton from '../components/CopyButton';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
 import { HTTP_METHODS } from '../utils/constants';
@@ -158,11 +159,16 @@ function TriggersView({ apiClient, principal }) {
       />
 
       {editing && (
-        <Modal open onClose={() => setEditing(null)} title={editing.id ? 'Edit trigger' : 'Create trigger'}
+        <Modal
+          open
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit trigger' : 'Create trigger'}
+          headerMeta={<ModalRecordId label="Trigger ID" value={editing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
             <button className="button-primary" onClick={save}>Save</button>
-          </>}>
+          </>}
+        >
           <div className="grid-2">
             <div className="form-row"><label title="Trigger name; visible on run records">Name</label><input value={editing.name || ''} placeholder="Order webhook" onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
             <div className="form-row">
@@ -255,6 +261,8 @@ function TriggersView({ apiClient, principal }) {
 
       <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Trigger JSON" />
       <ConfirmModal open={!!confirmDelete} danger title="Delete trigger"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Trigger ID"
         message={'Delete trigger "' + (confirmDelete?.name || '') + '"?'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteTrigger(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}

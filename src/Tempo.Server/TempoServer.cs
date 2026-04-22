@@ -14,6 +14,7 @@ namespace Tempo.Server
     using Tempo.Core.Services;
     using Tempo.Core.Settings;
     using Tempo.Core.Runtime;
+    using Tempo.Server.Helpers;
     using Tempo.Server.Routes;
     using WatsonWebserver;
     using WatsonWebserver.Core;
@@ -22,7 +23,7 @@ namespace Tempo.Server
     using TempoStepManager = Tempo.StepManager;
 
     /// <summary>
-    /// Tempo server host. Owns the Watson webserver, service stack, and flow queue worker.
+    /// Tempo server host. Owns the Watson webserver, service stack, and run dispatch coordinator.
     /// </summary>
     public class TempoServer : IDisposable
     {
@@ -33,14 +34,14 @@ namespace Tempo.Server
         private readonly AuthenticationService _Auth;
         private readonly AuthorizationService _Authz;
         private readonly RequestHistoryCaptureService _Capture;
-        private readonly FlowDispatchService _Dispatch;
+        private readonly IRunDispatchCoordinator _Dispatch;
         private readonly DeletionDependencyService _DeleteGuard;
         private readonly StepRuntimeRegistry _RuntimeRegistry;
         private readonly ExternalRuntimeCapacityManager _ExternalCapacity;
         private readonly IArtifactBlobStore _ArtifactBlobStore;
         private readonly ArtifactRetentionService _ArtifactRetention;
         private readonly TempoStepManager _StepManager;
-        private readonly FlowQueueWorker _Worker;
+        private readonly Tempo.Server.Services.LogFileService _LogFiles;
         private readonly CancellationTokenSource _Cts = new CancellationTokenSource();
         private readonly string _Header = "[TempoServer] ";
         private readonly Tempo.Server.Services.SettingsStore _SettingsStore;
@@ -67,13 +68,13 @@ namespace Tempo.Server
             _Auth = new AuthenticationService(_Database, _Tokens, _Settings.Auth);
             _Authz = new AuthorizationService(_Database);
             _Capture = new RequestHistoryCaptureService(_Database, _Settings.RequestHistory, _Logging);
-            _Dispatch = new FlowDispatchService(_Database);
             _DeleteGuard = new DeletionDependencyService(_Database);
             _ExternalCapacity = new ExternalRuntimeCapacityManager(_Settings.Runtimes.ExternalExecution);
             _ArtifactBlobStore = new LocalFilesystemArtifactBlobStore(_Settings.Artifacts);
             _RuntimeRegistry = StepRuntimeRegistry.CreateDefault(_StepManager, runtimes: _Settings.Runtimes, database: _Database, artifactBlobStore: _ArtifactBlobStore, externalCapacity: _ExternalCapacity);
             _ArtifactRetention = new ArtifactRetentionService(_Database, _ArtifactBlobStore, _Settings.Artifacts, _Settings.Runtimes.ExternalExecution);
-            _Worker = new FlowQueueWorker(_Database, _StepManager, _Settings.Engine, _Logging, _RuntimeRegistry);
+            _Dispatch = new Tempo.Server.Services.RunDispatchCoordinator(_Database, _StepManager, _Settings.Engine, _Logging, _RuntimeRegistry);
+            _LogFiles = new Tempo.Server.Services.LogFileService(_SettingsStore, (Tempo.Server.Services.RunDispatchCoordinator)_Dispatch);
         }
 
         /// <summary>Settings store for live edit.</summary>
@@ -88,8 +89,11 @@ namespace Tempo.Server
         /// <summary>Expose the token service for route registrars.</summary>
         public TokenService Tokens => _Tokens;
 
-        /// <summary>Expose the dispatch service for route registrars.</summary>
-        public FlowDispatchService Dispatch => _Dispatch;
+        /// <summary>Expose the run dispatch coordinator for route registrars.</summary>
+        public IRunDispatchCoordinator Dispatch => _Dispatch;
+
+        /// <summary>Expose the concrete dispatch coordinator for worker-management routes.</summary>
+        public Tempo.Server.Services.RunDispatchCoordinator DispatchCoordinator => (Tempo.Server.Services.RunDispatchCoordinator)_Dispatch;
 
         /// <summary>Expose delete dependency checks for route registrars.</summary>
         public DeletionDependencyService DeleteGuard => _DeleteGuard;
@@ -118,6 +122,9 @@ namespace Tempo.Server
         /// <summary>Expose the settings.</summary>
         public Settings Settings => _Settings;
 
+        /// <summary>Expose the log catalog service.</summary>
+        public Tempo.Server.Services.LogFileService LogFiles => _LogFiles;
+
         /// <summary>Start the server.</summary>
         public Task StartAsync()
         {
@@ -125,6 +132,7 @@ namespace Tempo.Server
             ws.Hostname = _Settings.Rest.Hostname;
             ws.Port = _Settings.Rest.Port;
             ws.Ssl.Enable = _Settings.Rest.Ssl;
+            ws.WebSockets.Enable = true;
 
             _Server = new Webserver(ws, DefaultRouteAsync);
 
@@ -147,7 +155,7 @@ namespace Tempo.Server
             _Logging.Info(_Header + "listening on http" + (_Settings.Rest.Ssl ? "s" : "") + "://" + _Settings.Rest.Hostname + ":" + _Settings.Rest.Port);
             _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "process-backed artifact execution is available; enforce tenant isolation, quotas, and runtime allowlists before accepting untrusted code"));
 
-            _Worker.Start();
+            _Dispatch.Start();
             _PruneTask = Task.Run(() => PruneLoopAsync(_Cts.Token));
             _ArtifactGcTask = Task.Run(() => ArtifactGcLoopAsync(_Cts.Token));
 
@@ -159,7 +167,7 @@ namespace Tempo.Server
         {
             try { _Cts.Cancel(); } catch { /* ignore */ }
             try { _Server?.Stop(); } catch { /* ignore */ }
-            _Worker.Stop();
+            _Dispatch.Stop();
         }
 
         /// <inheritdoc/>
@@ -169,7 +177,7 @@ namespace Tempo.Server
             Stop();
             try { _PruneTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* ignore */ }
             try { _ArtifactGcTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* ignore */ }
-            _Worker.Dispose();
+            _Dispatch.Dispose();
             try { _Server?.Dispose(); } catch { /* ignore */ }
             _Cts.Dispose();
             _Disposed = true;
@@ -194,11 +202,13 @@ namespace Tempo.Server
             new StepRoutes(this).Register(_Server);
             new RuntimeRoutes(this).Register(_Server);
             new ArtifactRoutes(this).Register(_Server);
+            new WorkerRoutes(this).Register(_Server);
             new TriggerRoutes(this).Register(_Server);
             new FlowRunRoutes(this).Register(_Server);
             new RequestHistoryRoutes(this).Register(_Server);
             new MigrationRoutes(this).Register(_Server);
             new SettingsRoutes(this).Register(_Server);
+            new LogRoutes(this).Register(_Server);
         }
 
         private async Task AuthenticateRequestAsync(HttpContextBase ctx)
@@ -267,7 +277,7 @@ namespace Tempo.Server
         {
             SetHeaderIfMissing(ctx, "Access-Control-Allow-Origin", "*");
             SetHeaderIfMissing(ctx, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
-            SetHeaderIfMissing(ctx, "Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Token, X-Tenant-Id, X-Access-Key, X-Secret-Key, X-Email, X-Password, X-Request");
+            SetHeaderIfMissing(ctx, "Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Token, X-Tenant-Id, X-Worker-Id, X-Worker-Token, X-Access-Key, X-Secret-Key, X-Email, X-Password, X-Request");
             SetHeaderIfMissing(ctx, "Access-Control-Expose-Headers", Constants.HeaderRunMetadataExposeList);
         }
 
@@ -295,7 +305,7 @@ namespace Tempo.Server
                 Url = ctx.Request.Url.RawWithQuery,
                 StatusCode = ctx.Response.StatusCode,
                 DurationMs = ctx.Timestamp.TotalMs ?? 0,
-                SourceIp = ctx.Request.Source?.IpAddress,
+                SourceIp = ClientIpResolver.Resolve(ctx),
                 CreatedUtc = ctx.Timestamp.Start,
                 CompletedUtc = ctx.Timestamp.End
             };

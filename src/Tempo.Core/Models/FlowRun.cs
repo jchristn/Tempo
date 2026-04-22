@@ -57,6 +57,9 @@ namespace Tempo.Core.Models
         /// <summary>Trigger identifier that caused this run (optional).</summary>
         public string? TriggerId { get; set; } = null;
 
+        /// <summary>Client source IP observed by the server when the run was enqueued (optional).</summary>
+        public string? SourceIp { get; set; } = null;
+
         /// <summary>Current state.</summary>
         public FlowRunStateEnum State { get; set; } = FlowRunStateEnum.Queued;
 
@@ -71,6 +74,30 @@ namespace Tempo.Core.Models
 
         /// <summary>Serialized run-start execution snapshot, including resolved artifact versions.</summary>
         public string? ExecutionSnapshotJson { get; set; } = null;
+
+        /// <summary>Current fine-grained dispatch state.</summary>
+        public FlowRunDispatchStateEnum DispatchState { get; set; } = FlowRunDispatchStateEnum.Pending;
+
+        /// <summary>Number of dispatch attempts made for this run.</summary>
+        public int DispatchAttempt { get; set; } = 0;
+
+        /// <summary>Worker identifier currently assigned to this run.</summary>
+        public string? AssignedWorkerId { get; set; } = null;
+
+        /// <summary>Current assignment identifier, if any.</summary>
+        public string? RunAssignmentId { get; set; } = null;
+
+        /// <summary>Milliseconds spent waiting in queue before assignment.</summary>
+        public long? QueueWaitMs { get; set; } = null;
+
+        /// <summary>UTC time at which the current assignment was created.</summary>
+        public DateTime? AssignedUtc { get; set; } = null;
+
+        /// <summary>UTC time at which the current assignment lease expires.</summary>
+        public DateTime? LeaseExpiresUtc { get; set; } = null;
+
+        /// <summary>Execution node kind handling the run.</summary>
+        public ExecutionNodeKindEnum? ExecutionNodeKind { get; set; } = null;
 
         /// <summary>UTC time the run was enqueued.</summary>
         public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;

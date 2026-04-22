@@ -12,6 +12,7 @@ namespace Tempo.Server.Routes
     using Tempo.Core.Requests;
     using Tempo.Core.Security;
     using Tempo.Core.Services;
+    using Tempo.Server.Helpers;
     using WatsonWebserver;
     using WatsonWebserver.Core;
     using WatsonWebserver.Core.OpenApi;
@@ -159,7 +160,8 @@ namespace Tempo.Server.Routes
             string body = method == "GET" ? string.Empty : ctx.Request.DataAsString ?? string.Empty;
             try
             {
-                var run = await _Host.Dispatch.EnqueueAsync(trigger.TenantId, trigger.DataFlowId!, string.IsNullOrEmpty(body) ? null : body, null, trigger.Id);
+                string? sourceIp = ClientIpResolver.Resolve(ctx);
+                var run = await _Host.Dispatch.EnqueueAsync(trigger.TenantId, trigger.DataFlowId!, string.IsNullOrEmpty(body) ? null : body, null, trigger.Id, sourceIp);
                 DataFlowRecord? flow = await _Host.Database.DataFlows.ReadAsync(trigger.TenantId, trigger.DataFlowId!).ConfigureAwait(false);
                 run = await WaitForRunCompletionAsync(run, CalculateWaitMs(flow)).ConfigureAwait(false);
 
@@ -244,6 +246,7 @@ namespace Tempo.Server.Routes
             SetHeader(ctx, Constants.HeaderRunState, run.State.ToString());
             SetHeader(ctx, Constants.HeaderRunCreatedUtc, run.CreatedUtc.ToString("o"));
             SetHeader(ctx, Constants.HeaderRunLastUpdateUtc, run.LastUpdateUtc.ToString("o"));
+            if (!string.IsNullOrWhiteSpace(run.AssignedWorkerId)) SetHeader(ctx, Constants.HeaderWorkerId, run.AssignedWorkerId);
             if (!string.IsNullOrWhiteSpace(run.TriggerId)) SetHeader(ctx, Constants.HeaderTriggerId, run.TriggerId);
             if (run.StartedUtc.HasValue) SetHeader(ctx, Constants.HeaderRunStartedUtc, run.StartedUtc.Value.ToString("o"));
             if (run.CompletedUtc.HasValue) SetHeader(ctx, Constants.HeaderRunCompletedUtc, run.CompletedUtc.Value.ToString("o"));

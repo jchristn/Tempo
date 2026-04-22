@@ -15,6 +15,7 @@ artifact files or built-in code -> step -> data flow -> trigger -> run history
 | Make execution explicit | Use stable step `executionKey` values and clear flow transition names |
 | Keep units small | Prefer steps that perform one operation and return one well-defined output |
 | Preserve observability | Inspect flow runs and step runs after every new trigger or artifact change |
+| Treat placement as an operator concern | Use worker labels and `routingHintLabel` intentionally rather than relying on incidental worker choice |
 | Pin where reproducibility matters | Use immutable artifact version labels for production-critical behavior |
 | Use mutable current intentionally | Use editable artifact files for iteration and local development |
 | Protect production records | Set `isProtected` on production steps, flows, triggers, artifacts, and pinned artifact versions |
@@ -174,6 +175,45 @@ Choose the least powerful runtime that solves the problem.
 | Operator-owned host binary | `Host.Executable` |
 
 Use `/v1.0/runtimes` or the MCP `runtime_list` tool before creating steps that depend on `python`, `node`, `dotnet`, or configured host executables.
+
+## Distributed Execution
+
+Tempo v0.3.0 schedules whole flow runs onto either the server pseudo-worker or a remote `Tempo.Worker`.
+
+Recommended operator settings:
+
+| Setting | Guidance |
+| --- | --- |
+| `engine.serverCanExecuteWorkload` | Set `false` when Tempo.Server should be control-plane only |
+| `engine.loadBalancingStrategy` | Use `LeastLoaded` by default; use `LabelPinned` only when a flow really needs a labeled worker pool |
+| `engine.workerHeartbeatTimeoutMs` | Keep it short enough to recover dead workers quickly but long enough to tolerate expected network jitter |
+| `engine.leaseDurationMs` | Set longer than the expected longest assignment dispatch-to-completion interval |
+| `engine.maxAssignmentAttempts` | Keep retries bounded so dead workers do not cause infinite churn |
+
+### Worker Labels and Routing Hints
+
+Use worker labels for durable placement constraints, not for ad hoc queueing.
+
+Good examples:
+
+| Label | Meaning |
+| --- | --- |
+| `python` | Worker has the required Python environment or packages |
+| `gpu` | Worker has GPU access |
+| `isolated` | Worker pool is reserved for a sensitive workflow class |
+
+Set a flow's `routingHintLabel` only when the flow genuinely needs that pool. Otherwise leave placement to `LeastLoaded`.
+
+### Recovery Expectations
+
+Distributed execution is at-least-once. Design flows so a retried assignment does not produce unsafe side effects.
+
+Practical guidance:
+
+1. Make outbound calls idempotent when possible.
+2. Use stable business identifiers in payloads so downstream systems can deduplicate.
+3. Inspect `dispatchAttempt`, `assignedWorkerId`, and `runAssignmentId` when diagnosing recovery.
+4. Drain workers before maintenance instead of killing them mid-run.
 
 ### Built-In Steps
 
@@ -472,6 +512,7 @@ Review:
 | Question | Field |
 | --- | --- |
 | Did the flow finish? | Run `state` |
+| Where did it run? | Run `assignedWorkerId`, `executionNodeKind`, `dispatchAttempt` |
 | What did the caller send? | Run `inputData` |
 | What did the flow return? | Run `outputData` |
 | Which step failed? | Step run `result` and `errorMessage` |
@@ -735,4 +776,3 @@ Use this as a starting point:
 7. Add failure or exception branches.
 8. Set timeouts and validation.
 9. Pin artifacts or protect records before production use.
-

@@ -55,6 +55,7 @@ function ActionMenu({ items }) {
         className="action-menu-trigger"
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
         aria-label="Actions"
+        title="Actions"
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -67,6 +68,7 @@ function ActionMenu({ items }) {
               key={i}
               type="button"
               className={'action-menu-item' + (it.variant === 'danger' ? ' danger' : '')}
+              title={it.title || it.label}
               onClick={(e) => { e.stopPropagation(); setOpen(false); it.onClick?.(); }}
             >
               {it.label}

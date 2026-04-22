@@ -5,6 +5,7 @@ import Modal from '../components/Modal';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import TenantPicker from '../components/TenantPicker';
 import { formatTime } from '../utils/formatters';
@@ -129,11 +130,17 @@ function UsersView({ apiClient, principal }) {
       />
 
       {editing && (
-        <Modal open size="medium" onClose={() => setEditing(null)} title={editing.id ? 'Edit user' : 'Create user'}
+        <Modal
+          open
+          size="medium"
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit user' : 'Create user'}
+          headerMeta={<ModalRecordId label="User ID" value={editing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
             <button className="button-primary" onClick={save}>Save</button>
-          </>}>
+          </>}
+        >
           <div className="form-row"><label title="Email used at password sign-in; must be unique within the tenant">Email</label><input value={editing.email || ''} placeholder="alice@example.com" onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></div>
           <div className="grid-2">
             <div className="form-row"><label title="First name (optional)">First name</label><input value={editing.firstName || ''} placeholder="Alice" onChange={(e) => setEditing({ ...editing, firstName: e.target.value })} /></div>
@@ -179,6 +186,8 @@ function UsersView({ apiClient, principal }) {
 
       <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="User JSON" />
       <ConfirmModal open={!!confirmDelete} danger title="Delete user"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="User ID"
         message={'Delete user "' + (confirmDelete?.email || '') + '"? Credentials and role maps will also be removed.'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteUser(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}

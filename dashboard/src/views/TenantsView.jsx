@@ -5,6 +5,7 @@ import Modal from '../components/Modal';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
 
@@ -84,11 +85,17 @@ function TenantsView({ apiClient }) {
       />
 
       {editing && (
-        <Modal open size="small" onClose={() => setEditing(null)} title={editing.id ? 'Edit tenant' : 'Create tenant'}
+        <Modal
+          open
+          size="small"
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit tenant' : 'Create tenant'}
+          headerMeta={<ModalRecordId label="Tenant ID" value={editing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
             <button className="button-primary" onClick={save}>Save</button>
-          </>}>
+          </>}
+        >
           <div className="form-row"><label title="Display name for the tenant; visible in the dashboard and audit trail">Name</label><input value={editing.name || ''} placeholder="Acme Corporation" onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
           <div className="form-row"><label title="Optional free-form region label, e.g. us-east, eu-west, dc1">Region</label><input value={editing.region || ''} placeholder="us-east" onChange={(e) => setEditing({ ...editing, region: e.target.value })} /></div>
           <div className="form-row"><label title="Inactive tenants reject all authentication"><input type="checkbox" checked={!!editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} style={{ width: 'auto' }} /> Active</label></div>
@@ -100,6 +107,8 @@ function TenantsView({ apiClient }) {
         open={!!confirmDelete}
         danger
         title="Delete tenant"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Tenant ID"
         message={'Delete tenant "' + (confirmDelete?.name || '') + '"? All users, flows, and runs under this tenant will be deleted.'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteTenant(confirmDelete.id); setConfirmDelete(null); refresh(); }}

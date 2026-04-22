@@ -34,9 +34,9 @@ namespace Tempo.Core.Database.Common.Implementations
             r.LastUpdateUtc = DateTime.UtcNow;
             string transitionsJson = JsonSerializer.Serialize(r.Transitions);
             await _Driver.ExecuteQueryAsync(
-                "INSERT INTO data_flows(id, tenant_id, name, description, trigger_id, start_step_id, max_runtime_ms, transitions, active, is_protected, created_utc, last_update_utc) VALUES (" +
+                "INSERT INTO data_flows(id, tenant_id, name, description, trigger_id, start_step_id, routing_hint_label, max_runtime_ms, transitions, active, is_protected, created_utc, last_update_utc) VALUES (" +
                 _D.Quote(r.Id) + ", " + _D.Quote(r.TenantId) + ", " + _D.Quote(r.Name) + ", " + _D.Quote(r.Description) + ", " +
-                _D.Quote(r.TriggerId) + ", " + _D.Quote(r.StartStepId) + ", " + r.MaxRuntimeMs + ", " +
+                _D.Quote(r.TriggerId) + ", " + _D.Quote(r.StartStepId) + ", " + _D.Quote(r.RoutingHintLabel) + ", " + r.MaxRuntimeMs + ", " +
                 _D.Quote(transitionsJson) + ", " + _D.Bit(r.Active) + ", " + _D.Bit(r.IsProtected) + ", " +
                 _D.Quote(r.CreatedUtc) + ", " + _D.Quote(r.LastUpdateUtc) + ");",
                 false, token).ConfigureAwait(false);
@@ -52,6 +52,7 @@ namespace Tempo.Core.Database.Common.Implementations
             await _Driver.ExecuteQueryAsync(
                 "UPDATE data_flows SET name = " + _D.Quote(r.Name) + ", description = " + _D.Quote(r.Description) + ", " +
                 "trigger_id = " + _D.Quote(r.TriggerId) + ", start_step_id = " + _D.Quote(r.StartStepId) + ", " +
+                "routing_hint_label = " + _D.Quote(r.RoutingHintLabel) + ", " +
                 "max_runtime_ms = " + r.MaxRuntimeMs + ", transitions = " + _D.Quote(transitionsJson) + ", " +
                 "active = " + _D.Bit(r.Active) + ", is_protected = " + _D.Bit(r.IsProtected) + ", " +
                 "last_update_utc = " + _D.Quote(r.LastUpdateUtc) +
@@ -140,6 +141,7 @@ namespace Tempo.Core.Database.Common.Implementations
                 Description = Converters.StringOrNull(row, "description"),
                 TriggerId = Converters.StringOrNull(row, "trigger_id"),
                 StartStepId = Converters.String(row, "start_step_id"),
+                RoutingHintLabel = row.Table.Columns.Contains("routing_hint_label") ? Converters.StringOrNull(row, "routing_hint_label") : null,
                 MaxRuntimeMs = Converters.Int(row, "max_runtime_ms"),
                 Transitions = transitions,
                 Active = Converters.Bool(row, "active"),

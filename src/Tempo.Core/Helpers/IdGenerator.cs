@@ -92,6 +92,36 @@ namespace Tempo.Core.Helpers
             return Generate(Constants.FlowRunIdPrefix);
         }
 
+        /// <summary>Generate a worker identifier.</summary>
+        public static string GenerateWorkerId()
+        {
+            return Generate(Constants.WorkerIdPrefix);
+        }
+
+        /// <summary>Generate a worker session identifier.</summary>
+        public static string GenerateWorkerSessionId()
+        {
+            return Generate(Constants.WorkerSessionIdPrefix);
+        }
+
+        /// <summary>Generate a run assignment identifier.</summary>
+        public static string GenerateRunAssignmentId()
+        {
+            return Generate(Constants.RunAssignmentIdPrefix);
+        }
+
+        /// <summary>Generate a worker activity identifier.</summary>
+        public static string GenerateWorkerActivityId()
+        {
+            return Generate(Constants.WorkerActivityIdPrefix);
+        }
+
+        /// <summary>Generate a server instance identifier.</summary>
+        public static string GenerateServerInstanceId()
+        {
+            return Generate(Constants.ServerInstanceIdPrefix);
+        }
+
         /// <summary>Generate a step run identifier.</summary>
         public static string GenerateStepRunId()
         {

@@ -32,7 +32,11 @@ const SECTIONS = [
   },
   {
     heading: 'System',
-    items: [{ id: 'settings', label: 'Settings', icon: 'gear', tip: 'Server configuration and dashboard preferences' }]
+    items: [
+      { id: 'workers', label: 'Workers', icon: 'workers', tip: 'Inspect worker state, placement labels, and drain or resume nodes' },
+      { id: 'logs', label: 'Logs', icon: 'list', tip: 'Browse server and worker log files, read bounded tails, and download or clear logs' },
+      { id: 'settings', label: 'Settings', icon: 'gear', tip: 'Server configuration and dashboard preferences' }
+    ]
   }
 ];
 
@@ -55,6 +59,7 @@ function Icon({ name }) {
     case 'key': return <svg {...props}><circle cx="8" cy="12" r="4" /><path d="M12 12h10M19 15l3-3-3-3" /></svg>;
     case 'shield': return <svg {...props}><path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6z" /></svg>;
     case 'lock': return <svg {...props}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>;
+    case 'workers': return <svg {...props}><rect x="3" y="5" width="6" height="6" rx="1" /><rect x="15" y="5" width="6" height="6" rx="1" /><path d="M6 11v3a2 2 0 002 2h8a2 2 0 002-2v-3" /><path d="M12 14v5" /></svg>;
     case 'gear': return <svg {...props}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33 1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82 1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></svg>;
     default: return <svg {...props}><circle cx="12" cy="12" r="4" /></svg>;
   }

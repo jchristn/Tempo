@@ -46,6 +46,7 @@ namespace Tempo.Core.Runtime
         public string VersionId { get; set; } = string.Empty;
         public string Version { get; set; } = string.Empty;
         public string Sha256 { get; set; } = string.Empty;
+        public string? ManifestJson { get; set; } = null;
         public string? ManifestEntrypoint { get; set; } = null;
     }
 }

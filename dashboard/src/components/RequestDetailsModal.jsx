@@ -4,6 +4,7 @@ import MethodPill from './MethodPill';
 import StatusPill from './StatusPill';
 import CopyableId from './CopyableId';
 import CopyButton from './CopyButton';
+import ModalRecordId from './ModalRecordId';
 import { formatDuration, formatTime } from '../utils/formatters';
 
 function Section({ title, extra, children, defaultOpen = true }) {
@@ -36,7 +37,13 @@ function RequestDetailsModal({ entryId, open, onClose, apiClient }) {
   }, [entryId, open, apiClient]);
 
   return (
-    <Modal open={open} onClose={onClose} size="large" title="Request details">
+    <Modal
+      open={open}
+      onClose={onClose}
+      size="large"
+      title="Request details"
+      headerMeta={<ModalRecordId label="Request ID" value={entry?.id || entryId} />}
+    >
       {error && <div className="login-error">{error}</div>}
       {!entry && !error && <div className="loading-spinner" style={{ margin: '2rem auto' }} />}
       {entry && (

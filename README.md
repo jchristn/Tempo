@@ -5,7 +5,7 @@
 # Tempo
 
 > **Note**  
-> v0.2.0 - Tempo is in ALPHA - API surface and data structures subject to change
+> v0.3.0 - Tempo is in ALPHA - API surface and data structures subject to change
 
 [![NuGet](https://img.shields.io/nuget/v/Tempo.svg)](https://www.nuget.org/packages/Tempo/)
 [![NuGet Tempo.Sdk](https://img.shields.io/nuget/v/Tempo.Sdk.svg)](https://www.nuget.org/packages/Tempo.Sdk/)
@@ -19,6 +19,7 @@ Tempo ships as:
 - `Tempo`: the core workflow/orchestration library
 - `Tempo.Core`: server-facing persistence, runtime, settings, and management contracts
 - `Tempo.Server`: the REST API host
+- `Tempo.Worker`: the first-party distributed execution worker daemon
 - `Tempo.McpServer`: an MCP facade over Tempo.Server built on Voltaic
 - `dashboard/`: a React/Vite operator UI
 - `sdk/csharp`, `sdk/js`, and `sdk/python`: artifact runtime SDKs with exhaustive test apps
@@ -30,6 +31,9 @@ Tempo ships as:
 - Source-step creation from the UI or API for Python, JavaScript, and C#
 - Mutable artifact packages with dashboard file browsing and in-place editing
 - Runtime-aware startup seeding that creates working sample steps for each available runtime type
+- Distributed execution with a control-plane/server split, authenticated workers, worker drain/resume/block control, and capability-aware run placement
+- Run placement metadata, worker management REST routes, dashboard worker views, and MCP worker tools
+- Admin log viewer for file-backed server and worker logs in the dashboard, REST API, MCP, and Postman
 - OpenAPI-backed API Explorer and MCP server for agent-driven automation
 - First-run setup wizard that creates and invokes example flows end to end
 - K-sortable PrettyId identifiers with fixed prefixes and a maximum length of 32
@@ -42,13 +46,14 @@ Tempo ships as:
 From the repository root:
 
 ```powershell
-docker compose -f .\docker\compose.yaml up --build
+docker compose -f .\docker\compose.yaml up -d
 ```
 
 Default endpoints:
 
 - Dashboard: `http://localhost:3000`
 - Tempo.Server: `http://localhost:8901`
+- Tempo.Worker: included in the compose stack as `tempo-worker-1`, `tempo-worker-2`, and `tempo-worker-3`
 - Tempo.McpServer HTTP RPC: `http://127.0.0.1:8910/rpc`
 - Tempo.McpServer TCP: `127.0.0.1:8911`
 - Tempo.McpServer WebSocket: `ws://127.0.0.1:8912/mcp`
@@ -57,8 +62,18 @@ Default seeded credentials on an empty database:
 
 - Email: `admin@tempo.local`
 - Password: `password`
+- Local admin API key: `tempo-local-admin-api-key`
 
-Compose uses named volumes for server config, database, logs, runtime cache, scratch storage, dashboard logs, and MCP configuration. The service images in the compose file are pinned to `v0.2.0`.
+Compose bind-mounts `docker/tempo.server.json` and `docker/tempo.worker.json` so first-run deployments use the intended control-plane and worker settings without depending on pre-seeded config volumes. Persistent named volumes remain in place for the server database, server artifact blob storage, server logs/runtime cache/scratch, shared worker logs, dashboard logs, and MCP configuration. Worker runtime-cache and scratch paths remain container-local anonymous volumes so scaled workers do not share mutable runtime state, while worker log files are written to a shared named volume that `Tempo.Server` mounts read-only for the admin log viewer. The service images in the compose file are pinned to `v0.3.0`.
+
+### Distributed Execution Model
+
+Tempo v0.3.0 splits the platform into:
+
+- `Tempo.Server` as the control plane for REST, MCP, scheduling, persistence, worker management, and authenticated artifact download
+- `Tempo.Worker` as the execution plane for assigned flow runs
+
+The server can still participate in execution through the local pseudo-worker controlled by `engine.serverCanExecuteWorkload`. Placement is whole-flow-run based, with `LeastLoaded` and `LabelPinned` strategies.
 
 ### Local Development
 
@@ -78,6 +93,7 @@ Build and run:
 ```powershell
 dotnet build .\src\Tempo.sln
 dotnet run --project .\src\Tempo.Server\Tempo.Server.csproj
+dotnet run --project .\src\Tempo.Worker\Tempo.Worker.csproj
 dotnet run --project .\src\Tempo.McpServer\Tempo.McpServer.csproj
 
 cd .\dashboard
@@ -87,9 +103,10 @@ npm run dev
 
 Helper scripts at the repository root:
 
-- `build-server.bat v0.2.0`
-- `build-mcp.bat v0.2.0`
-- `build-dashboard.bat v0.2.0`
+- `build-server.bat v0.3.0`
+- `build-worker.bat v0.3.0`
+- `build-mcp.bat v0.3.0`
+- `build-dashboard.bat v0.3.0`
 - `publish-nuget.bat <nuget-api-key>`
 
 ## Core Concepts
@@ -156,6 +173,7 @@ For successful trigger execution:
 Current response metadata headers include:
 
 - `x-tenant-id`
+- `x-worker-id` when the run has been assigned
 - `x-run-id`
 - `x-dataflow-id`
 - `x-trigger-id`
@@ -199,6 +217,8 @@ Primary reference material:
 - [docs/REST_API.md](docs/REST_API.md)
 - [docs/MCP_API.md](docs/MCP_API.md)
 - [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md)
+- [docs/DISTRIBUTED_EXECUTION_OPERATOR_GUIDE.md](docs/DISTRIBUTED_EXECUTION_OPERATOR_GUIDE.md)
+- [docs/WORKER_PROTOCOL.md](docs/WORKER_PROTOCOL.md)
 - [Tempo.postman_collection.json](Tempo.postman_collection.json)
 
 Additional operator and implementation guides:
@@ -229,6 +249,7 @@ dotnet build .\src\Tempo.sln
 dotnet run --project .\src\Test.Automated\Test.Automated.csproj
 dotnet test .\src\Test.Xunit\Test.Xunit.csproj
 dotnet test .\src\Test.Nunit\Test.Nunit.csproj
+npm.cmd --prefix .\dashboard run build
 ```
 
 SDK test applications:
@@ -258,6 +279,7 @@ That script packs and pushes:
 | `src/Tempo` | Core orchestration library |
 | `src/Tempo.Core` | Persistence, runtimes, settings, server contracts |
 | `src/Tempo.Server` | REST API host |
+| `src/Tempo.Worker` | Worker daemon for distributed execution |
 | `src/Tempo.McpServer` | MCP bridge over Tempo.Server |
 | `dashboard` | React/Vite operator UI |
 | `sdk/csharp` | C# SDK and test app |

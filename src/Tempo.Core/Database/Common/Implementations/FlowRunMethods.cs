@@ -3,8 +3,10 @@ namespace Tempo.Core.Database.Common.Implementations
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Globalization;
     using System.Threading;
     using System.Threading.Tasks;
+    using Tempo.Core.Database.Common;
     using Tempo.Core.Database.Interfaces;
     using Tempo.Core.Enums;
     using Tempo.Core.Helpers;
@@ -34,11 +36,14 @@ namespace Tempo.Core.Database.Common.Implementations
             r.CreatedUtc = DateTime.UtcNow;
             r.LastUpdateUtc = DateTime.UtcNow;
             await _Driver.ExecuteQueryAsync(
-                "INSERT INTO flow_runs(id, tenant_id, data_flow_id, triggered_by_user_id, trigger_id, state, input_data, output_data, error_message, execution_snapshot_json, created_utc, started_utc, completed_utc, last_update_utc) VALUES (" +
+                "INSERT INTO flow_runs(id, tenant_id, data_flow_id, triggered_by_user_id, trigger_id, source_ip, state, input_data, output_data, error_message, execution_snapshot_json, dispatch_state, dispatch_attempt, assigned_worker_id, run_assignment_id, queue_wait_ms, assigned_utc, lease_expires_utc, execution_node_kind, created_utc, started_utc, completed_utc, last_update_utc) VALUES (" +
                 _D.Quote(r.Id) + ", " + _D.Quote(r.TenantId) + ", " + _D.Quote(r.DataFlowId) + ", " +
-                _D.Quote(r.TriggeredByUserId) + ", " + _D.Quote(r.TriggerId) + ", " + _D.Quote(r.State.ToString()) + ", " +
+                _D.Quote(r.TriggeredByUserId) + ", " + _D.Quote(r.TriggerId) + ", " + _D.Quote(r.SourceIp) + ", " + _D.Quote(r.State.ToString()) + ", " +
                 _D.Quote(r.InputData) + ", " + _D.Quote(r.OutputData) + ", " + _D.Quote(r.ErrorMessage) + ", " +
-                _D.Quote(r.ExecutionSnapshotJson) + ", " + _D.Quote(r.CreatedUtc) + ", " + _D.Quote(r.StartedUtc) + ", " + _D.Quote(r.CompletedUtc) + ", " + _D.Quote(r.LastUpdateUtc) + ");",
+                _D.Quote(r.ExecutionSnapshotJson) + ", " + _D.Quote(r.DispatchState.ToString()) + ", " + r.DispatchAttempt.ToString(CultureInfo.InvariantCulture) + ", " +
+                _D.Quote(r.AssignedWorkerId) + ", " + _D.Quote(r.RunAssignmentId) + ", " + _D.Quote(r.QueueWaitMs) + ", " + _D.Quote(r.AssignedUtc) + ", " +
+                _D.Quote(r.LeaseExpiresUtc) + ", " + _D.Quote(r.ExecutionNodeKind?.ToString()) + ", " + _D.Quote(r.CreatedUtc) + ", " +
+                _D.Quote(r.StartedUtc) + ", " + _D.Quote(r.CompletedUtc) + ", " + _D.Quote(r.LastUpdateUtc) + ");",
                 false, token).ConfigureAwait(false);
             return r;
         }
@@ -49,9 +54,17 @@ namespace Tempo.Core.Database.Common.Implementations
             if (r == null) throw new ArgumentNullException(nameof(r));
             r.LastUpdateUtc = DateTime.UtcNow;
             await _Driver.ExecuteQueryAsync(
-                "UPDATE flow_runs SET state = " + _D.Quote(r.State.ToString()) + ", input_data = " + _D.Quote(r.InputData) + ", " +
+                "UPDATE flow_runs SET source_ip = " + _D.Quote(r.SourceIp) + ", state = " + _D.Quote(r.State.ToString()) + ", input_data = " + _D.Quote(r.InputData) + ", " +
                 "output_data = " + _D.Quote(r.OutputData) + ", error_message = " + _D.Quote(r.ErrorMessage) + ", " +
                 "execution_snapshot_json = " + _D.Quote(r.ExecutionSnapshotJson) + ", " +
+                "dispatch_state = " + _D.Quote(r.DispatchState.ToString()) + ", " +
+                "dispatch_attempt = " + r.DispatchAttempt.ToString(CultureInfo.InvariantCulture) + ", " +
+                "assigned_worker_id = " + _D.Quote(r.AssignedWorkerId) + ", " +
+                "run_assignment_id = " + _D.Quote(r.RunAssignmentId) + ", " +
+                "queue_wait_ms = " + _D.Quote(r.QueueWaitMs) + ", " +
+                "assigned_utc = " + _D.Quote(r.AssignedUtc) + ", " +
+                "lease_expires_utc = " + _D.Quote(r.LeaseExpiresUtc) + ", " +
+                "execution_node_kind = " + _D.Quote(r.ExecutionNodeKind?.ToString()) + ", " +
                 "started_utc = " + _D.Quote(r.StartedUtc) + ", completed_utc = " + _D.Quote(r.CompletedUtc) + ", " +
                 "last_update_utc = " + _D.Quote(r.LastUpdateUtc) +
                 " WHERE id = " + _D.Quote(r.Id) + ";",
@@ -107,31 +120,6 @@ namespace Tempo.Core.Database.Common.Implementations
             EnumerationResult<FlowRun> r = new EnumerationResult<FlowRun> { PageNumber = filter.PageNumber, PageSize = filter.PageSize, TotalCount = total };
             foreach (DataRow row in page.Rows) r.Items.Add(Map(row));
             return r;
-        }
-
-        /// <inheritdoc/>
-        public async Task<FlowRun?> ClaimNextQueuedAsync(CancellationToken token = default)
-        {
-            DataTable dt = await _Driver.ExecuteQueryAsync(
-                "SELECT * FROM flow_runs WHERE state = 'Queued' ORDER BY created_utc ASC " + _D.Paging(1, 0) + ";",
-                false, token).ConfigureAwait(false);
-            if (dt.Rows.Count == 0) return null;
-
-            FlowRun run = Map(dt.Rows[0]);
-            await _Driver.ExecuteQueryAsync(
-                "UPDATE flow_runs SET state = 'Running', started_utc = " + _D.Quote(DateTime.UtcNow) +
-                ", last_update_utc = " + _D.Quote(DateTime.UtcNow) +
-                " WHERE id = " + _D.Quote(run.Id) + " AND state = 'Queued';",
-                false, token).ConfigureAwait(false);
-
-            DataTable verify = await _Driver.ExecuteQueryAsync("SELECT state FROM flow_runs WHERE id = " + _D.Quote(run.Id) + ";", false, token).ConfigureAwait(false);
-            if (verify.Rows.Count > 0 && verify.Rows[0][0].ToString() == "Running")
-            {
-                run.State = FlowRunStateEnum.Running;
-                run.StartedUtc = DateTime.UtcNow;
-                return run;
-            }
-            return null;
         }
 
         /// <inheritdoc/>
@@ -217,16 +205,32 @@ namespace Tempo.Core.Database.Common.Implementations
                 DataFlowId = Converters.String(row, "data_flow_id"),
                 TriggeredByUserId = Converters.StringOrNull(row, "triggered_by_user_id"),
                 TriggerId = Converters.StringOrNull(row, "trigger_id"),
+                SourceIp = Converters.StringOrNull(row, "source_ip"),
                 State = Converters.EnumValue<FlowRunStateEnum>(row, "state", FlowRunStateEnum.Queued),
                 InputData = Converters.StringOrNull(row, "input_data"),
                 OutputData = Converters.StringOrNull(row, "output_data"),
                 ErrorMessage = Converters.StringOrNull(row, "error_message"),
                 ExecutionSnapshotJson = Converters.StringOrNull(row, "execution_snapshot_json"),
+                DispatchState = Converters.EnumValue<FlowRunDispatchStateEnum>(row, "dispatch_state", FlowRunDispatchStateEnum.Pending),
+                DispatchAttempt = Converters.Int(row, "dispatch_attempt"),
+                AssignedWorkerId = Converters.StringOrNull(row, "assigned_worker_id"),
+                RunAssignmentId = Converters.StringOrNull(row, "run_assignment_id"),
+                QueueWaitMs = Converters.LongOrNull(row, "queue_wait_ms"),
+                AssignedUtc = Converters.DateTimeOrNull(row, "assigned_utc"),
+                LeaseExpiresUtc = Converters.DateTimeOrNull(row, "lease_expires_utc"),
+                ExecutionNodeKind = ParseExecutionNodeKind(row),
                 CreatedUtc = Converters.DateTime(row, "created_utc"),
                 StartedUtc = Converters.DateTimeOrNull(row, "started_utc"),
                 CompletedUtc = Converters.DateTimeOrNull(row, "completed_utc"),
                 LastUpdateUtc = Converters.DateTime(row, "last_update_utc")
             };
+        }
+
+        private static ExecutionNodeKindEnum? ParseExecutionNodeKind(DataRow row)
+        {
+            string? value = Converters.StringOrNull(row, "execution_node_kind");
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            return Enum.TryParse(value, true, out ExecutionNodeKindEnum parsed) ? parsed : null;
         }
 
         private static StepRun MapStep(DataRow row)

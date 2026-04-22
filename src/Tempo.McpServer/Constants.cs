@@ -9,7 +9,7 @@ namespace Tempo.McpServer
         public const string ProductName = "Tempo MCP Server";
 
         /// <summary>Software version.</summary>
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
 
         /// <summary>Default settings filename.</summary>
         public const string DefaultSettingsFile = "./tempo.mcp.json";

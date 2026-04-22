@@ -7,6 +7,7 @@ namespace Test.Shared.Suites
     using Tempo.Core.Enums;
     using Tempo.Core.Services;
     using Tempo.Core.Settings;
+    using Tempo.Worker;
     using Touchstone.Core;
 
     /// <summary>Settings loader tests.</summary>
@@ -203,6 +204,43 @@ namespace Test.Shared.Suites
                         {
                             try { File.Delete(file); } catch { }
                         }
+                    }),
+                    new TestCaseDescriptor("Settings", "WorkerSettingsLoadAndEnvOverride", "Tempo.Worker settings load from JSON and allow environment overrides", async _ =>
+                    {
+                        await Task.CompletedTask;
+                        string file = Path.Combine(Path.GetTempPath(), "tempo-worker-settings-" + Guid.NewGuid().ToString("N") + ".json");
+                        File.WriteAllText(file, "{ \"serverEndpoint\": \"http://json.example:8901\", \"workerId\": \"wrk_json\", \"name\": \"json-worker\", \"maxConcurrentRuns\": 2, \"maxTaskTimeoutMs\": 1500, \"requestTimeoutMs\": 4000 }");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvServerEndpoint, "http://env.example:8901");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvMaxConcurrentRuns, "3");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvMaxTaskTimeoutMs, "2500");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvRequestTimeoutMs, "5000");
+                        try
+                        {
+                            WorkerSettings settings = WorkerSettingsLoader.Load(file);
+                            Assert2.Equal("http://env.example:8901", settings.ServerEndpoint, "server endpoint env override");
+                            Assert2.Equal("wrk_json", settings.WorkerId, "worker id from json");
+                            Assert2.Equal("json-worker", settings.Name, "worker name from json");
+                            Assert2.Equal(3, settings.MaxConcurrentRuns, "max concurrency env override");
+                            Assert2.Equal(2500, settings.MaxTaskTimeoutMs, "max task timeout env override");
+                            Assert2.Equal(5000, settings.RequestTimeoutMs, "request timeout env override");
+                        }
+                        finally
+                        {
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvServerEndpoint, null);
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvMaxConcurrentRuns, null);
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvMaxTaskTimeoutMs, null);
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvRequestTimeoutMs, null);
+                            try { File.Delete(file); } catch { }
+                        }
+                    }),
+                    new TestCaseDescriptor("Settings", "WorkerMaxTaskTimeoutClamp", "Worker max task timeout clamps to a non-negative bounded range", async _ =>
+                    {
+                        await Task.CompletedTask;
+                        WorkerSettings settings = new WorkerSettings();
+                        settings.MaxTaskTimeoutMs = -1;
+                        Assert2.Equal(0, settings.MaxTaskTimeoutMs, "timeout clamp low");
+                        settings.MaxTaskTimeoutMs = int.MaxValue;
+                        Assert2.Equal(86400000, settings.MaxTaskTimeoutMs, "timeout clamp high");
                     })
                 });
         }

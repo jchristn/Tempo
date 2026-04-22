@@ -36,7 +36,7 @@ namespace Tempo.Core.Services
         /// <inheritdoc/>
         public override async Task WriteDataFlowRun(DataFlowRunDetails details)
         {
-            // Flow-level update happens at the end of the run in FlowQueueWorker.
+            // Flow-level update happens when the dispatch coordinator handles terminal completion.
             await Task.CompletedTask.ConfigureAwait(false);
         }
 

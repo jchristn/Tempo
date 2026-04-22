@@ -319,6 +319,8 @@ function SettingsView({ apiClient, principal }) {
           <div className="card" style={{ marginBottom: 'var(--spacing-md)' }}>
             <div className="card-title" style={{ marginBottom: 'var(--spacing-sm)' }} title="Workflow execution engine and queue worker">Workflow engine</div>
             <div className="form-row"><label title="When disabled, queued runs accumulate but are not dispatched"><input type="checkbox" checked={!!(eng.QueueEnabled ?? eng.queueEnabled)} onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('queueEnabled') ? 'queueEnabled' : 'QueueEnabled']: e.target.checked })} style={{ width: 'auto' }} /> Queue worker enabled</label></div>
+            <div className="form-row"><label title="When enabled, Tempo.Server can execute runs itself as a pseudo-worker. Disable this to run Tempo.Server as control plane only"><input type="checkbox" checked={!!(eng.ServerCanExecuteWorkload ?? eng.serverCanExecuteWorkload)} onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('serverCanExecuteWorkload') ? 'serverCanExecuteWorkload' : 'ServerCanExecuteWorkload']: e.target.checked })} style={{ width: 'auto' }} /> Server can execute workload</label></div>
+            <div className="form-row"><label title="Unsupported override that allows multiple active schedulers to dispatch simultaneously"><input type="checkbox" checked={!!(eng.AllowDuplicateScheduler ?? eng.allowDuplicateScheduler)} onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('allowDuplicateScheduler') ? 'allowDuplicateScheduler' : 'AllowDuplicateScheduler']: e.target.checked })} style={{ width: 'auto' }} /> Allow duplicate scheduler</label></div>
             <div className="grid-2">
               <div className="form-row">
                 <label title="Upper bound on concurrent flow runs in this process. Range: 1 to 1024">Max concurrent runs</label>
@@ -329,10 +331,34 @@ function SettingsView({ apiClient, principal }) {
                 <input type="number" min={100} max={60000} value={eng.PollIntervalMs ?? eng.pollIntervalMs ?? 1000} placeholder="1000" onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('pollIntervalMs') ? 'pollIntervalMs' : 'PollIntervalMs']: numeric(e.target.value, 1000) })} />
               </div>
             </div>
+            <div className="grid-2">
+              <div className="form-row">
+                <label title="Scheduler placement strategy. LabelPinned prefers workers whose labels match the flow routing hint">Load-balancing strategy</label>
+                <select value={eng.LoadBalancingStrategy ?? eng.loadBalancingStrategy ?? 'LeastLoaded'} onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('loadBalancingStrategy') ? 'loadBalancingStrategy' : 'LoadBalancingStrategy']: e.target.value })}>
+                  <option value="LeastLoaded">LeastLoaded</option>
+                  <option value="LabelPinned">LabelPinned</option>
+                </select>
+              </div>
+              <div className="form-row">
+                <label title="How long an assignment lease remains valid before recovery can re-queue the run. Range: 1000 to 86400000">Lease duration (ms)</label>
+                <input type="number" min={1000} max={86400000} value={eng.LeaseDurationMs ?? eng.leaseDurationMs ?? 300000} placeholder="300000" onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('leaseDurationMs') ? 'leaseDurationMs' : 'LeaseDurationMs']: numeric(e.target.value, 300000) })} />
+              </div>
+            </div>
+            <div className="grid-2">
+              <div className="form-row">
+                <label title="How long a worker can miss heartbeats before it is treated as stale. Range: 1000 to 86400000">Worker heartbeat timeout (ms)</label>
+                <input type="number" min={1000} max={86400000} value={eng.WorkerHeartbeatTimeoutMs ?? eng.workerHeartbeatTimeoutMs ?? 30000} placeholder="30000" onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('workerHeartbeatTimeoutMs') ? 'workerHeartbeatTimeoutMs' : 'WorkerHeartbeatTimeoutMs']: numeric(e.target.value, 30000) })} />
+              </div>
+              <div className="form-row">
+                <label title="Maximum assignment attempts before a run is failed instead of re-queued. Range: 1 to 1024">Max assignment attempts</label>
+                <input type="number" min={1} max={1024} value={eng.MaxAssignmentAttempts ?? eng.maxAssignmentAttempts ?? 3} placeholder="3" onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('maxAssignmentAttempts') ? 'maxAssignmentAttempts' : 'MaxAssignmentAttempts']: numeric(e.target.value, 3) })} />
+              </div>
+            </div>
             <div className="form-row">
               <label title="Comma-separated list of assembly paths to scan for [StepMethod] attributes at startup">Step assembly paths</label>
               <input value={eng.StepAssemblyPaths || eng.stepAssemblyPaths || ''} placeholder="./MySteps.dll,./MoreSteps.dll" onChange={(e) => updateSection(engKey, { [Object.keys(eng).includes('stepAssemblyPaths') ? 'stepAssemblyPaths' : 'StepAssemblyPaths']: e.target.value })} />
             </div>
+            <div className="form-help">Distributed scheduling settings in this section are reboot-required. Disable server execution to run Tempo.Server as control plane only and use Tempo.Worker nodes for actual execution.</div>
           </div>
 
           {/* Hydration */}

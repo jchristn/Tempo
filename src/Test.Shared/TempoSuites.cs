@@ -37,7 +37,9 @@ namespace Test.Shared
                     ArtifactProcessSuite.Build(),
                     ProtocolSuite.Build(),
                     DataFlowSuite.Build(),
+                    DistributedExecutionSuite.Build(),
                     DeletionProtectionSuite.Build(),
+                    LogManagementSuite.Build(),
                     RequestHistorySuite.Build(),
                     HydrationSuite.Build()
                 };

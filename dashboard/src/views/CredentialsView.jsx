@@ -6,6 +6,7 @@ import TenantPicker from '../components/TenantPicker';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
 
@@ -87,11 +88,17 @@ function CredentialsView({ apiClient, principal }) {
       />
 
       {editing && (
-        <Modal open size="small" onClose={() => setEditing(null)} title={editing.id ? 'Edit credential' : 'Create credential'}
+        <Modal
+          open
+          size="small"
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit credential' : 'Create credential'}
+          headerMeta={<ModalRecordId label="Credential ID" value={editing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
             <button className="button-primary" onClick={save}>Save</button>
-          </>}>
+          </>}
+        >
           <div className="form-row"><label title="Friendly label, e.g. 'CI pipeline' or 'Mobile app prod'">Name</label><input value={editing.name || ''} placeholder="CI pipeline" onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
           <div className="form-row">
             <label title="The user identity this credential authenticates as. Permissions follow the user's role assignments">User</label>
@@ -107,6 +114,8 @@ function CredentialsView({ apiClient, principal }) {
 
       <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Credential JSON" />
       <ConfirmModal open={!!confirmDelete} danger title="Delete credential"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Credential ID"
         message={'Delete credential "' + (confirmDelete?.name || '') + '"?'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteCredential(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}

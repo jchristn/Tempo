@@ -20,7 +20,7 @@
     "issuer": "tempo",
     "signingKey": "tempo-development-key-override-for-production-use",
     "tokenExpirationMinutes": 1440,
-    "adminApiKey": ""
+    "adminApiKey": "tempo-local-admin-api-key"
   },
   "requestHistory": {
     "enabled": true,
@@ -29,10 +29,27 @@
     "retentionDays": 30,
     "pruneIntervalMinutes": 60
   },
+  "artifacts": {
+    "rootPath": "/var/lib/tempo-server/artifacts"
+  },
+  "logViewer": {
+    "workerRootPath": "/var/lib/tempo-server/worker-logs",
+    "workerLogFilename": "tempo-worker.log",
+    "defaultTailLines": 200,
+    "maxTailLines": 5000,
+    "defaultMaxBytes": 131072,
+    "maxReadBytes": 1048576
+  },
   "engine": {
     "queueEnabled": true,
     "maxConcurrentRuns": 4,
-    "pollIntervalMs": 1000
+    "serverCanExecuteWorkload": false,
+    "pollIntervalMs": 1000,
+    "loadBalancingStrategy": "LeastLoaded",
+    "workerHeartbeatTimeoutMs": 30000,
+    "leaseDurationMs": 300000,
+    "maxAssignmentAttempts": 3,
+    "allowDuplicateScheduler": false
   },
   "runtimes": {
     "externalExecution": {

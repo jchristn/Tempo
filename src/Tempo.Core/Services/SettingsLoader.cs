@@ -34,6 +34,10 @@ namespace Tempo.Core.Services
         public const string EnvExternalExecutionScratchRoot = "TEMPO_EXTERNAL_EXECUTION_SCRATCH_ROOT";
         /// <summary>Environment variable for external execution cache root.</summary>
         public const string EnvExternalExecutionCacheRoot = "TEMPO_EXTERNAL_EXECUTION_CACHE_ROOT";
+        /// <summary>Environment variable for the worker log root exposed to the server log viewer.</summary>
+        public const string EnvLogViewerWorkerRoot = "TEMPO_LOG_VIEWER_WORKER_ROOT";
+        /// <summary>Environment variable for the current worker log filename exposed to the server log viewer.</summary>
+        public const string EnvLogViewerWorkerLogFilename = "TEMPO_LOG_VIEWER_WORKER_LOG_FILENAME";
         /// <summary>Environment variable for the Python executable used by Artifact.Python.</summary>
         public const string EnvExternalExecutionPythonExecutable = "TEMPO_EXTERNAL_EXECUTION_PYTHON_EXECUTABLE";
         /// <summary>Environment variable for the Node.js executable used by Artifact.JavaScript.</summary>
@@ -123,6 +127,12 @@ namespace Tempo.Core.Services
 
             v = Environment.GetEnvironmentVariable(EnvExternalExecutionCacheRoot);
             if (!string.IsNullOrEmpty(v)) settings.Runtimes.ExternalExecution.CacheRoot = v;
+
+            v = Environment.GetEnvironmentVariable(EnvLogViewerWorkerRoot);
+            if (!string.IsNullOrEmpty(v)) settings.LogViewer.WorkerRootPath = v;
+
+            v = Environment.GetEnvironmentVariable(EnvLogViewerWorkerLogFilename);
+            if (!string.IsNullOrEmpty(v)) settings.LogViewer.WorkerLogFilename = v;
 
             v = Environment.GetEnvironmentVariable(EnvExternalExecutionPythonExecutable);
             if (!string.IsNullOrEmpty(v)) settings.Runtimes.ExternalExecution.PythonExecutable = v;

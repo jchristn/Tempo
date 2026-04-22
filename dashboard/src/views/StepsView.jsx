@@ -6,6 +6,7 @@ import TenantPicker from '../components/TenantPicker';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
 
@@ -414,11 +415,16 @@ function StepsView({ apiClient, principal }) {
       />
 
       {editing && (
-        <Modal open onClose={() => setEditing(null)} title={editing.id ? 'Edit step' : 'Create step'}
+        <Modal
+          open
+          onClose={() => setEditing(null)}
+          title={editing.id ? 'Edit step' : 'Create step'}
+          headerMeta={<ModalRecordId label="Step ID" value={editing.id} />}
           footer={<>
             <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
             <button className="button-primary" onClick={save}>Save</button>
-          </>}>
+          </>}
+        >
           {formError && <div className="login-error">{formError}</div>}
 
           <div className="grid-2">
@@ -572,6 +578,8 @@ function StepsView({ apiClient, principal }) {
 
       <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Step JSON" />
       <ConfirmModal open={!!confirmDelete} danger title="Delete step"
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel="Step ID"
         message={'Delete step "' + (confirmDelete?.name || '') + '"?'}
         confirmLabel="Delete"
         onConfirm={async () => { await apiClient.deleteStep(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}

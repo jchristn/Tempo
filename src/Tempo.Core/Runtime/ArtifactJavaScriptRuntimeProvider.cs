@@ -77,8 +77,8 @@ namespace Tempo.Core.Runtime
         {
             if (_Descriptor.Availability != StepRuntimeAvailabilityStateEnum.Available)
                 throw new NotSupportedException("Runtime '" + RuntimeKey + "' is not available: " + _Descriptor.Availability + ". " + _Descriptor.SecurityNotes);
-            if (_Database == null || _BlobStore == null || _Capacity == null)
-                throw new NotSupportedException("Artifact JavaScript runtime requires database, artifact blob store, and capacity manager services.");
+            if (_BlobStore == null || _Capacity == null)
+                throw new NotSupportedException("Artifact JavaScript runtime requires artifact blob store and capacity manager services.");
             if (config is not ArtifactJavaScriptRuntimeConfig jsConfig)
                 throw new ArgumentException("config type must be ArtifactJavaScriptRuntimeConfig.", nameof(config));
 
@@ -90,7 +90,9 @@ namespace Tempo.Core.Runtime
                 Arguments = new List<string>(jsConfig.Arguments),
                 EnvironmentReferences = new List<string>(jsConfig.EnvironmentReferences)
             };
-            ArtifactRuntimePlan plan = await ArtifactRuntimePlan.ResolveAsync(_Database, _BlobStore, _Settings, context, step, processShape, RuntimeKey, token).ConfigureAwait(false);
+            ArtifactRuntimePlan plan = _Database != null
+                ? await ArtifactRuntimePlan.ResolveAsync(_Database, _BlobStore, _Settings, context, step, processShape, RuntimeKey, token).ConfigureAwait(false)
+                : await ArtifactRuntimePlan.ResolveAsync(_BlobStore, _Settings, context, step, processShape, RuntimeKey, token).ConfigureAwait(false);
             ArtifactManifestEntrypoint entry = plan.Entrypoint;
             string module = string.IsNullOrWhiteSpace(jsConfig.Module) ? entry.Module ?? string.Empty : jsConfig.Module!;
             string function = string.IsNullOrWhiteSpace(jsConfig.Function) ? entry.Function : jsConfig.Function;
