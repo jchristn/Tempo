@@ -1,6 +1,7 @@
 namespace Tempo.Server
 {
     using System;
+    using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
     using SyslogLogging;
@@ -42,12 +43,14 @@ namespace Tempo.Server
         private readonly ArtifactRetentionService _ArtifactRetention;
         private readonly TempoStepManager _StepManager;
         private readonly Tempo.Server.Services.LogFileService _LogFiles;
+        private readonly RunLogService _RunLogs;
         private readonly CancellationTokenSource _Cts = new CancellationTokenSource();
         private readonly string _Header = "[TempoServer] ";
         private readonly Tempo.Server.Services.SettingsStore _SettingsStore;
         private Webserver? _Server = null;
         private Task? _PruneTask = null;
         private Task? _ArtifactGcTask = null;
+        private Task? _RunLogPruneTask = null;
         private bool _Disposed = false;
 
         /// <summary>Instantiate.</summary>
@@ -73,7 +76,8 @@ namespace Tempo.Server
             _ArtifactBlobStore = new LocalFilesystemArtifactBlobStore(_Settings.Artifacts);
             _RuntimeRegistry = StepRuntimeRegistry.CreateDefault(_StepManager, runtimes: _Settings.Runtimes, database: _Database, artifactBlobStore: _ArtifactBlobStore, externalCapacity: _ExternalCapacity);
             _ArtifactRetention = new ArtifactRetentionService(_Database, _ArtifactBlobStore, _Settings.Artifacts, _Settings.Runtimes.ExternalExecution);
-            _Dispatch = new Tempo.Server.Services.RunDispatchCoordinator(_Database, _StepManager, _Settings.Engine, _Logging, _RuntimeRegistry);
+            _RunLogs = new RunLogService(_Settings.RunLogs);
+            _Dispatch = new Tempo.Server.Services.RunDispatchCoordinator(_Database, _StepManager, _Settings.Engine, _Logging, _RuntimeRegistry, runLogSettings: _Settings.RunLogs);
             _LogFiles = new Tempo.Server.Services.LogFileService(_SettingsStore, (Tempo.Server.Services.RunDispatchCoordinator)_Dispatch);
         }
 
@@ -125,6 +129,9 @@ namespace Tempo.Server
         /// <summary>Expose the log catalog service.</summary>
         public Tempo.Server.Services.LogFileService LogFiles => _LogFiles;
 
+        /// <summary>Expose the tenant-scoped run-log service.</summary>
+        public RunLogService RunLogs => _RunLogs;
+
         /// <summary>Start the server.</summary>
         public Task StartAsync()
         {
@@ -158,6 +165,7 @@ namespace Tempo.Server
             _Dispatch.Start();
             _PruneTask = Task.Run(() => PruneLoopAsync(_Cts.Token));
             _ArtifactGcTask = Task.Run(() => ArtifactGcLoopAsync(_Cts.Token));
+            _RunLogPruneTask = Task.Run(() => RunLogPruneLoopAsync(_Cts.Token));
 
             return Task.CompletedTask;
         }
@@ -177,6 +185,7 @@ namespace Tempo.Server
             Stop();
             try { _PruneTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* ignore */ }
             try { _ArtifactGcTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* ignore */ }
+            try { _RunLogPruneTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* ignore */ }
             _Dispatch.Dispose();
             try { _Server?.Dispose(); } catch { /* ignore */ }
             _Cts.Dispose();
@@ -424,6 +433,57 @@ namespace Tempo.Server
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "artifact GC loop error: " + ex.Message)); }
             }
+        }
+
+        private async Task RunLogPruneLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(_Settings.RunLogs.PruneIntervalMinutes), token).ConfigureAwait(false);
+                    int deleted = await PruneRunLogsOnceAsync(token).ConfigureAwait(false);
+                    if (deleted > 0)
+                    {
+                        DateTime cutoff = DateTime.UtcNow.AddDays(-_Settings.RunLogs.RetentionDays);
+                        _Logging.Debug(_Header + "pruned " + deleted + " run-log director" + (deleted == 1 ? "y" : "ies") + " older than " + cutoff.ToString("o"));
+                    }
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex) { _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "run-log prune loop error: " + ex.Message)); }
+            }
+        }
+
+        /// <summary>Prune completed run-log directories older than the configured retention window.</summary>
+        public async Task<int> PruneRunLogsOnceAsync(CancellationToken token = default)
+        {
+            if (!_Settings.RunLogs.Enabled) return 0;
+
+            DateTime cutoff = DateTime.UtcNow.AddDays(-_Settings.RunLogs.RetentionDays);
+            int deleted = 0;
+
+            foreach (string runId in _RunLogs.EnumerateRunIds())
+            {
+                token.ThrowIfCancellationRequested();
+
+                FlowRun? run = await _Database.FlowRuns.ReadGlobalAsync(runId, token).ConfigureAwait(false);
+                if (run != null)
+                {
+                    if (!run.CompletedUtc.HasValue) continue;
+                    if (run.State == FlowRunStateEnum.Queued || run.State == FlowRunStateEnum.Running) continue;
+                    if (run.CompletedUtc.Value > cutoff) continue;
+                }
+                else
+                {
+                    string runRoot = _RunLogs.ResolveRunRoot(runId);
+                    if (Directory.Exists(runRoot) && Directory.GetLastWriteTimeUtc(runRoot) > cutoff) continue;
+                }
+
+                await _RunLogs.DeleteRunDirectoryAsync(runId, token).ConfigureAwait(false);
+                deleted++;
+            }
+
+            return deleted;
         }
     }
 }

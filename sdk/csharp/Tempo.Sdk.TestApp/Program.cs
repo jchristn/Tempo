@@ -20,6 +20,7 @@ namespace Tempo.Sdk.TestApp
             TestResultModelAndHelpers();
             await TestRunnerSuccessAsync();
             await TestRunnerFailuresAsync();
+            await TestRunLoggingAsync();
             Console.WriteLine("Tempo.Sdk C# test app PASS");
             return 0;
         }
@@ -29,10 +30,12 @@ namespace Tempo.Sdk.TestApp
             SortedSet<string> expected = new SortedSet<string>
             {
                 "T:ITempoStepHandler", "M:ITempoStepHandler.RunAsync",
+                "T:ITempoStepLogger", "M:ITempoStepLogger.Debug", "M:ITempoStepLogger.Info", "M:ITempoStepLogger.Warn", "M:ITempoStepLogger.Error",
                 "T:ProtocolVersions", "F:ProtocolVersions.V1", "F:ProtocolVersions.Current", "F:ProtocolVersions.ProtocolVersionEnvironmentVariable", "F:ProtocolVersions.SupportedProtocolVersionsEnvironmentVariable", "P:ProtocolVersions.Supported", "M:ProtocolVersions.IsSupported", "M:ProtocolVersions.Normalize",
                 "T:StepRequest", "C:StepRequest", "P:StepRequest.ProtocolVersion", "P:StepRequest.TenantId", "P:StepRequest.DataFlowId", "P:StepRequest.FlowRunId", "P:StepRequest.StepRunId", "P:StepRequest.RequestId", "P:StepRequest.Data", "P:StepRequest.Metadata", "P:StepRequest.PreviousResult",
                 "T:StepResult", "C:StepResult", "P:StepResult.ProtocolVersion", "P:StepResult.TenantId", "P:StepResult.DataFlowId", "P:StepResult.FlowRunId", "P:StepResult.StepRunId", "P:StepResult.RequestId", "P:StepResult.Result", "P:StepResult.Data", "P:StepResult.Exception", "P:StepResult.ExceptionMessage", "P:StepResult.Metadata",
                 "T:StepResultType", "E:StepResultType.Success", "E:StepResultType.Timeout", "E:StepResultType.Error", "E:StepResultType.Exception", "E:StepResultType.MaxIterationsExceeded",
+                "T:TempoExecutionContext", "C:TempoExecutionContext", "P:TempoExecutionContext.Current", "P:TempoExecutionContext.TenantId", "P:TempoExecutionContext.DataFlowId", "P:TempoExecutionContext.FlowRunId", "P:TempoExecutionContext.RunAssignmentId", "P:TempoExecutionContext.StepId", "P:TempoExecutionContext.StepRunId", "P:TempoExecutionContext.WorkerId", "P:TempoExecutionContext.Logger",
                 "T:TempoStepHost", "M:TempoStepHost.DeserializeRequest", "M:TempoStepHost.SerializeResult", "M:TempoStepHost.Correlate", "M:TempoStepHost.Success", "M:TempoStepHost.Error", "M:TempoStepHost.Exception", "M:TempoStepHost.RunAsync"
             };
 
@@ -160,6 +163,50 @@ namespace Tempo.Sdk.TestApp
             Throws<ArgumentNullException>(() => TempoStepHost.RunAsync(null!).GetAwaiter().GetResult(), "null handler");
         }
 
+        private static async Task TestRunLoggingAsync()
+        {
+            string logPath = Path.Combine(Path.GetTempPath(), "tempo-sdk-log-" + Guid.NewGuid().ToString("N") + ".log");
+            string? previousRunLog = Environment.GetEnvironmentVariable("TEMPO_RUN_LOG_FILE");
+            string? previousAssignment = Environment.GetEnvironmentVariable("TEMPO_RUN_ASSIGNMENT_ID");
+            string? previousStep = Environment.GetEnvironmentVariable("TEMPO_STEP_ID");
+            string? previousWorker = Environment.GetEnvironmentVariable("TEMPO_WORKER_ID");
+
+            Environment.SetEnvironmentVariable("TEMPO_RUN_LOG_FILE", logPath);
+            Environment.SetEnvironmentVariable("TEMPO_RUN_ASSIGNMENT_ID", "ras_1");
+            Environment.SetEnvironmentVariable("TEMPO_STEP_ID", "step_1");
+            Environment.SetEnvironmentVariable("TEMPO_WORKER_ID", "wrk_1");
+
+            try
+            {
+                StringWriter output = new StringWriter();
+                int code = await TempoStepHost.RunAsync(new LoggingHandler(), new StringReader(RequestJson(Request())), output);
+                Equal(0, code, "logging run exit code");
+
+                StepResult result = JsonSerializer.Deserialize<StepResult>(output.ToString(), JsonOptions())!;
+                Equal(StepResultType.Success, result.Result, "logging result");
+                JsonElement data = (JsonElement)result.Data!;
+                True(data.GetProperty("hasContext").GetBoolean(), "execution context available");
+                Equal("ras_1", data.GetProperty("runAssignmentId").GetString(), "execution context assignment id");
+                Equal("step_1", data.GetProperty("stepId").GetString(), "execution context step id");
+                Equal("wrk_1", data.GetProperty("workerId").GetString(), "execution context worker id");
+
+                True(File.Exists(logPath), "run log file created");
+                string logText = await File.ReadAllTextAsync(logPath);
+                True(logText.Contains("logger-info", StringComparison.Ordinal), "logger writes captured");
+                True(logText.Contains("console-info", StringComparison.Ordinal), "console out redirected to log");
+                True(logText.Contains("console-error", StringComparison.Ordinal), "console error redirected to log");
+                True(!output.ToString().Contains("console-info", StringComparison.Ordinal), "protocol stdout remains clean");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("TEMPO_RUN_LOG_FILE", previousRunLog);
+                Environment.SetEnvironmentVariable("TEMPO_RUN_ASSIGNMENT_ID", previousAssignment);
+                Environment.SetEnvironmentVariable("TEMPO_STEP_ID", previousStep);
+                Environment.SetEnvironmentVariable("TEMPO_WORKER_ID", previousWorker);
+                try { if (File.Exists(logPath)) File.Delete(logPath); } catch { /* ignore */ }
+            }
+        }
+
         private static StepRequest Request() => new StepRequest
         {
             ProtocolVersion = "1.0",
@@ -214,6 +261,28 @@ namespace Tempo.Sdk.TestApp
         private sealed class NullHandler : ITempoStepHandler
         {
             public Task<StepResult> RunAsync(StepRequest request, CancellationToken token) => Task.FromResult<StepResult>(null!);
+        }
+
+        private sealed class LoggingHandler : ITempoStepHandler
+        {
+            public Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+            {
+                TempoExecutionContext? context = TempoExecutionContext.Current;
+                context?.Logger.Info("logger-info");
+                Console.WriteLine("console-info");
+                Console.Error.WriteLine("console-error");
+                return Task.FromResult(new StepResult
+                {
+                    Result = StepResultType.Success,
+                    Data = new
+                    {
+                        hasContext = context != null,
+                        runAssignmentId = context?.RunAssignmentId,
+                        stepId = context?.StepId,
+                        workerId = context?.WorkerId
+                    }
+                });
+            }
         }
 
         private static void Equal<T>(T expected, T actual, string name)

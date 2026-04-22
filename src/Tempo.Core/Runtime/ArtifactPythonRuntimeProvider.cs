@@ -105,7 +105,7 @@ namespace Tempo.Core.Runtime
             List<string> args = new List<string>(entry.Args);
             args.AddRange(pythonConfig.Arguments);
             List<string> env = MergeEnvironment(pythonConfig.EnvironmentReferences, plan.Manifest.EnvironmentAllowList, entry.EnvironmentAllowList);
-            return new ArtifactPythonStepRunner(context.TenantId, plan.Artifact, plan.ArtifactRoot, plan.EntrypointName, pythonExecutable, module, function, args, env, _Settings, _Capacity, step.MaxRuntimeMs);
+            return new ArtifactPythonStepRunner(context.TenantId, plan.Artifact, plan.ArtifactRoot, plan.EntrypointName, pythonExecutable, module, function, args, env, _Settings, _Capacity, context.RunLogSession, context.RunLogStep, step.MaxRuntimeMs);
         }
 
         private static List<string> MergeEnvironment(IEnumerable<string> requested, IEnumerable<string> manifestAllowed, IEnumerable<string> entryAllowed)

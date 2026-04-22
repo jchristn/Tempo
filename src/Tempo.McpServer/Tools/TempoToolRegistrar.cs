@@ -189,6 +189,42 @@ namespace Tempo.McpServer.Tools
                 async (args, token) => await client.GetAsync(TenantPath(client, args, "/runs/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/steps"), token).ConfigureAwait(false)));
 
             tools.Add(new TempoToolDefinition(
+                "run_activity",
+                "Read one flow run plus its assignment attempts and worker activity timeline",
+                ToolSchemas.TenantRead(),
+                async (args, token) => await client.GetAsync(TenantPath(client, args, "/runs/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/activity"), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "run_logs_list",
+                "List log files captured for one flow run",
+                ToolSchemas.RunLogList(),
+                async (args, token) => await client.GetAsync(RunLogsListPath(client, args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "run_logs_read",
+                "Read a bounded tail from one flow run log file",
+                ToolSchemas.RunLogRead(),
+                async (args, token) => await client.GetAsync(RunLogsReadPath(client, args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "run_logs_download",
+                "Download one complete flow run log file as plain text",
+                ToolSchemas.RunLogRead(),
+                async (args, token) => await client.GetAsync(RunLogsDownloadPath(client, args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "run_logs_delete",
+                "Delete one archived flow run log file",
+                ToolSchemas.RunLogRead(),
+                async (args, token) => await client.DeleteAsync(RunLogsDeletePath(client, args), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
+                "run_logs_delete_all",
+                "Delete every archived log file for one completed flow run",
+                ToolSchemas.TenantRead(),
+                async (args, token) => await client.DeleteAsync(TenantPath(client, args, "/runs/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/logs"), token).ConfigureAwait(false)));
+
+            tools.Add(new TempoToolDefinition(
                 "runtime_list",
                 "List Tempo runtime providers",
                 ToolSchemas.Empty(),
@@ -405,6 +441,48 @@ namespace Tempo.McpServer.Tools
                 ["path"] = JsonArgumentReader.RequiredString(args, "path")
             };
             return TempoApiClient.AddQuery("/v1.0/logs/files/content", query);
+        }
+
+        private static string RunLogsListPath(TempoApiClient client, JsonElement? args)
+        {
+            return TenantPath(client, args, "/runs/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/logs");
+        }
+
+        private static string RunLogsReadPath(TempoApiClient client, JsonElement? args)
+        {
+            Dictionary<string, string?> query = new Dictionary<string, string?>
+            {
+                ["path"] = JsonArgumentReader.RequiredString(args, "path")
+            };
+            if (JsonArgumentReader.HasProperty(args, "tailLines"))
+                query["tailLines"] = Math.Max(1, JsonArgumentReader.OptionalInt(args, "tailLines", 1)).ToString();
+            if (JsonArgumentReader.HasProperty(args, "maxBytes"))
+                query["maxBytes"] = Math.Max(1, JsonArgumentReader.OptionalInt(args, "maxBytes", 1)).ToString();
+            return TempoApiClient.AddQuery(
+                TenantPath(client, args, "/runs/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/logs/content"),
+                query);
+        }
+
+        private static string RunLogsDownloadPath(TempoApiClient client, JsonElement? args)
+        {
+            Dictionary<string, string?> query = new Dictionary<string, string?>
+            {
+                ["path"] = JsonArgumentReader.RequiredString(args, "path")
+            };
+            return TempoApiClient.AddQuery(
+                TenantPath(client, args, "/runs/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/logs/download"),
+                query);
+        }
+
+        private static string RunLogsDeletePath(TempoApiClient client, JsonElement? args)
+        {
+            Dictionary<string, string?> query = new Dictionary<string, string?>
+            {
+                ["path"] = JsonArgumentReader.RequiredString(args, "path")
+            };
+            return TempoApiClient.AddQuery(
+                TenantPath(client, args, "/runs/" + TempoApiClient.EscapeSegment(JsonArgumentReader.RequiredString(args, "id")) + "/logs/content"),
+                query);
         }
 
         private static string PagedTenantPath(TempoApiClient client, JsonElement? args, string tenantRelativePath)

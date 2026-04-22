@@ -209,5 +209,40 @@ namespace Tempo.McpServer.Tools
                 required = new[] { "sourceKind", "sourceId", "path" }
             };
         }
+
+        /// <summary>Run log list schema.</summary>
+        /// <returns>Schema.</returns>
+        public static object RunLogList()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    tenantId = new { type = "string", description = "Tenant identifier. Uses settings.tempo.defaultTenantId when omitted." },
+                    id = new { type = "string", description = "Flow run identifier." }
+                },
+                required = new[] { "id" }
+            };
+        }
+
+        /// <summary>Run log read schema.</summary>
+        /// <returns>Schema.</returns>
+        public static object RunLogRead()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    tenantId = new { type = "string", description = "Tenant identifier. Uses settings.tempo.defaultTenantId when omitted." },
+                    id = new { type = "string", description = "Flow run identifier." },
+                    path = new { type = "string", description = "Run-log path relative to the run directory." },
+                    tailLines = new { type = "integer", description = "Optional tail line count for bounded reads." },
+                    maxBytes = new { type = "integer", description = "Optional maximum UTF-8 bytes returned for bounded reads." }
+                },
+                required = new[] { "id", "path" }
+            };
+        }
     }
 }

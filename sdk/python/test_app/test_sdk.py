@@ -5,6 +5,8 @@ import json
 import os
 import pathlib
 import sys
+import tempfile
+import logging
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -66,6 +68,8 @@ def test_public_api_coverage():
         "StepRequest",
         "StepResult",
         "TempoStepHost",
+        "TempoStepLogger",
+        "TempoExecutionContext",
         "normalize_protocol_version",
         "is_supported_protocol_version",
         "correlate_result",
@@ -74,6 +78,8 @@ def test_public_api_coverage():
         "exception_result",
         "step",
         "supported_protocol_environment",
+        "create_logger_from_environment",
+        "get_current_execution_context",
     ]
     assert_equal(expected_exports, sdk.__all__, "exports")
 
@@ -81,6 +87,7 @@ def test_public_api_coverage():
         "StepRequest": ["from_dict", "from_json", "to_dict", "to_json"],
         "StepResult": ["from_dict", "from_json", "to_dict", "to_json"],
         "TempoStepHost": ["deserialize_request", "run", "run_async", "serialize_result"],
+        "TempoExecutionContext": ["current"],
     }
     for cls_name, members in expected_members.items():
         actual = sorted(name for name, value in inspect.getmembers(getattr(sdk, cls_name)) if not name.startswith("_") and callable(value))
@@ -218,6 +225,69 @@ def test_launch_environment_helper():
     assert_equal("1.0,1.1", sdk.supported_protocol_environment(), "custom supported env")
 
 
+def test_logging_context_and_file():
+    handle, log_path = tempfile.mkstemp(prefix="tempo-py-sdk-", suffix=".log")
+    os.close(handle)
+    os.unlink(log_path)
+
+    previous = {
+        "TEMPO_RUN_LOG_FILE": os.environ.get("TEMPO_RUN_LOG_FILE"),
+        "TEMPO_RUN_ASSIGNMENT_ID": os.environ.get("TEMPO_RUN_ASSIGNMENT_ID"),
+        "TEMPO_STEP_ID": os.environ.get("TEMPO_STEP_ID"),
+        "TEMPO_WORKER_ID": os.environ.get("TEMPO_WORKER_ID"),
+    }
+
+    os.environ["TEMPO_RUN_LOG_FILE"] = log_path
+    os.environ["TEMPO_RUN_ASSIGNMENT_ID"] = "ras_1"
+    os.environ["TEMPO_STEP_ID"] = "step_1"
+    os.environ["TEMPO_WORKER_ID"] = "wrk_1"
+
+    try:
+        req = request()
+
+        def handler(_):
+            context = sdk.get_current_execution_context()
+            assert_true(context is not None, "execution context available")
+            context.logger.info("logger-info")
+            print("console-info")
+            logging.getLogger().info("root-info")
+            sys.stderr.write("console-error\n")
+            return {
+                "hasContext": context is not None,
+                "runAssignmentId": context.run_assignment_id,
+                "stepId": context.step_id,
+                "workerId": context.worker_id,
+            }
+
+        out = io.StringIO()
+        code = sdk.TempoStepHost.run(handler, io.StringIO(req.to_json()), out)
+        assert_equal(0, code, "logging run code")
+
+        result = sdk.StepResult.from_json(out.getvalue())
+        assert_equal(sdk.StepResultType.SUCCESS, result.result, "logging result")
+        assert_equal(True, result.data["hasContext"], "context flag")
+        assert_equal("ras_1", result.data["runAssignmentId"], "assignment id")
+        assert_equal("step_1", result.data["stepId"], "step id")
+        assert_equal("wrk_1", result.data["workerId"], "worker id")
+        assert_true(os.path.exists(log_path), "log file created")
+
+        with open(log_path, "r", encoding="utf-8") as log_file:
+            log_text = log_file.read()
+        assert_true("logger-info" in log_text, "logger output captured")
+        assert_true("console-info" in log_text, "print redirected to file")
+        assert_true("root-info" in log_text, "root logging redirected to file")
+        assert_true("console-error" in log_text, "stderr redirected to file")
+        assert_true("console-info" not in out.getvalue(), "protocol stdout remains clean")
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        if os.path.exists(log_path):
+            os.unlink(log_path)
+
+
 if __name__ == "__main__":
     test_public_api_coverage()
     test_versions()
@@ -225,4 +295,5 @@ if __name__ == "__main__":
     test_result_model_and_helpers()
     test_decorator_and_runner()
     test_launch_environment_helper()
+    test_logging_context_and_file()
     print("Tempo Python SDK test app PASS")

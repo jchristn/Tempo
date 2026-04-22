@@ -22,6 +22,7 @@ x-tempo-worker: &tempo-worker
   volumes:
     - ./tempo.worker.json:/var/lib/tempo-worker/config/tempo.worker.json:ro
     - tempo_worker_logs:/var/lib/tempo-worker/logs
+    - tempo_run_logs:/var/lib/tempo/run-logs
     - /var/lib/tempo-worker/runtime-cache
     - /var/lib/tempo-worker/scratch
 
@@ -39,6 +40,7 @@ services:
       - tempo_server_artifacts:/var/lib/tempo-server/artifacts
       - tempo_server_logs:/var/lib/tempo-server/logs
       - tempo_worker_logs:/var/lib/tempo-server/worker-logs:ro
+      - tempo_run_logs:/var/lib/tempo/run-logs
       - tempo_server_runtime_cache:/var/lib/tempo-server/runtime-cache
       - tempo_server_scratch:/var/lib/tempo-server/scratch
     healthcheck:
@@ -112,6 +114,7 @@ volumes:
   tempo_server_artifacts:
   tempo_server_logs:
   tempo_worker_logs:
+  tempo_run_logs:
   tempo_server_runtime_cache:
   tempo_server_scratch:
   dashboard_logs:

@@ -1,7 +1,7 @@
 # Run Log Plan
 
-Status: Proposed
-Owner:
+Status: Implemented
+Owner: Codex
 Last Updated: 2026-04-22
 
 ## Purpose
@@ -32,14 +32,14 @@ This document is an execution handoff. A developer should be able to pick it up,
 
 ## Progress Tracking
 
-- [ ] Phase 0: Confirm final design and naming
-- [ ] Phase 1: Add shared run-log storage and settings
-- [ ] Phase 2: Emit run logs from worker, server-local execution, and SDK/runtime shims
-- [ ] Phase 3: Add server-side run history and run-log APIs
-- [ ] Phase 4: Add dashboard run activity and run-log UX
-- [ ] Phase 5: Add MCP, Postman, docs, and SDK documentation
-- [ ] Phase 6: Add backend, dashboard, and SDK test coverage
-- [ ] Phase 7: Final validation in local and Docker deployments
+- [x] Phase 0: Confirm final design and naming
+- [x] Phase 1: Add shared run-log storage and settings
+- [x] Phase 2: Emit run logs from worker, server-local execution, and SDK/runtime shims
+- [x] Phase 3: Add server-side run history and run-log APIs
+- [x] Phase 4: Add dashboard run activity and run-log UX
+- [x] Phase 5: Add MCP, Postman, docs, and SDK documentation
+- [x] Phase 6: Add backend, dashboard, and SDK test coverage
+- [x] Phase 7: Final validation in local and Docker deployments
 
 ## Scope
 
@@ -722,14 +722,14 @@ Developer notes:
 
 The feature is complete when all of the following are true:
 
-- [ ] each flow run produces deterministic file-backed logs correlated to the run id
-- [ ] retries and recoveries create distinct attempt-scoped log directories
-- [ ] C#, JS, and Python step code can write logs without breaking protocol stdout
-- [ ] the server exposes tenant-scoped run-activity and run-log routes
-- [ ] the dashboard `Runs` experience shows both activity and logs
-- [ ] MCP and Postman support the same run-log surface
-- [ ] docs and SDK READMEs describe the feature accurately
-- [ ] run logs survive container restarts and are removed by retention/factory reset
+- [x] each flow run produces deterministic file-backed logs correlated to the run id
+- [x] retries and recoveries create distinct attempt-scoped log directories
+- [x] C#, JS, and Python step code can write logs without breaking protocol stdout
+- [x] the server exposes tenant-scoped run-activity and run-log routes
+- [x] the dashboard `Runs` experience shows both activity and logs
+- [x] MCP and Postman support the same run-log surface
+- [x] docs and SDK READMEs describe the feature accurately
+- [x] run logs survive container restarts and are removed by retention/factory reset
 
 ## Risks and Hard Parts
 
@@ -797,13 +797,14 @@ Mitigation:
 
 ## Open Questions
 
-- [ ] Should delete permissions for run logs match any tenant principal who can read runs, or be limited to tenant admins? Recommended: restrict delete to tenant admins while allowing read to existing run viewers.
-- [ ] Should bulk purge for a run ship in v1, or should v1 support only single-file delete plus background retention? Recommended: single-file delete plus background retention is enough for the first pass.
+- Resolved: run-log reads and deletes currently follow the same tenant-scoped authorization gate as existing run routes. They are not admin-only.
+- Resolved: v1 ships both single-file delete and bulk delete of all run logs for a completed run.
 
 ## Completion Notes
 
-Use this section when implementation is done.
-
-- Implementation PR:
+- Implementation summary:
+  Durable file-backed run logs are now emitted by the server-local executor, workers, runtime shims, and the C#/JS/Python SDK hosts. Tenant-scoped run activity and run-log routes are exposed in REST, OpenAPI, MCP, Postman, and the dashboard `Runs` experience. Docker Compose and factory-reset assets now mount and clear a dedicated shared `tempo_run_logs` volume.
 - Validation summary:
+  `dotnet build .\src\Tempo.sln`, `dotnet run --project .\src\Test.Automated\Test.Automated.csproj`, `npm.cmd --prefix .\dashboard run test`, `npm.cmd --prefix .\dashboard run build`, `dotnet run --project .\sdk\csharp\Tempo.Sdk.TestApp\Tempo.Sdk.TestApp.csproj --framework net8.0`, `node .\sdk\js\test-app\test.js`, and `python .\sdk\python\test_app\test_sdk.py` all pass.
 - Follow-up work:
+  None required for v0.3.0 beyond routine regression monitoring.

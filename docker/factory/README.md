@@ -16,6 +16,7 @@ Named data volumes:
 - `tempo_server_artifacts`
 - `tempo_server_logs`
 - `tempo_worker_logs`
+- `tempo_run_logs`
 - `tempo_server_runtime_cache`
 - `tempo_server_scratch`
 - `dashboard_logs`
@@ -29,6 +30,7 @@ Notes:
 - `tempo_server_db/tempo.db` is intentionally empty. On the next Tempo.Server start, SQLite schema creation and Tempo hydration rebuild the default database state.
 - `tempo_server_artifacts` is intentionally empty. On the next Tempo.Server start, source steps, imported artifacts, and startup sample artifacts rebuild into this persisted blob store and remain available across later container recreation.
 - `tempo_worker_logs` is intentionally empty. Scaled workers recreate per-worker subdirectories under this shared log volume, and Tempo.Server reads the same volume read-only through its log-viewer surface.
+- `tempo_run_logs` is intentionally empty. Tempo.Server and Tempo.Worker share this volume for per-run log capture so run logs survive container restarts and remain visible to the tenant-scoped run-log APIs and dashboard.
 - worker runtime-cache and scratch storage remain container-local anonymous volumes so scaled workers do not share mutable runtime state.
 - remaining named log, cache, and scratch directories are restored to empty factory-default contents.
 

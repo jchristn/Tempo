@@ -58,6 +58,9 @@ IF ERRORLEVEL 1 GOTO :Error
 CALL :ResetVolume tempo_worker_logs
 IF ERRORLEVEL 1 GOTO :Error
 
+CALL :ResetVolume tempo_run_logs
+IF ERRORLEVEL 1 GOTO :Error
+
 CALL :ResetVolume tempo_server_runtime_cache
 IF ERRORLEVEL 1 GOTO :Error
 

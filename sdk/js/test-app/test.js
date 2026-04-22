@@ -2,6 +2,9 @@
 
 const sdk = require("../src");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 function assertEqual(expected, actual, name) {
   try {
@@ -57,10 +60,13 @@ function testPublicApiCoverage() {
     "StepResult",
     "StepResultType",
     "TempoStepHost",
+    "TempoStepLogger",
     "V1",
     "correlateResult",
+    "createLoggerFromEnvironment",
     "error",
     "exceptionResult",
+    "getCurrentExecutionContext",
     "isSupportedProtocolVersion",
     "normalizeProtocolVersion",
     "step",
@@ -187,12 +193,59 @@ async function testDecoratorAndRunner() {
   assertEqual("unknown", invalid.dataFlowId, "invalid flow");
 }
 
+async function testLoggingContextAndFile() {
+  const logPath = path.join(os.tmpdir(), "tempo-js-sdk-" + Date.now() + "-" + Math.random().toString(16).slice(2) + ".log");
+  const env = {
+    ...process.env,
+    TEMPO_RUN_LOG_FILE: logPath,
+    TEMPO_RUN_ASSIGNMENT_ID: "ras_1",
+    TEMPO_STEP_ID: "step_1",
+    TEMPO_WORKER_ID: "wrk_1"
+  };
+
+  try {
+    const req = request();
+    const output = { text: "", write(chunk) { this.text += chunk; } };
+    const code = await sdk.TempoStepHost.run(() => {
+      const context = sdk.getCurrentExecutionContext();
+      assertTrue(!!context, "execution context available");
+      context.logger.info("logger-info");
+      console.log("console-info");
+      console.error("console-error");
+      return {
+        hasContext: !!context,
+        runAssignmentId: context.runAssignmentId,
+        stepId: context.stepId,
+        workerId: context.workerId
+      };
+    }, { input: req.toJson(), output, env });
+
+    assertEqual(0, code, "logging run code");
+    const result = sdk.StepResult.fromJson(output.text);
+    assertEqual(sdk.StepResultType.Success, result.result, "logging run success");
+    assertEqual(true, result.data.hasContext, "context flag");
+    assertEqual("ras_1", result.data.runAssignmentId, "assignment id");
+    assertEqual("step_1", result.data.stepId, "step id");
+    assertEqual("wrk_1", result.data.workerId, "worker id");
+    assertTrue(fs.existsSync(logPath), "log file created");
+
+    const logText = fs.readFileSync(logPath, "utf8");
+    assertTrue(logText.includes("logger-info"), "logger output captured");
+    assertTrue(logText.includes("console-info"), "stdout redirected to file");
+    assertTrue(logText.includes("console-error"), "stderr redirected to file");
+    assertTrue(!output.text.includes("console-info"), "protocol stdout remains clean");
+  } finally {
+    if (fs.existsSync(logPath)) fs.unlinkSync(logPath);
+  }
+}
+
 (async function main() {
   testPublicApiCoverage();
   testVersions();
   testRequestModel();
   testResultModelAndHelpers();
   await testDecoratorAndRunner();
+  await testLoggingContextAndFile();
   console.log("Tempo JavaScript SDK test app PASS");
 })().catch((err) => {
   console.error(err && err.stack ? err.stack : err);

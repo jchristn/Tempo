@@ -445,6 +445,161 @@ namespace Tempo.Server.Routes
             return schema;
         }
 
+        public static OpenApiSchemaMetadata FlowRunSummary()
+        {
+            OpenApiSchemaMetadata schema = Object("Flow run record.");
+            schema.Properties["id"] = String("Run identifier.", false);
+            schema.Properties["tenantId"] = String("Tenant identifier.", false);
+            schema.Properties["dataFlowId"] = String("Flow identifier.", false);
+            schema.Properties["triggeredByUserId"] = String("User identifier that enqueued the run.", true);
+            schema.Properties["triggerId"] = String("Trigger identifier that enqueued the run.", true);
+            schema.Properties["sourceIp"] = String("Client source IP observed at enqueue time.", true);
+            schema.Properties["state"] = EnumString("Run lifecycle state.", "Queued", "Running", "Succeeded", "Failed", "Exception", "Cancelled");
+            schema.Properties["inputData"] = String("Serialized input payload.", true);
+            schema.Properties["outputData"] = String("Serialized output payload.", true);
+            schema.Properties["errorMessage"] = String("Terminal error message when present.", true);
+            schema.Properties["executionSnapshotJson"] = String("Serialized execution snapshot.", true);
+            schema.Properties["dispatchState"] = String("Fine-grained dispatch state.", true);
+            schema.Properties["dispatchAttempt"] = NonNegativeInteger("Dispatch attempt count.");
+            schema.Properties["assignedWorkerId"] = String("Assigned worker identifier.", true);
+            schema.Properties["runAssignmentId"] = String("Current assignment identifier.", true);
+            schema.Properties["queueWaitMs"] = NonNegativeLong("Queue wait in milliseconds.");
+            schema.Properties["assignedUtc"] = String("Assignment timestamp.", true, "date-time");
+            schema.Properties["leaseExpiresUtc"] = String("Lease-expiry timestamp.", true, "date-time");
+            schema.Properties["executionNodeKind"] = EnumString("Execution node kind.", "Server", "Worker");
+            schema.Properties["createdUtc"] = String("Creation timestamp.", false, "date-time");
+            schema.Properties["startedUtc"] = String("Start timestamp.", true, "date-time");
+            schema.Properties["completedUtc"] = String("Completion timestamp.", true, "date-time");
+            schema.Properties["lastUpdateUtc"] = String("Last update timestamp.", false, "date-time");
+            schema.Required.Add("id");
+            schema.Required.Add("tenantId");
+            schema.Required.Add("dataFlowId");
+            schema.Required.Add("state");
+            schema.Required.Add("createdUtc");
+            schema.Required.Add("lastUpdateUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunAssignmentRecord()
+        {
+            OpenApiSchemaMetadata schema = Object("Run assignment attempt.");
+            schema.Properties["id"] = String("Assignment identifier.", false);
+            schema.Properties["flowRunId"] = String("Flow-run identifier.", false);
+            schema.Properties["workerId"] = String("Worker identifier.", false);
+            schema.Properties["workerSessionId"] = String("Worker-session identifier.", true);
+            schema.Properties["attemptNumber"] = NonNegativeInteger("Assignment attempt number.");
+            schema.Properties["state"] = String("Assignment state.", false);
+            schema.Properties["leaseToken"] = String("Assignment lease token.", false);
+            schema.Properties["leaseExpiresUtc"] = String("Lease-expiry timestamp.", false, "date-time");
+            schema.Properties["assignedUtc"] = String("Assignment timestamp.", false, "date-time");
+            schema.Properties["completedUtc"] = String("Completion timestamp.", true, "date-time");
+            schema.Required.Add("id");
+            schema.Required.Add("flowRunId");
+            schema.Required.Add("workerId");
+            schema.Required.Add("attemptNumber");
+            schema.Required.Add("state");
+            schema.Required.Add("leaseToken");
+            schema.Required.Add("leaseExpiresUtc");
+            schema.Required.Add("assignedUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata WorkerActivityRecord()
+        {
+            OpenApiSchemaMetadata schema = Object("Worker activity event.");
+            schema.Properties["id"] = String("Activity identifier.", false);
+            schema.Properties["workerId"] = String("Worker identifier.", false);
+            schema.Properties["workerSessionId"] = String("Worker-session identifier.", true);
+            schema.Properties["flowRunId"] = String("Flow-run identifier when present.", true);
+            schema.Properties["runAssignmentId"] = String("Run-assignment identifier when present.", true);
+            schema.Properties["eventType"] = String("Activity event type.", false);
+            schema.Properties["severity"] = String("Severity label.", true);
+            schema.Properties["message"] = String("Human-readable message.", true);
+            schema.Properties["payloadJson"] = String("Optional structured payload JSON.", true);
+            schema.Properties["createdUtc"] = String("Creation timestamp.", false, "date-time");
+            schema.Required.Add("id");
+            schema.Required.Add("workerId");
+            schema.Required.Add("eventType");
+            schema.Required.Add("createdUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunActivityResponse()
+        {
+            OpenApiSchemaMetadata schema = Object("Flow run plus assignment and worker activity history.");
+            schema.Properties["run"] = FlowRunSummary();
+            schema.Properties["assignments"] = OpenApiSchemaMetadata.CreateArray(RunAssignmentRecord());
+            schema.Properties["activity"] = OpenApiSchemaMetadata.CreateArray(WorkerActivityRecord());
+            schema.Required.Add("run");
+            schema.Required.Add("assignments");
+            schema.Required.Add("activity");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunLogFileSummary()
+        {
+            OpenApiSchemaMetadata schema = Object("Run-log file summary.");
+            schema.Properties["flowRunId"] = String("Flow-run identifier.", false);
+            schema.Properties["path"] = String("Path relative to the run directory.", false);
+            schema.Properties["fileName"] = String("Simple file name.", false);
+            schema.Properties["kind"] = EnumString("Run-log file kind.", "Run", "Worker", "Host", "Step", "StepStderr");
+            schema.Properties["attemptNumber"] = NonNegativeInteger("Assignment attempt number.");
+            schema.Properties["runAssignmentId"] = String("Run-assignment identifier.", true);
+            schema.Properties["workerId"] = String("Worker identifier.", true);
+            schema.Properties["stepId"] = String("Step identifier.", true);
+            schema.Properties["stepRunId"] = String("Step-run identifier.", true);
+            schema.Properties["byteLength"] = NonNegativeLong("Total file size in bytes.");
+            schema.Properties["lastModifiedUtc"] = String("Last file-modified timestamp.", false, "date-time");
+            schema.Properties["active"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["deleteAllowed"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["downloadAllowed"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["deleteMode"] = EnumString("Delete behavior for this file.", "Delete", "Truncate");
+            schema.Required.Add("flowRunId");
+            schema.Required.Add("path");
+            schema.Required.Add("fileName");
+            schema.Required.Add("kind");
+            schema.Required.Add("byteLength");
+            schema.Required.Add("lastModifiedUtc");
+            schema.Required.Add("active");
+            schema.Required.Add("deleteAllowed");
+            schema.Required.Add("downloadAllowed");
+            schema.Required.Add("deleteMode");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunLogFileRead()
+        {
+            OpenApiSchemaMetadata schema = RunLogFileSummary();
+            schema.Description = "Bounded run-log file read response.";
+            schema.Properties["contentType"] = String("Returned content type.", false);
+            schema.Properties["content"] = String("Returned text content.", false);
+            schema.Properties["truncated"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["tailLines"] = PositiveInteger("Tail line count applied to this read.");
+            schema.Properties["maxBytes"] = NonNegativeLong("Maximum bytes allowed for this read.");
+            schema.Properties["returnedByteLength"] = NonNegativeLong("UTF-8 byte count returned in content.");
+            schema.Required.Add("contentType");
+            schema.Required.Add("content");
+            schema.Required.Add("truncated");
+            schema.Required.Add("tailLines");
+            schema.Required.Add("maxBytes");
+            schema.Required.Add("returnedByteLength");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunLogDelete()
+        {
+            OpenApiSchemaMetadata schema = Object("Run-log file delete or truncate result.");
+            schema.Properties["flowRunId"] = String("Flow-run identifier.", false);
+            schema.Properties["path"] = String("Path relative to the run directory.", false);
+            schema.Properties["action"] = EnumString("Mutation applied to the file.", "Deleted", "Truncated");
+            schema.Properties["success"] = OpenApiSchemaMetadata.Boolean();
+            schema.Required.Add("flowRunId");
+            schema.Required.Add("path");
+            schema.Required.Add("action");
+            schema.Required.Add("success");
+            return schema;
+        }
+
         public static OpenApiSchemaMetadata LogFileSummary()
         {
             OpenApiSchemaMetadata schema = Object("Log file summary.");

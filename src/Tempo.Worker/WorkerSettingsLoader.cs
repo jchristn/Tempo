@@ -23,6 +23,8 @@ namespace Tempo.Worker
         public const string EnvRequestTimeoutMs = "TEMPO_WORKER_REQUEST_TIMEOUT_MS";
         public const string EnvLogDirectory = "TEMPO_WORKER_LOG_DIRECTORY";
         public const string EnvLogFilename = "TEMPO_WORKER_LOG_FILENAME";
+        public const string EnvRunLogEnabled = "TEMPO_RUN_LOG_ENABLED";
+        public const string EnvRunLogRoot = "TEMPO_RUN_LOG_ROOT";
 
         /// <summary>Load worker settings from disk and environment overrides.</summary>
         public static WorkerSettings Load(string? path = null)
@@ -119,6 +121,18 @@ namespace Tempo.Worker
             if (!string.IsNullOrWhiteSpace(value))
             {
                 settings.Logging.LogFilename = value;
+            }
+
+            value = Environment.GetEnvironmentVariable(EnvRunLogEnabled);
+            if (!string.IsNullOrWhiteSpace(value) && bool.TryParse(value, out bool runLogEnabled))
+            {
+                settings.RunLogs.Enabled = runLogEnabled;
+            }
+
+            value = Environment.GetEnvironmentVariable(EnvRunLogRoot);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                settings.RunLogs.RootPath = value;
             }
         }
     }

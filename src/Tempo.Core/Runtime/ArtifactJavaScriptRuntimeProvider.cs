@@ -102,7 +102,7 @@ namespace Tempo.Core.Runtime
             List<string> args = new List<string>(entry.Args);
             args.AddRange(jsConfig.Arguments);
             List<string> env = MergeEnvironment(jsConfig.EnvironmentReferences, plan.Manifest.EnvironmentAllowList, entry.EnvironmentAllowList);
-            return new ArtifactJavaScriptStepRunner(context.TenantId, plan.Artifact, plan.ArtifactRoot, plan.EntrypointName, _Settings.NodeExecutable, module, function, args, env, _Settings, _Capacity, step.MaxRuntimeMs);
+            return new ArtifactJavaScriptStepRunner(context.TenantId, plan.Artifact, plan.ArtifactRoot, plan.EntrypointName, _Settings.NodeExecutable, module, function, args, env, _Settings, _Capacity, context.RunLogSession, context.RunLogStep, step.MaxRuntimeMs);
         }
 
         private static List<string> MergeEnvironment(IEnumerable<string> requested, IEnumerable<string> manifestAllowed, IEnumerable<string> entryAllowed)

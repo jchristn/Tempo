@@ -49,7 +49,8 @@ namespace Tempo.Server.Services
             Tempo.Core.Settings.EngineSettings settings,
             LoggingModule? logging = null,
             StepRuntimeRegistry? runtimeRegistry = null,
-            IRunAssignmentStore? assignments = null)
+            IRunAssignmentStore? assignments = null,
+            Tempo.Core.Settings.RunLogSettings? runLogSettings = null)
         {
             if (database == null) throw new ArgumentNullException(nameof(database));
             if (stepManager == null) throw new ArgumentNullException(nameof(stepManager));
@@ -63,7 +64,7 @@ namespace Tempo.Server.Services
             if (_Settings.ServerCanExecuteWorkload)
             {
                 StepRuntimeRegistry registry = runtimeRegistry ?? StepRuntimeRegistry.CreateDefault(stepManager, database: database);
-                _LocalExecutor = new LocalServerRunExecutor(database, registry, _Settings, logging);
+                _LocalExecutor = new LocalServerRunExecutor(database, registry, _Settings, logging, runLogSettings);
             }
         }
 
@@ -441,6 +442,18 @@ namespace Tempo.Server.Services
         public Task<WorkerSessionRecord?> ReadLatestWorkerSessionAsync(string workerId, CancellationToken token = default)
         {
             return RequireConcreteStore().ReadLatestWorkerSessionAsync(workerId, token);
+        }
+
+        /// <summary>List assignment attempts for one flow run.</summary>
+        public Task<List<RunAssignmentRecord>> ListAssignmentsByRunAsync(string flowRunId, CancellationToken token = default)
+        {
+            return RequireConcreteStore().ListAssignmentsByRunAsync(flowRunId, token);
+        }
+
+        /// <summary>List worker activity correlated to one flow run.</summary>
+        public Task<List<WorkerActivityRecord>> ListWorkerActivityByRunAsync(string flowRunId, CancellationToken token = default)
+        {
+            return RequireConcreteStore().ListWorkerActivityByRunAsync(flowRunId, token);
         }
 
         /// <summary>Rotate a worker token.</summary>

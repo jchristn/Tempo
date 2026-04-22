@@ -18,6 +18,16 @@
     "logDirectory": "/var/lib/tempo-worker/logs",
     "logFilename": "tempo-worker.log"
   },
+  "runLogs": {
+    "enabled": true,
+    "rootPath": "/var/lib/tempo/run-logs",
+    "retentionDays": 7,
+    "pruneIntervalMinutes": 60,
+    "defaultTailLines": 400,
+    "defaultMaxBytes": 262144,
+    "maxTailLines": 5000,
+    "maxReadBytes": 1048576
+  },
   "runtimes": {
     "externalExecution": {
       "maxConcurrentProcessesServerWide": 4,

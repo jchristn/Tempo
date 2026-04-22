@@ -75,6 +75,12 @@ namespace Tempo.Worker
             set => _Runtimes = value ?? throw new ArgumentNullException(nameof(Runtimes));
         }
 
+        public RunLogSettings RunLogs
+        {
+            get => _RunLogs;
+            set => _RunLogs = value ?? throw new ArgumentNullException(nameof(RunLogs));
+        }
+
         private string _ServerEndpoint = "http://127.0.0.1:8901";
         private string _WorkerId = "wrk_worker_1";
         private string _Name = Environment.MachineName;
@@ -85,5 +91,6 @@ namespace Tempo.Worker
         private int _RequestTimeoutMs = 30000;
         private LoggingSettings _Logging = new LoggingSettings();
         private RuntimeSettings _Runtimes = new RuntimeSettings();
+        private RunLogSettings _RunLogs = new RunLogSettings();
     }
 }

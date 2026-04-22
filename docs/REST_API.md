@@ -849,6 +849,7 @@ Run metadata is returned in response headers:
 | Header | Purpose |
 | --- | --- |
 | `x-tenant-id` | Tenant that owns the trigger and run |
+| `x-worker-id` | Assigned worker ID or server pseudo-worker ID when available |
 | `x-run-id` | Flow run ID |
 | `x-dataflow-id` | Data flow ID |
 | `x-trigger-id` | Trigger ID |
@@ -893,6 +894,12 @@ A run is one execution of a data flow. A step run is one execution of one step w
 | `GET` | `/v1.0/tenants/{tenantId}/runs` | List flow runs |
 | `GET` | `/v1.0/tenants/{tenantId}/runs/{id}` | Read one flow run |
 | `GET` | `/v1.0/tenants/{tenantId}/runs/{id}/steps` | List step runs for one flow run |
+| `GET` | `/v1.0/tenants/{tenantId}/runs/{id}/activity` | Read the run plus assignment history and worker activity |
+| `GET` | `/v1.0/tenants/{tenantId}/runs/{id}/logs` | List run-log files for one flow run |
+| `GET` | `/v1.0/tenants/{tenantId}/runs/{id}/logs/content?path={path}` | Read a bounded tail from one run-log file |
+| `GET` | `/v1.0/tenants/{tenantId}/runs/{id}/logs/download?path={path}` | Download the complete run-log file |
+| `DELETE` | `/v1.0/tenants/{tenantId}/runs/{id}/logs/content?path={path}` | Delete one archived run-log file |
+| `DELETE` | `/v1.0/tenants/{tenantId}/runs/{id}/logs` | Delete all run logs for a completed flow run |
 | `POST` | `/v1.0/tenants/{tenantId}/runs/{id}/cancel` | Cancel a queued run |
 | `DELETE` | `/v1.0/tenants/{tenantId}/runs/{id}` | Delete one run record |
 | `POST` | `/v1.0/tenants/{tenantId}/runs/bulk-delete` | Delete multiple run records |
@@ -923,6 +930,7 @@ Supported run states:
 | `dataFlowId` | Flow that ran |
 | `triggeredByUserId` | User that directly triggered the run, when available |
 | `triggerId` | Trigger that created the run, when available |
+| `sourceIp` | Client IP observed at enqueue time, including `Forwarded` and `X-Forwarded-For` when present |
 | `state` | Current run state |
 | `inputData` | Initial JSON input string |
 | `outputData` | Final JSON output string |
@@ -940,6 +948,173 @@ Supported run states:
 | `startedUtc` | Start time |
 | `completedUtc` | Completion time |
 | `lastUpdateUtc` | Last update time |
+
+### Run Activity
+
+Use the run-activity route when you need assignment history and worker timeline details rather than just the current run row:
+
+```http
+GET /v1.0/tenants/{tenantId}/runs/{runId}/activity
+```
+
+Response shape:
+
+```json
+{
+  "run": {
+    "id": "run_example",
+    "assignedWorkerId": "wrk_docker_1",
+    "dispatchAttempt": 1,
+    "sourceIp": "198.51.100.77"
+  },
+  "assignments": [
+    {
+      "id": "ras_example",
+      "attemptNumber": 1,
+      "workerId": "wrk_docker_1",
+      "state": "Completed",
+      "assignedUtc": "2026-04-22T18:00:00.0000000Z",
+      "completedUtc": "2026-04-22T18:00:01.2345678Z"
+    }
+  ],
+  "activity": [
+    {
+      "id": "wac_example",
+      "workerId": "wrk_docker_1",
+      "runAssignmentId": "ras_example",
+      "eventType": "execution_completed",
+      "severity": "Info",
+      "message": "Assignment completed.",
+      "createdUtc": "2026-04-22T18:00:01.2345678Z"
+    }
+  ]
+}
+```
+
+Use this route to drive run-assignment history, worker-placement diagnostics, and runtime timelines in the dashboard or external tooling.
+
+### Run Logs
+
+Tempo stores detailed run logs on the filesystem, not in database tables. Log files are scoped to one flow run and are exposed through tenant-scoped run routes.
+
+List files for a run:
+
+```http
+GET /v1.0/tenants/{tenantId}/runs/{runId}/logs
+```
+
+Example list response:
+
+```json
+[
+  {
+    "flowRunId": "run_example",
+    "path": "run.log",
+    "fileName": "run.log",
+    "kind": "Run",
+    "attemptNumber": null,
+    "runAssignmentId": null,
+    "workerId": null,
+    "stepId": null,
+    "stepRunId": null,
+    "byteLength": 512,
+    "lastModifiedUtc": "2026-04-22T18:00:01.3000000Z",
+    "active": false,
+    "deleteAllowed": true,
+    "downloadAllowed": true,
+    "deleteMode": "Delete"
+  },
+  {
+    "flowRunId": "run_example",
+    "path": "attempt-001-ras_example/worker.log",
+    "fileName": "worker.log",
+    "kind": "Worker",
+    "attemptNumber": 1,
+    "runAssignmentId": "ras_example",
+    "workerId": "wrk_docker_1",
+    "stepId": null,
+    "stepRunId": null,
+    "byteLength": 384,
+    "lastModifiedUtc": "2026-04-22T18:00:01.3000000Z",
+    "active": false,
+    "deleteAllowed": true,
+    "downloadAllowed": true,
+    "deleteMode": "Delete"
+  }
+]
+```
+
+File kinds currently include:
+
+| Kind | Purpose |
+| --- | --- |
+| `Run` | High-level flow lifecycle events |
+| `Worker` | Assignment acceptance, completion, timeout, and cancellation messages |
+| `Host` | Runtime-host and protocol diagnostics |
+| `Step` | Per-step lifecycle and handler-written logs |
+| `StepStderr` | Captured child-process stderr |
+
+Read a bounded tail:
+
+```http
+GET /v1.0/tenants/{tenantId}/runs/{runId}/logs/content?path=attempt-001-ras_example%2Fworker.log&tailLines=200&maxBytes=131072
+```
+
+Example bounded-read response:
+
+```json
+{
+  "flowRunId": "run_example",
+  "path": "attempt-001-ras_example/worker.log",
+  "fileName": "worker.log",
+  "kind": "Worker",
+  "attemptNumber": 1,
+  "runAssignmentId": "ras_example",
+  "workerId": "wrk_docker_1",
+  "stepId": null,
+  "stepRunId": null,
+  "byteLength": 384,
+  "lastModifiedUtc": "2026-04-22T18:00:01.3000000Z",
+  "active": false,
+  "deleteAllowed": true,
+  "downloadAllowed": true,
+  "deleteMode": "Delete",
+  "contentType": "text/plain; charset=utf-8",
+  "content": "2026-04-22T18:00:00.0000000Z [Info] Worker accepted the assignment and started execution.\n",
+  "truncated": false,
+  "tailLines": 200,
+  "maxBytes": 131072,
+  "returnedByteLength": 100
+}
+```
+
+Download the complete file:
+
+```http
+GET /v1.0/tenants/{tenantId}/runs/{runId}/logs/download?path=run.log
+```
+
+Delete one file:
+
+```http
+DELETE /v1.0/tenants/{tenantId}/runs/{runId}/logs/content?path=attempt-001-ras_example%2Fstep-001-sru_example-my.step.log
+```
+
+Delete every file for a completed run:
+
+```http
+DELETE /v1.0/tenants/{tenantId}/runs/{runId}/logs
+```
+
+Run-log safety rules:
+
+| Rule | Meaning |
+| --- | --- |
+| `path` is run-relative | Absolute paths are rejected |
+| Parent traversal is rejected | `..` segments and encoded traversal are rejected |
+| Reads are bounded | `tailLines` and `maxBytes` are clamped to `runLogs` settings |
+| Active files are protected | Active files for queued or running runs cannot be deleted |
+| Completed runs can be purged | `DELETE /logs` removes the whole run-log directory for a terminal run |
 
 ### Step Run Fields
 

@@ -11,6 +11,10 @@ The protocol is intentionally small:
 
 Workers do not connect to the Tempo database.
 
+Workers do write per-run log files to the shared `runLogs.rootPath` configured
+in `tempo.worker.json` or `TEMPO_RUN_LOG_ROOT`. Those logs are later surfaced
+through tenant-scoped run-log APIs and the dashboard `Runs` view.
+
 ## Transport
 
 - Endpoint: `GET /v1.0/workers/connect`
@@ -260,3 +264,23 @@ Workers fetch artifact bytes over HTTP using worker-scoped authorization headers
 - `leaseToken`
 
 The server validates that the requested artifact hash exists in the run's execution snapshot for the active assignment.
+
+## Execution Logging
+
+During assignment execution, the worker and runtime stack write attempt-scoped
+files beneath the shared run-log root. The worker protocol itself does not ship
+log bytes over the WebSocket.
+
+Expected file classes:
+
+- `run.log` for high-level flow lifecycle events
+- `worker.log` for assignment acceptance, completion, timeout, and cancellation
+- `host.log` for runtime-host and protocol diagnostics
+- per-step `.log` files for handler-written output
+- per-step `.stderr.log` files for captured stderr
+
+Important rule:
+
+- `stdout` remains reserved for the final `StepResult` JSON when the worker launches external runtimes
+
+This is why Tempo redirects user logging to files and stderr instead of allowing arbitrary stdout writes from step code.

@@ -97,7 +97,7 @@ namespace Tempo.Core.Runtime
             List<string> args = new List<string>(entrypoint.Args);
             args.AddRange(dotnetConfig.Arguments);
             List<string> env = MergeEnvironment(dotnetConfig.EnvironmentReferences, plan.Manifest.EnvironmentAllowList, entrypoint.EnvironmentAllowList);
-            return new ArtifactProcessStepRunner(context.TenantId, plan.Artifact, plan.ArtifactRoot, plan.EntrypointName, command, args, env, _Settings, _Capacity, step.MaxRuntimeMs);
+            return new ArtifactProcessStepRunner(context.TenantId, plan.Artifact, plan.ArtifactRoot, plan.EntrypointName, command, args, env, _Settings, _Capacity, context.RunLogSession, context.RunLogStep, step.MaxRuntimeMs);
         }
 
         private static List<string> MergeEnvironment(IEnumerable<string> requested, IEnumerable<string> manifestAllowed, IEnumerable<string> entryAllowed)

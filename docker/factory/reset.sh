@@ -83,6 +83,7 @@ reset_volume tempo_server_db
 reset_volume tempo_server_artifacts
 reset_volume tempo_server_logs
 reset_volume tempo_worker_logs
+reset_volume tempo_run_logs
 reset_volume tempo_server_runtime_cache
 reset_volume tempo_server_scratch
 reset_volume dashboard_logs

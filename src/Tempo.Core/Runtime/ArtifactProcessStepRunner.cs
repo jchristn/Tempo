@@ -37,6 +37,8 @@ namespace Tempo.Core.Runtime
         protected readonly string _Command;
         protected readonly List<string> _Arguments;
         protected readonly List<string> _EnvironmentReferences;
+        protected readonly RunLogSession? _RunLogs;
+        protected readonly RunLogStepScope? _RunLogStep;
         private readonly int _MaxRuntimeMs;
         private bool _UseLinuxProcessGroupKill;
 
@@ -52,6 +54,8 @@ namespace Tempo.Core.Runtime
             IEnumerable<string> environmentReferences,
             ExternalExecutionSettings settings,
             ExternalRuntimeCapacityManager capacity,
+            RunLogSession? runLogs = null,
+            RunLogStepScope? runLogStep = null,
             int maxRuntimeMs = 0)
         {
             _TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId));
@@ -67,6 +71,8 @@ namespace Tempo.Core.Runtime
             _Command = command ?? throw new ArgumentNullException(nameof(command));
             _Arguments = arguments?.ToList() ?? new List<string>();
             _EnvironmentReferences = environmentReferences?.ToList() ?? new List<string>();
+            _RunLogs = runLogs;
+            _RunLogStep = runLogStep;
             _MaxRuntimeMs = maxRuntimeMs > 0 ? maxRuntimeMs : _Settings.DefaultMaxRuntimeMs;
         }
 
@@ -154,6 +160,7 @@ namespace Tempo.Core.Runtime
             process.StartInfo = BuildStartInfo(scratch);
             process.StartInfo.Environment[ProtocolVersions.ProtocolVersionEnvironmentVariable] = req.ProtocolVersion;
             process.StartInfo.Environment[ProtocolVersions.SupportedProtocolVersionsEnvironmentVariable] = string.Join(",", ProtocolVersions.Supported);
+            ApplyRunLogEnvironment(process.StartInfo, req);
             DateTime deadline = DateTime.UtcNow.AddMilliseconds(_MaxRuntimeMs);
             using CancellationTokenSource timeoutCts = new CancellationTokenSource(_MaxRuntimeMs);
             using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(token, timeoutCts.Token);
@@ -161,7 +168,11 @@ namespace Tempo.Core.Runtime
 
             try
             {
-                if (!process.Start()) return ExceptionResult(req, "External process failed to start.");
+                if (!process.Start())
+                {
+                    await WriteHostAsync("External process failed to start.", token).ConfigureAwait(false);
+                    return ExceptionResult(req, "External process failed to start.");
+                }
                 long stdoutLimit = Math.Min(_Settings.MaxStdoutBytes, _Settings.MaxOutputBytes);
                 Task<string> stdoutTask = ReadLimitedAsync(process.StandardOutput, stdoutLimit, "stdout", token);
                 Task<string> stderrTask = ReadLimitedAsync(process.StandardError, _Settings.MaxStderrBytes, "stderr", token);
@@ -186,12 +197,25 @@ namespace Tempo.Core.Runtime
 
                 string stdout = await stdoutTask.ConfigureAwait(false);
                 string stderr = Redact(await stderrTask.ConfigureAwait(false), process.StartInfo.Environment);
+                if (!string.IsNullOrWhiteSpace(stderr))
+                {
+                    await WriteStepStdErrAsync(stderr, token).ConfigureAwait(false);
+                }
                 if (timedOut)
+                {
+                    await WriteHostAsync("External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.", token).ConfigureAwait(false);
                     return TimeoutResult(req, "External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.");
+                }
                 if (process.ExitCode != 0)
+                {
+                    await WriteHostAsync("External process exited with code " + process.ExitCode + StderrSuffix(stderr), token).ConfigureAwait(false);
                     return ExceptionResult(req, "External process exited with code " + process.ExitCode + StderrSuffix(stderr));
+                }
                 if (string.IsNullOrWhiteSpace(stdout))
+                {
+                    await WriteHostAsync("External process produced empty stdout.", token).ConfigureAwait(false);
                     return ExceptionResult(req, "External process produced empty stdout.");
+                }
 
                 try
                 {
@@ -200,6 +224,7 @@ namespace Tempo.Core.Runtime
                 }
                 catch (JsonException ex)
                 {
+                    await WriteHostAsync("External process stdout was not valid StepResult JSON: " + ex.Message + StderrSuffix(stderr), token).ConfigureAwait(false);
                     return ExceptionResult(req, "External process stdout was not valid StepResult JSON: " + ex.Message + StderrSuffix(stderr));
                 }
             }
@@ -209,7 +234,12 @@ namespace Tempo.Core.Runtime
             }
             catch (Exception ex)
             {
-                if (DateTime.UtcNow >= deadline) return TimeoutResult(req, "External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.");
+                if (DateTime.UtcNow >= deadline)
+                {
+                    await WriteHostAsync("External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.", token).ConfigureAwait(false);
+                    return TimeoutResult(req, "External process exceeded maximum runtime of " + _MaxRuntimeMs + "ms.");
+                }
+                await WriteHostAsync(ex.Message, token).ConfigureAwait(false);
                 return ExceptionResult(req, ex.Message);
             }
         }
@@ -364,6 +394,33 @@ namespace Tempo.Core.Runtime
         private static void TryDelete(string path)
         {
             try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); } catch { }
+        }
+
+        private void ApplyRunLogEnvironment(ProcessStartInfo psi, StepRequest req)
+        {
+            if (_RunLogStep == null) return;
+
+            string logDir = Path.GetDirectoryName(_RunLogStep.LogPath) ?? _ArtifactRoot;
+            psi.Environment["TEMPO_RUN_LOG_DIR"] = logDir;
+            psi.Environment["TEMPO_RUN_LOG_FILE"] = _RunLogStep.LogPath;
+            psi.Environment["TEMPO_RUN_LOG_KIND"] = "Step";
+            psi.Environment["TEMPO_FLOW_RUN_ID"] = req.FlowRunId ?? string.Empty;
+            psi.Environment["TEMPO_RUN_ASSIGNMENT_ID"] = _RunLogs?.Context.RunAssignmentId ?? string.Empty;
+            psi.Environment["TEMPO_STEP_RUN_ID"] = req.StepRunId ?? string.Empty;
+            psi.Environment["TEMPO_STEP_ID"] = _RunLogStep.StepId;
+            psi.Environment["TEMPO_WORKER_ID"] = _RunLogs?.Context.WorkerId ?? string.Empty;
+        }
+
+        private Task WriteHostAsync(string message, CancellationToken token)
+        {
+            if (_RunLogs == null) return Task.CompletedTask;
+            return _RunLogs.AppendHostAsync("Info", message, token);
+        }
+
+        private Task WriteStepStdErrAsync(string stderr, CancellationToken token)
+        {
+            if (_RunLogs == null || _RunLogStep == null) return Task.CompletedTask;
+            return _RunLogs.AppendStepStdErrAsync(_RunLogStep, stderr, token);
         }
     }
 }

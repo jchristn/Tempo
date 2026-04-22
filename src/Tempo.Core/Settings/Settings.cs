@@ -150,6 +150,20 @@ namespace Tempo.Core.Settings
             }
         }
 
+        /// <summary>Per-run log settings.</summary>
+        public RunLogSettings RunLogs
+        {
+            get
+            {
+                return _RunLogs;
+            }
+            set
+            {
+                if (value == null) throw new ArgumentNullException(nameof(RunLogs));
+                _RunLogs = value;
+            }
+        }
+
         private RestSettings _Rest = new RestSettings();
         private DatabaseSettings _Database = new DatabaseSettings();
         private LoggingSettings _Logging = new LoggingSettings();
@@ -160,5 +174,6 @@ namespace Tempo.Core.Settings
         private ArtifactSettings _Artifacts = new ArtifactSettings();
         private RuntimeSettings _Runtimes = new RuntimeSettings();
         private LogViewerSettings _LogViewer = new LogViewerSettings();
+        private RunLogSettings _RunLogs = new RunLogSettings();
     }
 }

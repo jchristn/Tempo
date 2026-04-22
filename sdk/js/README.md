@@ -11,6 +11,8 @@ Protocol v1 SDK for Node.js artifact step handlers.
 - Models: `StepRequest`, `StepResult`, `StepResultType`
 - Result helpers: `success`, `error`, `exceptionResult`, `correlateResult`
 - Handler marker: `step(fn)`
+- Logging helpers: `TempoStepLogger`, `createLoggerFromEnvironment`
+- Ambient context: `getCurrentExecutionContext()`
 - Runner: `TempoStepHost.run(handler)`
 
 ## Handler
@@ -28,6 +30,25 @@ TempoStepHost.run(handler).then((code) => process.exit(code));
 Returning plain JSON-serializable data creates a `Success` result. Returning a
 `StepResult` preserves the explicit result state. Exceptions are mapped to
 `Exception` result envelopes with request correlation preserved when possible.
+
+## Logging
+
+Tempo reserves stdout for protocol JSON. Use the ambient logger or ordinary
+`console.*` calls only through `TempoStepHost.run`, which redirects them to the
+file-backed log sink when `TEMPO_RUN_LOG_FILE` is present.
+
+```js
+const { TempoStepHost, getCurrentExecutionContext, step } = require("tempo-sdk");
+
+const handler = step((request) => {
+  const ctx = getCurrentExecutionContext();
+  ctx?.logger?.info("processing order");
+  console.log("this also goes to the run log");
+  return { ok: true, input: request.data };
+});
+
+TempoStepHost.run(handler).then((code) => process.exit(code));
+```
 
 ## Test App
 

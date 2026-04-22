@@ -512,6 +512,12 @@ The typed `artifact_file_save` tool is for text content. Use `tempo_request` aga
 | `run_list` | optional `tenantId`, `pageNumber`, `pageSize`, `includeInactive` | List runs |
 | `run_get` | `id`, optional `tenantId` | Read one run |
 | `run_steps` | `id`, optional `tenantId` | List step runs for a run |
+| `run_activity` | `id`, optional `tenantId` | Read the run plus assignment attempts and worker activity |
+| `run_logs_list` | `id`, optional `tenantId` | List file-backed logs for one run |
+| `run_logs_read` | `id`, `path`, optional `tenantId`, optional `tailLines`, optional `maxBytes` | Read a bounded tail from one run-log file |
+| `run_logs_download` | `id`, `path`, optional `tenantId` | Download the complete run-log file |
+| `run_logs_delete` | `id`, `path`, optional `tenantId` | Delete one archived run-log file |
+| `run_logs_delete_all` | `id`, optional `tenantId` | Delete every run-log file for one completed run |
 
 Generic collection helpers also register `run_create` and `run_update`, but Tempo's workflow API creates runs through `flow_enqueue_run` or public trigger invocation. Prefer those workflow tools. Use `tempo_request` for cancel and delete operations:
 
@@ -528,6 +534,58 @@ Generic collection helpers also register `run_create` and `run_update`, but Temp
   "path": "/v1.0/tenants/ten_example/runs/run_example"
 }
 ```
+
+Read run activity:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example"
+}
+```
+
+List run logs:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example"
+}
+```
+
+Read a bounded run-log tail:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example",
+  "path": "attempt-001-ras_example/worker.log",
+  "tailLines": 200,
+  "maxBytes": 131072
+}
+```
+
+Download a complete run log:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example",
+  "path": "run.log"
+}
+```
+
+Delete one archived run log:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example",
+  "path": "attempt-001-ras_example/step-001-sru_example-step.echo.log"
+}
+```
+
+`run_logs_download` returns the normal MCP response envelope. Because the underlying REST route responds with `text/plain`, the complete file is exposed in the envelope's `text` field rather than `body`.
 
 ### Runtime Tools
 
@@ -704,6 +762,8 @@ For each trigger invocation:
 3. Read `headers.x-run-id`.
 4. Call `run_get` for the final run record.
 5. Call `run_steps` for per-step output, errors, artifacts, and timing.
+6. Call `run_activity` to inspect assignment history and worker timeline data.
+7. Call `run_logs_list` and `run_logs_read` to inspect the durable file-backed logs for that run.
 
 Important run and step-run fields:
 

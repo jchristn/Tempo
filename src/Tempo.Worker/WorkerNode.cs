@@ -29,6 +29,7 @@ namespace Tempo.Worker
         private readonly WorkerSettings _Settings;
         private readonly LoggingModule _Logging;
         private readonly ExternalRuntimeCapacityManager _ExternalCapacity;
+        private readonly RunLogService _RunLogs;
         private readonly SemaphoreSlim _SendLock = new SemaphoreSlim(1, 1);
         private readonly Dictionary<string, CancellationTokenSource> _ActiveAssignments = new Dictionary<string, CancellationTokenSource>(StringComparer.Ordinal);
         private readonly object _AssignmentLock = new object();
@@ -43,6 +44,7 @@ namespace Tempo.Worker
             _Settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _Logging = logging ?? throw new ArgumentNullException(nameof(logging));
             _ExternalCapacity = new ExternalRuntimeCapacityManager(_Settings.Runtimes.ExternalExecution);
+            _RunLogs = new RunLogService(_Settings.RunLogs);
         }
 
         /// <summary>Run until cancellation is requested.</summary>
@@ -341,6 +343,17 @@ namespace Tempo.Worker
         private async Task<RunCompletionReport> ExecuteAssignmentAsync(RunAssignmentRecord assignment, FlowRunExecutionPlan plan, CancellationToken token)
         {
             BufferedFlowMetricsStore bufferedMetrics = new BufferedFlowMetricsStore(plan.TenantId, plan.FlowRunId);
+            RunLogSession? runLogs = await _RunLogs.CreateSessionAsync(new RunLogSessionContext
+            {
+                FlowRunId = assignment.FlowRunId,
+                TenantId = plan.TenantId,
+                DataFlowId = plan.DataFlowId,
+                AttemptNumber = assignment.AttemptNumber,
+                RunAssignmentId = assignment.Id,
+                WorkerId = _Settings.WorkerId,
+                NodeKind = ExecutionNodeKindEnum.Worker.ToString()
+            }, token).ConfigureAwait(false);
+
             using RemoteArtifactBlobStore blobStore = new RemoteArtifactBlobStore(
                 _Settings.ServerEndpoint,
                 _Settings.WorkerId,
@@ -356,7 +369,8 @@ namespace Tempo.Worker
 
             RegistryDataFlowRunner runner = new RegistryDataFlowRunner(new ExecutionPlanStepResolver(plan), registry)
             {
-                MetricsStore = bufferedMetrics
+                MetricsStore = bufferedMetrics,
+                RunLogs = runLogs
             };
 
             StepRequest request = new StepRequest
@@ -382,6 +396,12 @@ namespace Tempo.Worker
             }
 
             using CancellationTokenSource executionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            Stopwatch runtime = Stopwatch.StartNew();
+            if (runLogs != null)
+            {
+                await runLogs.AppendWorkerAsync("Info", "Worker accepted the assignment and started execution.", token).ConfigureAwait(false);
+            }
+
             Task<StepResult> runTask = runner.Run(plan.Flow, request, plan.ExecutionSnapshot, executionCts.Token);
             Task timeoutTask = _Settings.MaxTaskTimeoutMs > 0
                 ? Task.Delay(_Settings.MaxTaskTimeoutMs)
@@ -396,6 +416,14 @@ namespace Tempo.Worker
                 {
                     try { executionCts.Cancel(); } catch { /* ignore */ }
                     ObserveTaskCompletion(runTask);
+                    runtime.Stop();
+                    if (runLogs != null)
+                    {
+                        await runLogs.AppendWorkerAsync(
+                            "Error",
+                            "Assignment exceeded maxTaskTimeoutMs of " + _Settings.MaxTaskTimeoutMs + " after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                            token).ConfigureAwait(false);
+                    }
 
                     return new RunCompletionReport
                     {
@@ -416,6 +444,14 @@ namespace Tempo.Worker
                 {
                     try { executionCts.Cancel(); } catch { /* ignore */ }
                     ObserveTaskCompletion(runTask);
+                    runtime.Stop();
+                    if (runLogs != null)
+                    {
+                        await runLogs.AppendWorkerAsync(
+                            "Warning",
+                            "Assignment was cancelled after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                            token).ConfigureAwait(false);
+                    }
 
                     return new RunCompletionReport
                     {
@@ -432,6 +468,14 @@ namespace Tempo.Worker
                 }
 
                 StepResult result = await runTask.ConfigureAwait(false);
+                runtime.Stop();
+                if (runLogs != null)
+                {
+                    await runLogs.AppendWorkerAsync(
+                        "Info",
+                        "Assignment completed with result " + result.Result + " in " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                        token).ConfigureAwait(false);
+                }
                 return new RunCompletionReport
                 {
                     FlowRunId = assignment.FlowRunId,
@@ -456,6 +500,14 @@ namespace Tempo.Worker
             }
             catch (OperationCanceledException)
             {
+                runtime.Stop();
+                if (runLogs != null)
+                {
+                    await runLogs.AppendWorkerAsync(
+                        "Warning",
+                        "Assignment was cancelled after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                        CancellationToken.None).ConfigureAwait(false);
+                }
                 return new RunCompletionReport
                 {
                     FlowRunId = assignment.FlowRunId,
@@ -471,6 +523,14 @@ namespace Tempo.Worker
             }
             catch (Exception ex)
             {
+                runtime.Stop();
+                if (runLogs != null)
+                {
+                    await runLogs.AppendWorkerAsync(
+                        "Error",
+                        "Assignment crashed after " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms: " + ex.Message,
+                        CancellationToken.None).ConfigureAwait(false);
+                }
                 return new RunCompletionReport
                 {
                     FlowRunId = assignment.FlowRunId,

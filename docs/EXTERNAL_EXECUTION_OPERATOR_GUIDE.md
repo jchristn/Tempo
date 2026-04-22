@@ -11,6 +11,11 @@ and are not seeded as startup templates. Configure command names or absolute
 paths per host; bare command names are resolved through the service process
 `PATH` on Linux, macOS, and Windows.
 
+Detailed execution logs for artifact-backed runs are file-backed under the
+shared `runLogs.rootPath`. Those logs survive container restarts when the root
+is backed by persistent storage and are exposed through the tenant-scoped run
+activity and run-log APIs.
+
 ```json
 {
   "runtimes": {
@@ -57,6 +62,39 @@ and require a .NET SDK because Tempo compiles the submitted source with
 Use low per-tenant concurrency until workload behavior is known. Keep scratch
 and cache roots on storage that can be cleaned independently from application
 configuration and database files.
+
+## Run Log Contract
+
+Tempo v0.3.0 reserves `stdout` for protocol JSON. User logs must not be written
+to stdout for `Artifact.Process`, `Artifact.Python`, `Artifact.JavaScript`, or
+`Artifact.DotnetProcess` steps.
+
+Tempo passes these environment variables into process-backed step runtimes:
+
+| Variable | Purpose |
+| --- | --- |
+| `TEMPO_RUN_LOG_DIR` | Attempt-scoped run-log directory |
+| `TEMPO_RUN_LOG_FILE` | Primary per-step log file |
+| `TEMPO_FLOW_RUN_ID` | Flow-run identifier |
+| `TEMPO_RUN_ASSIGNMENT_ID` | Assignment identifier |
+| `TEMPO_STEP_ID` | Step execution key |
+| `TEMPO_STEP_RUN_ID` | Step-run identifier |
+| `TEMPO_WORKER_ID` | Assigned worker or pseudo-worker identifier |
+
+Behavior by runtime:
+
+| Runtime | Logging behavior |
+| --- | --- |
+| `Artifact.Process` | Child stderr is captured separately and the host writes runtime/protocol diagnostics to `host.log` |
+| `Artifact.Python` | `print(...)`, root `logging`, and stderr are redirected into the run-log files |
+| `Artifact.JavaScript` | `console.*` and stderr are redirected into the run-log files |
+| `Artifact.DotnetProcess` | `TempoStepHost` installs a file-backed logger and redirects `Console.Out` and `Console.Error` away from protocol stdout |
+
+Operator guidance:
+
+1. Keep `runLogs.rootPath` on persistent storage that is shared between the server and workers.
+2. Keep retention bounded through `runLogs.retentionDays`.
+3. Treat run logs as tenant-visible diagnostic output and avoid automatically logging secrets or raw credentials.
 
 ## Backup And Recovery
 

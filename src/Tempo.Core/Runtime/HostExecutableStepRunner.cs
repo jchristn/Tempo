@@ -21,6 +21,8 @@ namespace Tempo.Core.Runtime
             IEnumerable<string> environmentReferences,
             ExternalExecutionSettings settings,
             ExternalRuntimeCapacityManager capacity,
+            RunLogSession? runLogs = null,
+            RunLogStepScope? runLogStep = null,
             int maxRuntimeMs = 0)
             : base(
                 tenantId,
@@ -32,6 +34,8 @@ namespace Tempo.Core.Runtime
                 environmentReferences,
                 settings,
                 capacity,
+                runLogs,
+                runLogStep,
                 maxRuntimeMs)
         {
             _AllowListKey = allowListKey ?? throw new ArgumentNullException(nameof(allowListKey));

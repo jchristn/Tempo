@@ -10,6 +10,8 @@ Protocol v1 SDK for .NET artifact step handlers.
 - `StepResult`: result envelope returned to Tempo.
 - `StepResultType`: valid result states.
 - `ITempoStepHandler`: async handler interface.
+- `ITempoStepLogger`: ambient file-backed logger exposed during execution.
+- `TempoExecutionContext.Current`: ambient run, step, assignment, worker, and logger context.
 - `TempoStepHost`: JSON serialization, result helpers, correlation, and
   stdin/stdout runner.
 - `Tempo.Sdk.Workers.*`: worker-protocol frame DTOs and JSON options for
@@ -34,6 +36,28 @@ return await TempoStepHost.RunAsync(new Handler());
 `TempoStepHost.RunAsync` reads one `StepRequest` JSON object from stdin and
 writes one `StepResult` JSON object to stdout. Helper results preserve
 `protocolVersion`, tenant, run, step-run, and request correlation fields.
+
+## Logging
+
+Tempo reserves stdout for protocol JSON. Use the ambient logger instead of
+writing diagnostic output to stdout.
+
+```csharp
+using Tempo.Sdk;
+
+public sealed class Handler : ITempoStepHandler
+{
+    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+    {
+        TempoExecutionContext.Current?.Logger.Info("processing order");
+        return Task.FromResult(TempoStepHost.Success(request, new { ok = true }));
+    }
+}
+```
+
+When `TEMPO_RUN_LOG_FILE` is present, `TempoStepHost.RunAsync` installs a
+file-backed logger and redirects `Console.Out` and `Console.Error` into the
+run-log file so protocol stdout remains clean.
 
 ## Worker Protocol DTOs
 

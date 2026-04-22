@@ -231,6 +231,38 @@ class ApiClient {
   async listRuns(tenantId, filters = {}) { return this._request('GET', this._ten(tenantId, '/runs'), { query: filters }); }
   async readRun(tenantId, id) { return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id))); }
   async readRunSteps(tenantId, id) { return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/steps')); }
+  async getRunActivity(tenantId, id) { return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/activity')); }
+  async listRunLogs(tenantId, id) { return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs')); }
+  async readRunLog(tenantId, id, path, options = {}) {
+    return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs/content'), {
+      query: {
+        path,
+        tailLines: options.tailLines,
+        maxBytes: options.maxBytes
+      }
+    });
+  }
+  async deleteRunLog(tenantId, id, path) {
+    return this._request('DELETE', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs/content'), { query: { path } });
+  }
+  async deleteRunLogs(tenantId, id) {
+    return this._request('DELETE', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs'));
+  }
+  async downloadRunLog(tenantId, id, path) {
+    const url = new URL(this.baseUrl + this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs/download'));
+    url.searchParams.set('path', path);
+    const response = await fetch(url.toString(), { method: 'GET', headers: this._authHeaders() });
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '');
+      throw new ApiError(response.status, errorBody || response.statusText);
+    }
+    const disposition = response.headers.get('content-disposition') || '';
+    const fileNameMatch = disposition.match(/filename=\"?([^"]+)\"?/i);
+    return {
+      blob: await response.blob(),
+      fileName: fileNameMatch ? fileNameMatch[1] : 'tempo-run.log'
+    };
+  }
   async cancelRun(tenantId, id) { return this._request('POST', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/cancel')); }
   async deleteRun(tenantId, id) { return this._request('DELETE', this._ten(tenantId, '/runs/' + encodeURIComponent(id))); }
 

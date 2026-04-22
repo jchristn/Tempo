@@ -38,6 +38,14 @@ namespace Tempo.Core.Services
         public const string EnvLogViewerWorkerRoot = "TEMPO_LOG_VIEWER_WORKER_ROOT";
         /// <summary>Environment variable for the current worker log filename exposed to the server log viewer.</summary>
         public const string EnvLogViewerWorkerLogFilename = "TEMPO_LOG_VIEWER_WORKER_LOG_FILENAME";
+        /// <summary>Environment variable toggling run-log capture.</summary>
+        public const string EnvRunLogEnabled = "TEMPO_RUN_LOG_ENABLED";
+        /// <summary>Environment variable for the shared run-log root.</summary>
+        public const string EnvRunLogRoot = "TEMPO_RUN_LOG_ROOT";
+        /// <summary>Environment variable for the run-log retention in days.</summary>
+        public const string EnvRunLogRetentionDays = "TEMPO_RUN_LOG_RETENTION_DAYS";
+        /// <summary>Environment variable for the run-log prune cadence in minutes.</summary>
+        public const string EnvRunLogPruneIntervalMinutes = "TEMPO_RUN_LOG_PRUNE_INTERVAL_MINUTES";
         /// <summary>Environment variable for the Python executable used by Artifact.Python.</summary>
         public const string EnvExternalExecutionPythonExecutable = "TEMPO_EXTERNAL_EXECUTION_PYTHON_EXECUTABLE";
         /// <summary>Environment variable for the Node.js executable used by Artifact.JavaScript.</summary>
@@ -133,6 +141,18 @@ namespace Tempo.Core.Services
 
             v = Environment.GetEnvironmentVariable(EnvLogViewerWorkerLogFilename);
             if (!string.IsNullOrEmpty(v)) settings.LogViewer.WorkerLogFilename = v;
+
+            v = Environment.GetEnvironmentVariable(EnvRunLogEnabled);
+            if (!string.IsNullOrEmpty(v) && bool.TryParse(v, out bool runLogEnabled)) settings.RunLogs.Enabled = runLogEnabled;
+
+            v = Environment.GetEnvironmentVariable(EnvRunLogRoot);
+            if (!string.IsNullOrEmpty(v)) settings.RunLogs.RootPath = v;
+
+            v = Environment.GetEnvironmentVariable(EnvRunLogRetentionDays);
+            if (!string.IsNullOrEmpty(v) && int.TryParse(v, out int runLogRetentionDays)) settings.RunLogs.RetentionDays = runLogRetentionDays;
+
+            v = Environment.GetEnvironmentVariable(EnvRunLogPruneIntervalMinutes);
+            if (!string.IsNullOrEmpty(v) && int.TryParse(v, out int runLogPruneIntervalMinutes)) settings.RunLogs.PruneIntervalMinutes = runLogPruneIntervalMinutes;
 
             v = Environment.GetEnvironmentVariable(EnvExternalExecutionPythonExecutable);
             if (!string.IsNullOrEmpty(v)) settings.Runtimes.ExternalExecution.PythonExecutable = v;

@@ -40,6 +40,16 @@
     "defaultMaxBytes": 131072,
     "maxReadBytes": 1048576
   },
+  "runLogs": {
+    "enabled": true,
+    "rootPath": "/var/lib/tempo/run-logs",
+    "retentionDays": 7,
+    "pruneIntervalMinutes": 60,
+    "defaultTailLines": 400,
+    "defaultMaxBytes": 262144,
+    "maxTailLines": 5000,
+    "maxReadBytes": 1048576
+  },
   "engine": {
     "queueEnabled": true,
     "maxConcurrentRuns": 4,

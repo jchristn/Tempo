@@ -68,6 +68,32 @@ Recommended starting values:
 | `maxAssignmentAttempts` | 2 to 5 |
 | `allowDuplicateScheduler` | Leave `false`; it is an unsupported override |
 
+Per-run log capture is configured separately under `runLogs` and should point to storage shared by the server and every worker:
+
+```json
+{
+  "runLogs": {
+    "enabled": true,
+    "rootPath": "/var/lib/tempo/run-logs",
+    "retentionDays": 7,
+    "pruneIntervalMinutes": 60,
+    "defaultTailLines": 400,
+    "defaultMaxBytes": 262144,
+    "maxTailLines": 5000,
+    "maxReadBytes": 1048576
+  }
+}
+```
+
+Recommended starting values:
+
+| Setting | Recommendation |
+| --- | --- |
+| `enabled` | `true` unless the operator intentionally wants to disable durable run logs |
+| `rootPath` | Shared storage visible to `Tempo.Server` and every `Tempo.Worker` |
+| `retentionDays` | 7 for local/dev, longer when troubleshooting history matters |
+| `pruneIntervalMinutes` | 60 |
+
 ## Local Compose
 
 The repository ships a local compose example with:
@@ -224,6 +250,7 @@ The dashboard adds:
 - worker detail drawer
 - worker heartbeat recency chart
 - run placement columns in the `Runs` view
+- run activity and run-log sections in the `Runs` drawer
 - distributed execution settings in `Settings`
 
 Use the `Runs` view to inspect:
@@ -233,6 +260,9 @@ Use the `Runs` view to inspect:
 - `executionNodeKind`
 - `runAssignmentId`
 - `dispatchAttempt`
+- `sourceIp`
+- assignment history
+- durable per-run log files
 
 The `Workers` view also deep-links directly into the `Logs` page for the
 selected worker.
@@ -249,6 +279,10 @@ Conceptual layout:
 /var/lib/tempo-server/worker-logs/wrk_docker_1/tempo-worker.log
 /var/lib/tempo-server/worker-logs/wrk_docker_2/tempo-worker.log
 /var/lib/tempo-server/worker-logs/wrk_docker_3/tempo-worker.log
+/var/lib/tempo/run-logs/run_xxx/run.log
+/var/lib/tempo/run-logs/run_xxx/attempt-001-ras_xxx/worker.log
+/var/lib/tempo/run-logs/run_xxx/attempt-001-ras_xxx/host.log
+/var/lib/tempo/run-logs/run_xxx/attempt-001-ras_xxx/step-001-sru_xxx-step.echo.log
 ```
 
 Operational notes:
@@ -257,6 +291,8 @@ Operational notes:
 2. `Tempo.Server` mounts the same worker-log root read-only for the admin log viewer.
 3. Current log files are cleared by truncation; archived log files are deleted outright.
 4. Bounded reads clamp `tailLines` and `maxBytes` to configured limits.
+5. Per-run logs live on a separate shared `tempo_run_logs` volume and are exposed from the `Runs` experience rather than the global `Logs` page.
+6. `docker/factory/reset.*` clears the shared run-log volume so factory resets start with no retained run history files.
 
 Available operator surfaces:
 
@@ -264,11 +300,23 @@ Available operator surfaces:
 - REST: `/v1.0/logs/sources`, `/v1.0/logs/files`, `/v1.0/logs/files/content`, `/v1.0/logs/files/download`
 - MCP: `listLogSources`, `listLogFiles`, `readLogFile`, `downloadLogFile`, `deleteLogFile`
 
+Available run-log surfaces:
+
+- Dashboard: open a run in `Runs` and use the `Assignment History`, `Worker Activity`, and `Run Logs` sections
+- REST: `/v1.0/tenants/{tenantId}/runs/{id}/activity`, `/v1.0/tenants/{tenantId}/runs/{id}/logs`, `/v1.0/tenants/{tenantId}/runs/{id}/logs/content`, `/v1.0/tenants/{tenantId}/runs/{id}/logs/download`
+- MCP: `run_activity`, `run_logs_list`, `run_logs_read`, `run_logs_download`, `run_logs_delete`, `run_logs_delete_all`
+
 If worker logs are not visible, check:
 
 1. the shared `tempo_worker_logs` named volume exists
 2. each worker has a distinct `TEMPO_WORKER_LOG_DIRECTORY`
 3. the server has `TEMPO_LOG_VIEWER_WORKER_ROOT` pointing at the mounted worker-log root
+
+If run logs are not visible, check:
+
+1. `runLogs.enabled` is still `true` in both server and worker settings
+2. every container mounts the shared `tempo_run_logs` volume at the same `runLogs.rootPath`
+3. the run actually reached execution and was not rejected before an assignment began
 
 ## Recovery Model
 

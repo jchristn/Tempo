@@ -38,6 +38,7 @@ namespace Test.Shared
                     ProtocolSuite.Build(),
                     DataFlowSuite.Build(),
                     DistributedExecutionSuite.Build(),
+                    RunLogSuite.Build(),
                     DeletionProtectionSuite.Build(),
                     LogManagementSuite.Build(),
                     RequestHistorySuite.Build(),

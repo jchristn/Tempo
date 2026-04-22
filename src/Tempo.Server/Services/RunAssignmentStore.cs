@@ -17,6 +17,7 @@ namespace Tempo.Server.Services
     using Tempo.Core.Runtime;
     using Tempo.Core.Security;
     using Tempo.Core.Services;
+    using Tempo.Core.Workers;
 
     /// <summary>
     /// Database-backed assignment and worker-state persistence.
@@ -105,6 +106,17 @@ namespace Tempo.Server.Services
             {
                 throw new InvalidOperationException("Assignment '" + assignment.Id + "' was not persisted for run '" + run.Id + "'.");
             }
+
+            await RecordWorkerActivityAsync(new WorkerActivityRecord
+            {
+                WorkerId = executor.WorkerId,
+                WorkerSessionId = executor.WorkerSessionId,
+                FlowRunId = run.Id,
+                RunAssignmentId = assignment.Id,
+                EventType = "assigned",
+                Severity = "Info",
+                Message = "Run assigned to worker '" + executor.WorkerId + "'."
+            }, token).ConfigureAwait(false);
 
             return assignment;
         }
@@ -206,6 +218,20 @@ namespace Tempo.Server.Services
 
             if (verify.Rows.Count < 1) return false;
             RunAssignmentRecord updated = MapAssignment(verify.Rows[0]);
+            if (updated.CompletedUtc.HasValue)
+            {
+                await RecordWorkerActivityAsync(new WorkerActivityRecord
+                {
+                    WorkerId = completion.WorkerId,
+                    WorkerSessionId = completion.WorkerSessionId,
+                    FlowRunId = completion.FlowRunId,
+                    RunAssignmentId = completion.RunAssignmentId,
+                    EventType = "execution_completed",
+                    Severity = completion.FinalState == FlowRunStateEnum.Succeeded ? "Info" : "Warning",
+                    Message = "Assignment completed with state '" + completion.FinalState + "'.",
+                    PayloadJson = System.Text.Json.JsonSerializer.Serialize(completion, WorkerProtocolSerialization.Options)
+                }, token).ConfigureAwait(false);
+            }
             return updated.CompletedUtc.HasValue && updated.State == assignmentState;
         }
 
@@ -290,6 +316,38 @@ namespace Tempo.Server.Services
             {
                 await _Database.ExecuteQueriesAsync(batch, true, token).ConfigureAwait(false);
             }
+        }
+
+        /// <summary>List assignment attempts for one flow run.</summary>
+        public async Task<List<RunAssignmentRecord>> ListAssignmentsByRunAsync(string flowRunId, CancellationToken token = default)
+        {
+            if (string.IsNullOrWhiteSpace(flowRunId)) throw new ArgumentNullException(nameof(flowRunId));
+
+            DataTable dt = await _Database.ExecuteQueryAsync(
+                "SELECT * FROM run_assignments WHERE flow_run_id = " + _Dialect.Quote(flowRunId) + " ORDER BY attempt_number ASC, assigned_utc ASC;",
+                false,
+                token).ConfigureAwait(false);
+
+            List<RunAssignmentRecord> assignments = new List<RunAssignmentRecord>();
+            foreach (DataRow row in dt.Rows) assignments.Add(MapAssignment(row));
+            return assignments;
+        }
+
+        /// <summary>List worker activity rows correlated to one flow run.</summary>
+        public async Task<List<WorkerActivityRecord>> ListWorkerActivityByRunAsync(string flowRunId, CancellationToken token = default)
+        {
+            if (string.IsNullOrWhiteSpace(flowRunId)) throw new ArgumentNullException(nameof(flowRunId));
+
+            DataTable dt = await _Database.ExecuteQueryAsync(
+                "SELECT * FROM worker_activity WHERE flow_run_id = " + _Dialect.Quote(flowRunId) +
+                " OR run_assignment_id IN (SELECT id FROM run_assignments WHERE flow_run_id = " + _Dialect.Quote(flowRunId) + ")" +
+                " ORDER BY created_utc ASC;",
+                false,
+                token).ConfigureAwait(false);
+
+            List<WorkerActivityRecord> activities = new List<WorkerActivityRecord>();
+            foreach (DataRow row in dt.Rows) activities.Add(MapWorkerActivity(row));
+            return activities;
         }
 
         /// <inheritdoc/>
@@ -606,7 +664,22 @@ namespace Tempo.Server.Services
 
             batch.Add("SELECT completed_utc FROM run_assignments WHERE id = " + _Dialect.Quote(assignment.Id) + ";");
             DataTable verify = await _Database.ExecuteQueriesAsync(batch, true, token).ConfigureAwait(false);
-            return verify.Rows.Count > 0 && Converters.DateTimeOrNull(verify.Rows[0], "completed_utc").HasValue;
+            bool recovered = verify.Rows.Count > 0 && Converters.DateTimeOrNull(verify.Rows[0], "completed_utc").HasValue;
+            if (recovered)
+            {
+                await RecordWorkerActivityAsync(new WorkerActivityRecord
+                {
+                    WorkerId = assignment.WorkerId,
+                    WorkerSessionId = assignment.WorkerSessionId,
+                    FlowRunId = assignment.FlowRunId,
+                    RunAssignmentId = assignment.Id,
+                    EventType = reason,
+                    Severity = "Warning",
+                    Message = failureMessage
+                }, token).ConfigureAwait(false);
+            }
+
+            return recovered;
         }
 
         private static SqlDialect ResolveDialect(DatabaseDriverBase database)
@@ -675,6 +748,23 @@ namespace Tempo.Server.Services
                 LeaseExpiresUtc = Converters.DateTime(row, "lease_expires_utc"),
                 AssignedUtc = Converters.DateTime(row, "assigned_utc"),
                 CompletedUtc = Converters.DateTimeOrNull(row, "completed_utc")
+            };
+        }
+
+        private static WorkerActivityRecord MapWorkerActivity(DataRow row)
+        {
+            return new WorkerActivityRecord
+            {
+                Id = Converters.String(row, "id"),
+                WorkerId = Converters.String(row, "worker_id"),
+                WorkerSessionId = Converters.StringOrNull(row, "worker_session_id"),
+                FlowRunId = Converters.StringOrNull(row, "flow_run_id"),
+                RunAssignmentId = Converters.StringOrNull(row, "run_assignment_id"),
+                EventType = Converters.StringOrNull(row, "event_type") ?? "info",
+                Severity = Converters.StringOrNull(row, "severity"),
+                Message = Converters.StringOrNull(row, "message"),
+                PayloadJson = Converters.StringOrNull(row, "payload_json"),
+                CreatedUtc = Converters.DateTime(row, "created_utc")
             };
         }
 

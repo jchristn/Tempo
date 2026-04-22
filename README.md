@@ -33,6 +33,7 @@ Tempo ships as:
 - Runtime-aware startup seeding that creates working sample steps for each available runtime type
 - Distributed execution with a control-plane/server split, authenticated workers, worker drain/resume/block control, and capability-aware run placement
 - Run placement metadata, worker management REST routes, dashboard worker views, and MCP worker tools
+- Durable per-run log capture with tenant-scoped run activity and run-log APIs plus dashboard run-log viewing
 - Admin log viewer for file-backed server and worker logs in the dashboard, REST API, MCP, and Postman
 - OpenAPI-backed API Explorer and MCP server for agent-driven automation
 - First-run setup wizard that creates and invokes example flows end to end
@@ -64,7 +65,7 @@ Default seeded credentials on an empty database:
 - Password: `password`
 - Local admin API key: `tempo-local-admin-api-key`
 
-Compose bind-mounts `docker/tempo.server.json` and `docker/tempo.worker.json` so first-run deployments use the intended control-plane and worker settings without depending on pre-seeded config volumes. Persistent named volumes remain in place for the server database, server artifact blob storage, server logs/runtime cache/scratch, shared worker logs, dashboard logs, and MCP configuration. Worker runtime-cache and scratch paths remain container-local anonymous volumes so scaled workers do not share mutable runtime state, while worker log files are written to a shared named volume that `Tempo.Server` mounts read-only for the admin log viewer. The service images in the compose file are pinned to `v0.3.0`.
+Compose bind-mounts `docker/tempo.server.json` and `docker/tempo.worker.json` so first-run deployments use the intended control-plane and worker settings without depending on pre-seeded config volumes. Persistent named volumes remain in place for the server database, server artifact blob storage, server logs/runtime cache/scratch, shared worker logs, shared run logs, dashboard logs, and MCP configuration. Worker runtime-cache and scratch paths remain container-local anonymous volumes so scaled workers do not share mutable runtime state, while worker log files are written to a shared named volume that `Tempo.Server` mounts read-only for the admin log viewer. Per-run logs are written to a separate shared volume mounted read-write by the server and workers so run logs survive container restarts and remain visible through the `Runs` view and tenant-scoped run-log APIs. The service images in the compose file are pinned to `v0.3.0`.
 
 ### Distributed Execution Model
 
@@ -198,6 +199,7 @@ Notes:
 - The C# SDK targets `net8.0` and `net10.0`
 - The server-side projects target `net10.0`
 - Each SDK ships with a test application intended to exercise the public API surface exhaustively
+- The SDKs expose ambient execution context and file-backed step logging so handler code can write diagnostics without corrupting protocol stdout
 
 ## Mutable Artifacts and Source Steps
 

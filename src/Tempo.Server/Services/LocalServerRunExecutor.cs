@@ -1,6 +1,8 @@
 namespace Tempo.Server.Services
 {
     using System;
+    using System.Diagnostics;
+    using System.Globalization;
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
@@ -25,16 +27,18 @@ namespace Tempo.Server.Services
         private readonly DatabaseDriverBase _Database;
         private readonly StepRuntimeRegistry _RuntimeRegistry;
         private readonly LoggingModule? _Logging;
+        private readonly RunLogService _RunLogs;
         private readonly string _Header = "[LocalServerRunExecutor] ";
         private int _ActiveRuns = 0;
 
         /// <summary>Instantiate.</summary>
-        public LocalServerRunExecutor(DatabaseDriverBase database, StepRuntimeRegistry runtimeRegistry, EngineSettings settings, LoggingModule? logging = null)
+        public LocalServerRunExecutor(DatabaseDriverBase database, StepRuntimeRegistry runtimeRegistry, EngineSettings settings, LoggingModule? logging = null, RunLogSettings? runLogSettings = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
             _RuntimeRegistry = runtimeRegistry ?? throw new ArgumentNullException(nameof(runtimeRegistry));
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             _Logging = logging;
+            _RunLogs = new RunLogService(runLogSettings ?? new RunLogSettings { Enabled = false });
 
             Descriptor = new RunExecutorDescriptor
             {
@@ -83,9 +87,21 @@ namespace Tempo.Server.Services
 
             try
             {
+                RunLogSession? runLogs = await _RunLogs.CreateSessionAsync(new RunLogSessionContext
+                {
+                    FlowRunId = assignment.FlowRunId,
+                    TenantId = plan.TenantId,
+                    DataFlowId = plan.DataFlowId,
+                    AttemptNumber = assignment.AttemptNumber,
+                    RunAssignmentId = assignment.Id,
+                    WorkerId = assignment.WorkerId,
+                    NodeKind = Descriptor.NodeKind.ToString()
+                }, token).ConfigureAwait(false);
+
                 RegistryDataFlowRunner runner = new RegistryDataFlowRunner(new ExecutionPlanStepResolver(plan), _RuntimeRegistry)
                 {
-                    MetricsStore = new FlowMetricsBridge(_Database, plan.FlowRunId, plan.TenantId)
+                    MetricsStore = new FlowMetricsBridge(_Database, plan.FlowRunId, plan.TenantId),
+                    RunLogs = runLogs
                 };
 
                 Tempo.StepRequest request = new Tempo.StepRequest
@@ -110,7 +126,21 @@ namespace Tempo.Server.Services
                     }
                 }
 
+                Stopwatch runtime = Stopwatch.StartNew();
+                if (runLogs != null)
+                {
+                    await runLogs.AppendWorkerAsync("Info", "Assignment started on the server-local executor.", token).ConfigureAwait(false);
+                }
+
                 Tempo.StepResult result = await runner.Run(plan.Flow, request, plan.ExecutionSnapshot, token).ConfigureAwait(false);
+                runtime.Stop();
+                if (runLogs != null)
+                {
+                    await runLogs.AppendWorkerAsync(
+                        "Info",
+                        "Assignment completed with result " + result.Result + " in " + FormatMilliseconds(runtime.Elapsed.TotalMilliseconds) + "ms.",
+                        token).ConfigureAwait(false);
+                }
                 return new RunCompletionReport
                 {
                     FlowRunId = assignment.FlowRunId,
@@ -174,6 +204,11 @@ namespace Tempo.Server.Services
             if (data == null) return null;
             try { return JsonSerializer.Serialize(data); }
             catch (NotSupportedException) { return data.ToString(); }
+        }
+
+        private static string FormatMilliseconds(double value)
+        {
+            return value.ToString("F2", CultureInfo.InvariantCulture);
         }
     }
 }

@@ -108,6 +108,8 @@ namespace Tempo.Core.Runtime
                 entry.EnvironmentAllowList,
                 _ExternalSettings,
                 _Capacity,
+                context.RunLogSession,
+                context.RunLogStep,
                 maxRuntimeMs);
         }
 
