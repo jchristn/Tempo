@@ -3,6 +3,7 @@ namespace Tempo.Sdk
     using System;
     using System.Globalization;
     using System.IO;
+    using System.Text;
     using System.Text.Json;
     using System.Text.Json.Serialization;
     using System.Threading;
@@ -94,6 +95,7 @@ namespace Tempo.Sdk
             output ??= Console.Out;
             StepRequest? request = null;
             IDisposable? executionScope = null;
+            ITempoStepLogger? logger = null;
             TextWriter? originalOut = null;
             TextWriter? originalErr = null;
 
@@ -101,7 +103,7 @@ namespace Tempo.Sdk
             {
                 string text = await input.ReadToEndAsync(token).ConfigureAwait(false);
                 request = DeserializeRequest(text);
-                ITempoStepLogger logger = CreateLoggerFromEnvironment();
+                logger = CreateLoggerFromEnvironment();
                 executionScope = TempoExecutionContext.Push(new TempoExecutionContext
                 {
                     TenantId = request.TenantId,
@@ -110,16 +112,11 @@ namespace Tempo.Sdk
                     RunAssignmentId = Environment.GetEnvironmentVariable("TEMPO_RUN_ASSIGNMENT_ID"),
                     StepId = Environment.GetEnvironmentVariable("TEMPO_STEP_ID"),
                     StepRunId = request.StepRunId,
+                    RequestId = request.RequestId,
                     WorkerId = Environment.GetEnvironmentVariable("TEMPO_WORKER_ID"),
                     Logger = logger
                 });
-                if (logger is not NullTempoStepLogger)
-                {
-                    originalOut = Console.Out;
-                    originalErr = Console.Error;
-                    Console.SetOut(new TempoLogTextWriter(logger, "Info"));
-                    Console.SetError(new TempoLogTextWriter(logger, "Error"));
-                }
+                RedirectConsole(logger, out originalOut, out originalErr);
 
                 StepResult result = await handler.RunAsync(request, token).ConfigureAwait(false);
                 if (result == null) throw new InvalidOperationException("Handler returned null StepResult.");
@@ -137,14 +134,29 @@ namespace Tempo.Sdk
             {
                 RestoreConsole(originalOut, originalErr);
                 executionScope?.Dispose();
+                if (logger is IDisposable disposable) disposable.Dispose();
             }
         }
 
         private static ITempoStepLogger CreateLoggerFromEnvironment()
         {
             string? path = Environment.GetEnvironmentVariable("TEMPO_RUN_LOG_FILE");
-            if (string.IsNullOrWhiteSpace(path)) return NullTempoStepLogger.Instance;
+            if (string.IsNullOrWhiteSpace(path)) return ConsoleTempoStepLogger.Instance;
             return new FileTempoStepLogger(path!);
+        }
+
+        private static void RedirectConsole(ITempoStepLogger logger, out TextWriter? originalOut, out TextWriter? originalErr)
+        {
+            originalOut = Console.Out;
+            Console.SetOut(new TempoLogTextWriter(logger, "Info"));
+            if (logger is FileTempoStepLogger)
+            {
+                originalErr = Console.Error;
+                Console.SetError(new TempoLogTextWriter(logger, "Error"));
+                return;
+            }
+
+            originalErr = null;
         }
 
         private static void RestoreConsole(TextWriter? originalOut, TextWriter? originalErr)
@@ -153,14 +165,18 @@ namespace Tempo.Sdk
             if (originalErr != null) Console.SetError(originalErr);
         }
 
-        private sealed class FileTempoStepLogger : ITempoStepLogger
+        private sealed class FileTempoStepLogger : ITempoStepLogger, IDisposable
         {
-            private readonly string _Path;
             private readonly object _Sync = new object();
+            private readonly StreamWriter _Writer;
+            private bool _Disposed;
 
             public FileTempoStepLogger(string path)
             {
-                _Path = path;
+                string directory = Path.GetDirectoryName(path) ?? ".";
+                Directory.CreateDirectory(directory);
+                FileStream stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+                _Writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
             }
 
             public void Debug(string message) => Write("Debug", message);
@@ -168,21 +184,29 @@ namespace Tempo.Sdk
             public void Warn(string message) => Write("Warn", message);
             public void Error(string message) => Write("Error", message);
 
+            public void Dispose()
+            {
+                lock (_Sync)
+                {
+                    if (_Disposed) return;
+                    _Writer.Dispose();
+                    _Disposed = true;
+                }
+            }
+
             private void Write(string severity, string? message)
             {
                 if (string.IsNullOrWhiteSpace(message)) return;
-                string directory = Path.GetDirectoryName(_Path) ?? ".";
-                Directory.CreateDirectory(directory);
-
+                string[] lines = message.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
                 lock (_Sync)
                 {
-                    using StreamWriter writer = new StreamWriter(new FileStream(_Path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete));
-                    foreach (string line in message.Replace("\r\n", "\n").Split('\n'))
+                    if (_Disposed) return;
+                    foreach (string line in lines)
                     {
                         if (string.IsNullOrWhiteSpace(line)) continue;
-                        writer.WriteLine(DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " [" + severity + "] " + line);
+                        _Writer.WriteLine(DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " [" + severity + "] " + line);
                     }
-                    writer.Flush();
+                    _Writer.Flush();
                 }
             }
         }
@@ -191,7 +215,8 @@ namespace Tempo.Sdk
         {
             private readonly ITempoStepLogger _Logger;
             private readonly string _Severity;
-            private readonly System.Text.StringBuilder _Buffer = new System.Text.StringBuilder();
+            private readonly StringBuilder _Buffer = new StringBuilder();
+            private readonly object _Sync = new object();
 
             public TempoLogTextWriter(ITempoStepLogger logger, string severity)
             {
@@ -203,31 +228,59 @@ namespace Tempo.Sdk
 
             public override void Write(char value)
             {
-                if (value == '\r') return;
-                if (value == '\n')
+                lock (_Sync)
                 {
-                    FlushBuffer();
-                    return;
-                }
+                    if (value == '\r') return;
+                    if (value == '\n')
+                    {
+                        FlushBuffer();
+                        return;
+                    }
 
-                _Buffer.Append(value);
+                    _Buffer.Append(value);
+                }
             }
 
             public override void Write(string? value)
             {
                 if (string.IsNullOrEmpty(value)) return;
-                foreach (char c in value) Write(c);
+                lock (_Sync)
+                {
+                    WriteLocked(value);
+                }
             }
 
             public override void WriteLine(string? value)
             {
-                Write(value);
-                FlushBuffer();
+                lock (_Sync)
+                {
+                    WriteLocked(value);
+                    FlushBuffer();
+                }
             }
 
             public override void Flush()
             {
-                FlushBuffer();
+                lock (_Sync)
+                {
+                    FlushBuffer();
+                }
+            }
+
+            private void WriteLocked(string? value)
+            {
+                if (string.IsNullOrEmpty(value)) return;
+                foreach (char c in value)
+                {
+                    if (c == '\r') continue;
+                    if (c == '\n')
+                    {
+                        FlushBuffer();
+                        continue;
+                    }
+
+                    _Buffer.Append(c);
+                }
             }
 
             private void FlushBuffer()

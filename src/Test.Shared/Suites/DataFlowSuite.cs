@@ -35,10 +35,12 @@ namespace Test.Shared.Suites
                                 TenantId = t.Id,
                                 Name = "flow",
                                 StartStepId = "start",
+                                InvocationAuthMode = DataFlowInvocationAuthModeEnum.ApiAuthenticated,
                                 Transitions = trans
                             }, ct);
                             DataFlowRecord? read = await driver.DataFlows.ReadAsync(t.Id, rec.Id, ct);
                             Assert2.NotNull(read, "read");
+                            Assert2.Equal(DataFlowInvocationAuthModeEnum.ApiAuthenticated, read!.InvocationAuthMode, "invocation auth mode");
                             Assert2.Equal(3, read!.Transitions.Count, "three transitions");
                             Assert2.Equal("middle", read.Transitions["start"].OnSuccess!, "onSuccess");
                             Assert2.Equal(3, read.Transitions["middle"].MaxTransitions, "max transitions");

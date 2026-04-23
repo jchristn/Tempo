@@ -12,7 +12,7 @@ export function codeTemplate(language, kind = 'echo') {
         fileName: 'RandomNumberHandler.cs',
         function: 'run',
         handlerType: 'Tempo.UserSteps.RandomNumberHandler',
-        code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class RandomNumberHandler : ITempoStepHandler\n{\n    private static readonly Random Random = new Random();\n\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        int value = Random.Next(1, 11);\n        Console.Error.WriteLine("Random number step generated value: " + value);\n        return Task.FromResult(TempoStepHost.Success(request, new { value, min = 1, max = 10 }));\n    }\n}\n'
+        code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class RandomNumberHandler : TempoStepHandlerBase\n{\n    private static readonly Random Random = new Random();\n\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        int value = Random.Next(1, 11);\n        LogInfo("Random number step generated value: " + value);\n        return Task.FromResult(Success(request, new { value, min = 1, max = 10 }));\n    }\n}\n'
       };
     }
     if (kind === 'double') {
@@ -20,14 +20,14 @@ export function codeTemplate(language, kind = 'echo') {
         fileName: 'DoubleNumberHandler.cs',
         function: 'run',
         handlerType: 'Tempo.UserSteps.DoubleNumberHandler',
-        code: 'using System;\nusing System.Text.Json;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class DoubleNumberHandler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        double input = ReadNumber(request.Data);\n        Console.Error.WriteLine("Double number step received value: " + input);\n        return Task.FromResult(TempoStepHost.Success(request, new { input, value = input * 2 }));\n    }\n\n    private static double ReadNumber(object? data)\n    {\n        if (data is JsonElement element)\n        {\n            if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out double number)) return number;\n            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("value", out JsonElement value) && value.TryGetDouble(out double nested)) return nested;\n        }\n        return 0;\n    }\n}\n'
+        code: 'using System;\nusing System.Text.Json;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class DoubleNumberHandler : TempoStepHandlerBase\n{\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        double input = ReadNumber(request.Data);\n        LogInfo("Double number step received value: " + input);\n        return Task.FromResult(Success(request, new { input, value = input * 2 }));\n    }\n\n    private static double ReadNumber(object? data)\n    {\n        if (data is JsonElement element)\n        {\n            if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out double number)) return number;\n            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("value", out JsonElement value) && value.TryGetDouble(out double nested)) return nested;\n        }\n        return 0;\n    }\n}\n'
       };
     }
     return {
       fileName: 'Handler.cs',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        Console.Error.WriteLine("Echo step received input: " + request.Data);\n        return Task.FromResult(TempoStepHost.Success(request, new { ok = true, input = request.Data }));\n    }\n}\n'
+      code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : TempoStepHandlerBase\n{\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        LogInfo("Echo step received input: " + request.Data);\n        return Task.FromResult(Success(request, new { ok = true, input = request.Data }));\n    }\n}\n'
     };
   }
   if (language === 'Python') {
@@ -346,6 +346,7 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
           [executionKey]: { OnSuccess: null, OnFailure: null, OnException: null }
         },
         maxRuntimeMs: 0,
+        invocationAuthMode: 'Public',
         active: true
       });
       const randomKey = createdChainSteps.random.executionKey;
@@ -359,6 +360,7 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
           [doubleKey]: { Name: 'Double number', OnSuccess: null, OnFailure: null, OnException: null }
         },
         maxRuntimeMs: 0,
+        invocationAuthMode: 'Public',
         active: true
       });
       setCreatedFlow(flow);
@@ -902,7 +904,7 @@ function SourceStepEditor({ title, language, form, setForm }) {
         </div>
         {language === 'CSharp' ? (
           <div className="form-row">
-            <label title="C# handler type implementing Tempo.Protocol.ITempoStepHandler">Handler type</label>
+            <label title="C# handler type implementing Tempo.Protocol.ITempoStepHandler or inheriting Tempo.Protocol.TempoStepHandlerBase">Handler type</label>
             <input value={form.handlerType} onChange={(e) => setForm({ ...form, handlerType: e.target.value })} />
           </div>
         ) : (

@@ -377,6 +377,14 @@ namespace Tempo.Core.Database.Postgresql
             });
             list.Add(m13);
 
+            SchemaMigration m14 = new SchemaMigration { Version = 14, Description = "flow invocation authentication policy" };
+            m14.Statements.AddRange(new[]
+            {
+                "ALTER TABLE data_flows ADD COLUMN IF NOT EXISTS invocation_auth_mode VARCHAR(32) NOT NULL DEFAULT 'Public';",
+                "UPDATE data_flows SET invocation_auth_mode = 'Public' WHERE invocation_auth_mode IS NULL OR btrim(invocation_auth_mode) = '';"
+            });
+            list.Add(m14);
+
             return list;
         }
     }

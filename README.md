@@ -133,7 +133,7 @@ Flows reference steps by `executionKey`, not by step record ID. This keeps flow 
 | `Artifact.Process` | Executes a package-local process that speaks Tempo protocol v1 |
 | `Artifact.Python` | Executes a Python handler from an artifact package |
 | `Artifact.JavaScript` | Executes a Node.js handler from an artifact package |
-| `Artifact.DotnetProcess` | Executes a .NET handler from an artifact package using the Tempo SDK host |
+| `Artifact.DotnetProcess` | Executes a .NET handler from an artifact package using the Tempo SDK host and `TempoStepHandlerBase` helpers |
 | `Host.Executable` | Executes an operator allowlisted host executable |
 
 `Legacy.InlineRest` remains a compatibility read path. New REST steps should use `External.Rest`.
@@ -158,13 +158,15 @@ The dashboard opens a setup wizard on first access. The wizard explains what Tem
 
 Every workspace in the dashboard includes a page title and subtitle, and sidebar scrolling is independent from workspace scrolling.
 
-## Public HTTP Trigger Response Contract
+## HTTP Trigger Response Contract
 
-Public HTTP trigger routes are:
+HTTP trigger routes are:
 
 ```text
 /v1.0/triggers/http/{triggerId}
 ```
+
+Flows default to public trigger invocation, where the trigger ID acts as a bearer capability. Set the flow field `invocationAuthMode` to `ApiAuthenticated` when trigger calls should require normal Tempo API credentials and tenant access.
 
 For successful trigger execution:
 

@@ -26,7 +26,8 @@ describes the runtime and named entrypoints available in the package.
 For `Artifact.Process`, an entrypoint needs `command`. For
 `Artifact.DotnetProcess`, the entrypoint `command` must point at a package-local
 `.dll` and `handlerType` must identify the Tempo SDK handler type implemented by
-the artifact. For `Artifact.Python`, an entrypoint uses `module` and `function`;
+the artifact, usually a class inheriting `TempoStepHandlerBase`. For
+`Artifact.Python`, an entrypoint uses `module` and `function`;
 tenant config can override those fields.
 
 Paths must be relative artifact paths. Absolute paths, `..` traversal, symlink

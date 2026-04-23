@@ -21,6 +21,7 @@ namespace Test.Shared.Suites
     using Tempo.Core.Database.Sqlite;
     using Tempo.Core.Enums;
     using Tempo.Core.Models;
+    using Tempo.Core.Requests;
     using Tempo.Core.Runtime;
     using Tempo.Core.Services;
     using Tempo.Core.Settings;
@@ -48,6 +49,7 @@ namespace Test.Shared.Suites
                     new TestCaseDescriptor("DistributedExecution", "LocalCoordinatorPathExecutesRun", "Server-local execution flows through the coordinator and pseudo-worker path", LocalCoordinatorPathExecutesRunAsync),
                     new TestCaseDescriptor("DistributedExecution", "CoordinatorOwnsQueuedCancel", "Queued cancel is centralized in the coordinator", CoordinatorOwnsQueuedCancelAsync),
                     new TestCaseDescriptor("DistributedExecution", "TriggerReturns202WhenNoExecutor", "Trigger wait remains backward-compatible when no executor is available", TriggerReturns202WhenNoExecutorAsync),
+                    new TestCaseDescriptor("DistributedExecution", "ApiAuthenticatedTriggerRequiresTempoAuth", "HTTP triggers can require normal Tempo API authentication based on the flow policy", ApiAuthenticatedTriggerRequiresTempoAuthAsync),
                     new TestCaseDescriptor("DistributedExecution", "TriggerIncludesWorkerHeaderWhenRunAssigned", "HTTP trigger responses include the assigned worker id when a worker executes the run", TriggerIncludesWorkerHeaderWhenRunAssignedAsync),
                     new TestCaseDescriptor("DistributedExecution", "RemoteWorkerExecutesPersistedRestFlow", "A remote worker can execute a persisted REST flow end to end", RemoteWorkerExecutesPersistedRestFlowAsync),
                     new TestCaseDescriptor("DistributedExecution", "WorkerMaxTaskTimeoutIsPersistedAndEnforced", "Worker max task timeout is persisted and cancels slow assignments", WorkerMaxTaskTimeoutIsPersistedAndEnforcedAsync),
@@ -208,6 +210,70 @@ namespace Test.Shared.Suites
                 Assert2.NotNull(stored, "stored run");
                 Assert2.Equal(FlowRunStateEnum.Queued, stored!.State, "queued in database");
                 Assert2.Equal(FlowRunDispatchStateEnum.Pending, stored.DispatchState, "dispatch pending in database");
+            }
+            finally
+            {
+                try { server?.Stop(); } catch { /* ignore */ }
+                try { server?.Dispose(); } catch { /* ignore */ }
+                await TempTestStore.DisposeAsync(driver);
+                DeleteDirectory(root);
+            }
+        }
+
+        private static async Task ApiAuthenticatedTriggerRequiresTempoAuthAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct);
+            TempoServer? server = null;
+            string root = NewTempRoot("tempo-trigger-auth");
+            try
+            {
+                int port = FreePort();
+                Settings settings = CreateServerSettings(root, port, serverCanExecuteWorkload: false, adminApiKey: AdminApiKey);
+
+                CoreTenant tenant = await driver.Tenants.CreateAsync(new CoreTenant { Name = "Protected Trigger" }, ct);
+                DataFlowRecord flow = await CreateRestFlowAsync(driver, tenant.Id, "https://example.com/not-called", null, ct).ConfigureAwait(false);
+                flow.MaxRuntimeMs = 1;
+                flow.InvocationAuthMode = DataFlowInvocationAuthModeEnum.ApiAuthenticated;
+                flow = await driver.DataFlows.UpdateAsync(flow, ct).ConfigureAwait(false);
+                TriggerRecord trigger = await driver.Triggers.CreateAsync(new TriggerRecord
+                {
+                    TenantId = tenant.Id,
+                    Name = "http-auth",
+                    TriggerType = TriggerTypeEnum.Http,
+                    DataFlowId = flow.Id,
+                    Configuration = "{\"allowedMethods\":[\"GET\"]}"
+                }, ct).ConfigureAwait(false);
+
+                server = new TempoServer(settings, SilentLogger(), driver, new StepManager());
+                await server.StartAsync().ConfigureAwait(false);
+
+                using HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                string triggerUrl = "http://127.0.0.1:" + port + "/v1.0/triggers/http/" + trigger.Id;
+                using HttpResponseMessage unauthenticated = await client.GetAsync(triggerUrl, ct).ConfigureAwait(false);
+                Assert2.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode, "unauthenticated trigger rejected");
+
+                var runsAfterReject = await driver.FlowRuns.EnumerateAsync(new FlowRunFilter
+                {
+                    TenantId = tenant.Id,
+                    DataFlowId = flow.Id,
+                    PageSize = 10
+                }, ct).ConfigureAwait(false);
+                Assert2.Equal(0, runsAfterReject.TotalCount, "unauthenticated trigger did not enqueue");
+
+                using HttpRequestMessage authenticatedRequest = new HttpRequestMessage(HttpMethod.Get, triggerUrl);
+                authenticatedRequest.Headers.TryAddWithoutValidation(Constants.HeaderApiKey, AdminApiKey);
+                using HttpResponseMessage authenticated = await client.SendAsync(authenticatedRequest, ct).ConfigureAwait(false);
+                string body = await authenticated.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+                Assert2.Equal(HttpStatusCode.Accepted, authenticated.StatusCode, "authenticated trigger accepted");
+                Assert2.True(authenticated.Headers.TryGetValues(Constants.HeaderRunId, out IEnumerable<string>? runIds), "run id header");
+                string runId = runIds!.First();
+                Assert2.Equal("null", body, "pending trigger body");
+
+                FlowRun? stored = await driver.FlowRuns.ReadAsync(tenant.Id, runId, ct).ConfigureAwait(false);
+                Assert2.NotNull(stored, "stored run");
+                Assert2.Equal(FlowRunStateEnum.Queued, stored!.State, "queued in database");
+                Assert2.Equal(trigger.Id, stored.TriggerId!, "trigger id persisted");
             }
             finally
             {

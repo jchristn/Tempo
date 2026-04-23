@@ -129,7 +129,7 @@ namespace Tempo.McpServer.Tools
                 type = "object",
                 properties = new
                 {
-                    triggerId = new { type = "string", description = "HTTP trigger identifier." },
+                    triggerId = new { type = "string", description = "HTTP trigger identifier. If the flow requires API-authenticated invocation, the MCP server's configured Tempo credentials are forwarded." },
                     body = new { description = "JSON request body to send to the trigger." }
                 },
                 required = new[] { "triggerId" }
@@ -150,7 +150,7 @@ namespace Tempo.McpServer.Tools
                     language = new { type = "string", description = "Python, JavaScript, or CSharp." },
                     code = new { type = "string", description = "Source code." },
                     function = new { type = "string", description = "Python or JavaScript function name." },
-                    handlerType = new { type = "string", description = "C# handler type." },
+                    handlerType = new { type = "string", description = "C# handler type implementing ITempoStepHandler or inheriting TempoStepHandlerBase." },
                     entrypoint = new { type = "string", description = "Entrypoint file or assembly name." },
                     fileName = new { type = "string", description = "Optional source file name." }
                 },

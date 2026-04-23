@@ -26,7 +26,7 @@ Use the simplest runtime that matches your deployment and ownership model.
 | `External.Rest` | Calling an existing HTTP endpoint | Configuration only | No local code package, but behavior lives outside Tempo |
 | `Artifact.Python` | Tenant-authored Python logic | Python function in an artifact or source step | Depends on Python availability on the worker/server |
 | `Artifact.JavaScript` | Tenant-authored JavaScript or Node logic | JavaScript function in an artifact or source step | Depends on Node availability on the worker/server |
-| `Artifact.DotnetProcess` | Tenant-authored .NET step logic | .NET process artifact implementing `ITempoStepHandler` | `stdout` is protocol-only, so logging must be deliberate |
+| `Artifact.DotnetProcess` | Tenant-authored .NET step logic | .NET process artifact inheriting `TempoStepHandlerBase` or implementing `ITempoStepHandler` | `stdout` is protocol-only, so use the host logger |
 | `Artifact.Process` | Any executable that can speak Tempo protocol over stdin/stdout | Manual package and protocol implementation | Most flexible, least ergonomic |
 | `Host.Executable` | Operator-approved local tools | Tenant references an allowlist key only | Good for curated tools, not for arbitrary tenant code |
 | `Builtin.Class` | Server-owned in-process code | `Step` subclass in the server process | Fastest path, but deployment-coupled |
@@ -110,7 +110,7 @@ Practical guidance:
 - Let Tempo produce `Exception` for unhandled code or protocol failures.
 - Let Tempo handle `Timeout` when the runtime exceeds limits.
 
-For .NET process steps, prefer `TempoStepHost.Success(...)` or `TempoStepHost.Error(...)` so correlation fields stay correct.
+For .NET process steps, prefer `TempoStepHandlerBase.Success(...)` / `TempoStepHandlerBase.Error(...)` or `TempoStepHost.Success(...)` / `TempoStepHost.Error(...)` so correlation fields stay correct.
 
 ### Treat `stdout` carefully
 
@@ -174,8 +174,8 @@ Runtime-specific behavior:
 | --- | --- | --- |
 | `Artifact.Python` | `print(...)`, root `logging`, or `stderr` | Step log files |
 | `Artifact.JavaScript` | `console.log/info/warn/error/debug` or `stderr` | Step log files |
-| `Artifact.DotnetProcess` | `Console.Error.WriteLine(...)` for quick diagnostics, or append directly to `TEMPO_RUN_LOG_FILE` for a primary step log | `stderr` log or step log file depending on how you write |
-| `Artifact.Process` | `stderr` or append directly to `TEMPO_RUN_LOG_FILE` | `stderr` log or step log file |
+| `Artifact.DotnetProcess` | `LogInfo`, `LogWarn`, `LogError`, or `TempoExecutionContext.Current.Logger` | Step log files |
+| `Artifact.Process` | `stderr` or an invocation-scoped writer opened from `TEMPO_RUN_LOG_FILE` | `stderr` log or step log file |
 | Built-in / in-process | Server logging and run-log instrumentation around step execution | Server logs plus run activity |
 
 General logging best practices:
@@ -215,7 +215,7 @@ Important source-step request fields:
 | `artifactName` | Optional generated artifact display name |
 | `entrypoint` | Defaults to `main` |
 | `function` | Required for Python and JavaScript |
-| `handlerType` | Required for C# |
+| `handlerType` | Required for C#, usually a `TempoStepHandlerBase` subclass |
 | `contractType`, `inputSchema`, `outputSchema` | Optional contract controls |
 | `maxRuntimeMs` | Per-step timeout override |
 
@@ -248,11 +248,9 @@ There are two main C# authoring styles:
 
 This is the recommended C# path for tenant-authored code.
 
-Implement `Tempo.Protocol.ITempoStepHandler`:
+Inherit `Tempo.Protocol.TempoStepHandlerBase`:
 
 ```csharp
-using System;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Tempo;
@@ -260,41 +258,30 @@ using Tempo.Protocol;
 
 namespace Tempo.UserSteps;
 
-public sealed class Handler : ITempoStepHandler
+public sealed class Handler : TempoStepHandlerBase
 {
-    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)
+    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)
     {
         LogInfo("Echo step received input: " + request.Data);
-        return Task.FromResult(TempoStepHost.Success(request, new
+
+        return Task.FromResult(Success(request, new
         {
             ok = true,
             input = request.Data
         }));
-    }
-
-    private static void LogInfo(string message)
-    {
-        string? path = Environment.GetEnvironmentVariable("TEMPO_RUN_LOG_FILE");
-        if (!string.IsNullOrWhiteSpace(path))
-        {
-            string? dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
-            File.AppendAllText(path, $"{DateTime.UtcNow:O} [INFO] {message}{Environment.NewLine}");
-            return;
-        }
-
-        Console.Error.WriteLine(message);
     }
 }
 ```
 
 Best practices:
 
-- Use `TempoStepHost.Success(request, data)` or `TempoStepHost.Error(request, data)` instead of constructing `StepResult` manually.
+- Use `Success(request, data)` or `Error(request, data)` from `TempoStepHandlerBase` instead of constructing `StepResult` manually.
+- Use `LogDebug`, `LogInfo`, `LogWarn`, `LogWarning`, and `LogError` from `TempoStepHandlerBase` for step diagnostics.
 - Honor the cancellation token when calling other services.
 - Never write user logs to `Console.Out`.
-- Use `Console.Error` for quick diagnostics if you do not want to manage `TEMPO_RUN_LOG_FILE` directly.
-- If you want logs in the primary step log file rather than the stderr file, append to `TEMPO_RUN_LOG_FILE`.
+- Do not read `TEMPO_RUN_LOG_FILE` from step code. `TempoStepHost` resolves it once per invocation and exposes the active logger through `TempoExecutionContext.Current`.
+- Do not use `File.AppendAllText` as a logging strategy. The Tempo host owns the file-backed logger and serializes writes for the invocation.
+- Existing handlers that directly implement `ITempoStepHandler` still work, but new C# code should use `TempoStepHandlerBase`.
 
 Build and execution notes:
 
@@ -467,7 +454,7 @@ stderr -> write diagnostics
 Best practices:
 
 - Reserve `stdout` for the protocol result only.
-- Write diagnostics to `stderr` or append to `TEMPO_RUN_LOG_FILE`.
+- Write diagnostics to `stderr` or to an invocation-scoped logger.
 - Preserve request correlation fields when building the result.
 - Exit nonzero only for host-level failures. If you can still emit a valid `StepResult`, do that instead.
 
@@ -659,7 +646,7 @@ Cause:
 Fix:
 
 - install a compatible .NET SDK
-- verify the `handlerType` exists and implements `ITempoStepHandler`
+- verify the `handlerType` exists and inherits `TempoStepHandlerBase` or implements `ITempoStepHandler`
 - inspect the compilation error returned by Tempo
 
 ### Dependencies do not install for Python
@@ -681,8 +668,8 @@ Cause:
 
 Fix:
 
-- use `Console.Error.WriteLine(...)` for quick diagnostics
-- or append directly to `TEMPO_RUN_LOG_FILE` for primary step-log output
+- inherit `TempoStepHandlerBase` and use `LogInfo`, `LogWarn`, or `LogError`
+- if implementing `ITempoStepHandler` directly, use `TempoExecutionContext.Current?.Logger`
 
 ## Recommended Starting Point
 

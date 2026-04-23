@@ -262,7 +262,7 @@ namespace Tempo.McpServer.Tools
 
             tools.Add(new TempoToolDefinition(
                 "trigger_fire",
-                "Fire an HTTP trigger and return the response body plus run metadata headers, including the assigned worker id when available",
+                "Fire an HTTP trigger and return the response body plus run metadata headers; Tempo API credentials are forwarded for flows that require authenticated invocation",
                 ToolSchemas.TriggerFire(),
                 async (args, token) => await FireTriggerAsync(client, args, token).ConfigureAwait(false)));
 

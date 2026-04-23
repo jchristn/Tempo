@@ -35,7 +35,8 @@ namespace Tempo.Sdk.TestApp
                 "T:StepRequest", "C:StepRequest", "P:StepRequest.ProtocolVersion", "P:StepRequest.TenantId", "P:StepRequest.DataFlowId", "P:StepRequest.FlowRunId", "P:StepRequest.StepRunId", "P:StepRequest.RequestId", "P:StepRequest.Data", "P:StepRequest.Metadata", "P:StepRequest.PreviousResult",
                 "T:StepResult", "C:StepResult", "P:StepResult.ProtocolVersion", "P:StepResult.TenantId", "P:StepResult.DataFlowId", "P:StepResult.FlowRunId", "P:StepResult.StepRunId", "P:StepResult.RequestId", "P:StepResult.Result", "P:StepResult.Data", "P:StepResult.Exception", "P:StepResult.ExceptionMessage", "P:StepResult.Metadata",
                 "T:StepResultType", "E:StepResultType.Success", "E:StepResultType.Timeout", "E:StepResultType.Error", "E:StepResultType.Exception", "E:StepResultType.MaxIterationsExceeded",
-                "T:TempoExecutionContext", "C:TempoExecutionContext", "P:TempoExecutionContext.Current", "P:TempoExecutionContext.TenantId", "P:TempoExecutionContext.DataFlowId", "P:TempoExecutionContext.FlowRunId", "P:TempoExecutionContext.RunAssignmentId", "P:TempoExecutionContext.StepId", "P:TempoExecutionContext.StepRunId", "P:TempoExecutionContext.WorkerId", "P:TempoExecutionContext.Logger",
+                "T:TempoExecutionContext", "C:TempoExecutionContext", "P:TempoExecutionContext.Current", "P:TempoExecutionContext.TenantId", "P:TempoExecutionContext.DataFlowId", "P:TempoExecutionContext.FlowRunId", "P:TempoExecutionContext.RunAssignmentId", "P:TempoExecutionContext.StepId", "P:TempoExecutionContext.StepRunId", "P:TempoExecutionContext.RequestId", "P:TempoExecutionContext.WorkerId", "P:TempoExecutionContext.Logger",
+                "T:TempoStepHandlerBase", "M:TempoStepHandlerBase.RunAsync",
                 "T:TempoStepHost", "M:TempoStepHost.DeserializeRequest", "M:TempoStepHost.SerializeResult", "M:TempoStepHost.Correlate", "M:TempoStepHost.Success", "M:TempoStepHost.Error", "M:TempoStepHost.Exception", "M:TempoStepHost.RunAsync"
             };
 
@@ -188,11 +189,13 @@ namespace Tempo.Sdk.TestApp
                 True(data.GetProperty("hasContext").GetBoolean(), "execution context available");
                 Equal("ras_1", data.GetProperty("runAssignmentId").GetString(), "execution context assignment id");
                 Equal("step_1", data.GetProperty("stepId").GetString(), "execution context step id");
+                Equal("req_1", data.GetProperty("requestId").GetString(), "execution context request id");
                 Equal("wrk_1", data.GetProperty("workerId").GetString(), "execution context worker id");
 
                 True(File.Exists(logPath), "run log file created");
                 string logText = await File.ReadAllTextAsync(logPath);
                 True(logText.Contains("logger-info", StringComparison.Ordinal), "logger writes captured");
+                True(logText.Contains("base-info", StringComparison.Ordinal), "base logger writes captured");
                 True(logText.Contains("console-info", StringComparison.Ordinal), "console out redirected to log");
                 True(logText.Contains("console-error", StringComparison.Ordinal), "console error redirected to log");
                 True(!output.ToString().Contains("console-info", StringComparison.Ordinal), "protocol stdout remains clean");
@@ -263,25 +266,23 @@ namespace Tempo.Sdk.TestApp
             public Task<StepResult> RunAsync(StepRequest request, CancellationToken token) => Task.FromResult<StepResult>(null!);
         }
 
-        private sealed class LoggingHandler : ITempoStepHandler
+        private sealed class LoggingHandler : TempoStepHandlerBase
         {
-            public Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+            public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
             {
                 TempoExecutionContext? context = TempoExecutionContext.Current;
                 context?.Logger.Info("logger-info");
+                LogInfo("base-info");
                 Console.WriteLine("console-info");
                 Console.Error.WriteLine("console-error");
-                return Task.FromResult(new StepResult
+                return Task.FromResult(Success(request, new
                 {
-                    Result = StepResultType.Success,
-                    Data = new
-                    {
-                        hasContext = context != null,
-                        runAssignmentId = context?.RunAssignmentId,
-                        stepId = context?.StepId,
-                        workerId = context?.WorkerId
-                    }
-                });
+                    hasContext = context != null,
+                    runAssignmentId = context?.RunAssignmentId,
+                    stepId = context?.StepId,
+                    requestId = context?.RequestId,
+                    workerId = context?.WorkerId
+                }));
             }
         }
 

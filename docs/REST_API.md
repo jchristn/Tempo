@@ -14,7 +14,7 @@ The public HTTP trigger endpoints are intentionally not tenant-scoped:
 /v1.0/triggers/http/{triggerId}
 ```
 
-Use the trigger ID as a bearer capability unless the deployment places another gateway or authentication layer in front of public trigger routes.
+By default, use the trigger ID as a bearer capability unless the deployment places another gateway or authentication layer in front of public trigger routes. A flow can opt into normal Tempo API authentication for HTTP trigger invocation by setting `invocationAuthMode` to `ApiAuthenticated`.
 
 ## Base URL
 
@@ -324,7 +324,7 @@ C# example:
   "language": "CSharp",
   "fileName": "Handler.cs",
   "handlerType": "Tempo.UserSteps.Handler",
-  "code": "using System.Threading;\nusing System.Threading.Tasks;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token)\n    {\n        return Task.FromResult(TempoStepHost.Success(request, new { ok = true, input = request.Data }));\n    }\n}\n"
+  "code": "using System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : TempoStepHandlerBase\n{\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token)\n    {\n        LogInfo(\"Echo step received input: \" + request.Data);\n        return Task.FromResult(Success(request, new { ok = true, input = request.Data }));\n    }\n}\n"
 }
 ```
 
@@ -610,6 +610,7 @@ A data flow connects step execution keys with transition rules. The output of on
 | `triggerId` | no | Optional trigger associated with this flow |
 | `startStepId` | yes | First execution key. Must exist in `transitions` |
 | `routingHintLabel` | no | Worker-placement hint used when `engine.loadBalancingStrategy` is `LabelPinned` |
+| `invocationAuthMode` | no | HTTP trigger invocation policy. `Public` allows anyone with the trigger URL. `ApiAuthenticated` requires standard Tempo API authentication and tenant access |
 | `maxRuntimeMs` | no | Flow-level runtime budget. `0` means no flow timeout |
 | `transitions` | yes | Map from execution key to transition definition |
 | `active` | no | Active flag |
@@ -642,6 +643,7 @@ Content-Type: application/json
   "description": "Returns the output from the echo step",
   "startStepId": "example.echo_python",
   "maxRuntimeMs": 30000,
+  "invocationAuthMode": "Public",
   "transitions": {
     "example.echo_python": {
       "name": "Echo",
@@ -739,7 +741,7 @@ Deletion is blocked when:
 
 ## Triggers
 
-A trigger invokes a data flow. Current public trigger execution is HTTP-based and supports `GET` and `POST` according to the trigger configuration.
+A trigger invokes a data flow. HTTP trigger execution supports `GET` and `POST` according to the trigger configuration.
 
 ### Trigger Endpoints
 
@@ -751,8 +753,8 @@ A trigger invokes a data flow. Current public trigger execution is HTTP-based an
 | `PUT` | `/v1.0/tenants/{tenantId}/triggers/{id}` | Update one trigger |
 | `DELETE` | `/v1.0/tenants/{tenantId}/triggers/{id}` | Delete one trigger if unprotected |
 | `POST` | `/v1.0/tenants/{tenantId}/triggers/bulk-delete` | Delete multiple unprotected triggers |
-| `GET` | `/v1.0/triggers/http/{id}` | Fire a public HTTP trigger with no request body |
-| `POST` | `/v1.0/triggers/http/{id}` | Fire a public HTTP trigger with a request body |
+| `GET` | `/v1.0/triggers/http/{id}` | Fire an HTTP trigger with no request body |
+| `POST` | `/v1.0/triggers/http/{id}` | Fire an HTTP trigger with a request body |
 
 ### Trigger Fields
 
@@ -785,6 +787,17 @@ A trigger invokes a data flow. Current public trigger execution is HTTP-based an
 ```
 
 If `allowedMethods` is missing or invalid, the server defaults to `["POST"]`.
+
+### HTTP Trigger Authentication
+
+HTTP trigger routes are not tenant-scoped in the URL, but the referenced flow controls whether invocation requires normal Tempo API authentication:
+
+| Flow `invocationAuthMode` | Behavior |
+| --- | --- |
+| `Public` | Anyone with the trigger ID can invoke the flow |
+| `ApiAuthenticated` | The request must include standard Tempo API credentials, and the authenticated principal must be allowed to act on the flow's tenant |
+
+Supported authentication headers are the same as management API requests, including `Authorization: Bearer {token}`, `x-token`, `x-api-key`, or credential pair headers.
 
 Create a POST trigger:
 
@@ -833,6 +846,18 @@ GET with no body:
 GET /v1.0/triggers/http/{triggerId}
 ```
 
+API-authenticated flow trigger:
+
+```http
+POST /v1.0/triggers/http/{triggerId}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "value": "hello world"
+}
+```
+
 Unlike direct flow run enqueue, HTTP trigger invocation waits for the run to finish up to a bounded timeout. On success, the response body is the final flow output only:
 
 ```json
@@ -868,6 +893,8 @@ Status behavior:
 | --- | --- |
 | `200` | Run completed successfully; response body is flow output |
 | `202` | Run did not reach a terminal state before the wait budget; response body is current output if any |
+| `401` | Flow requires API-authenticated invocation and no valid credentials were supplied |
+| `403` | Authenticated principal cannot act on the flow's tenant |
 | `404` | Trigger or associated flow was not found |
 | `405` | HTTP method is not allowed by trigger configuration |
 | `409` | Run was cancelled |

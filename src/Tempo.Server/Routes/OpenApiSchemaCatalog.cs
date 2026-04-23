@@ -46,6 +46,46 @@ namespace Tempo.Server.Routes
             return schema;
         }
 
+        public static OpenApiSchemaMetadata DataFlowRecord()
+        {
+            OpenApiSchemaMetadata schema = DataFlowShape("Persisted data flow definition.");
+            schema.Properties["id"] = String("Flow identifier.", false);
+            schema.Properties["tenantId"] = String("Tenant identifier.", false);
+            schema.Properties["createdUtc"] = String("Creation timestamp.", false, "date-time");
+            schema.Properties["lastUpdateUtc"] = String("Last update timestamp.", false, "date-time");
+            schema.Required.Add("id");
+            schema.Required.Add("tenantId");
+            schema.Required.Add("createdUtc");
+            schema.Required.Add("lastUpdateUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata DataFlowWriteRequest()
+        {
+            OpenApiSchemaMetadata schema = DataFlowShape("Create or update a data flow.");
+            schema.Example = new
+            {
+                name = "Echo flow",
+                description = "Returns the output from the echo step",
+                startStepId = "example.echo",
+                invocationAuthMode = "Public",
+                maxRuntimeMs = 30000,
+                transitions = new Dictionary<string, object>
+                {
+                    ["example.echo"] = new
+                    {
+                        name = "Echo",
+                        onSuccess = (string?)null,
+                        onFailure = (string?)null,
+                        onException = (string?)null,
+                        maxTransitions = 1
+                    }
+                },
+                active = true
+            };
+            return schema;
+        }
+
         public static OpenApiSchemaMetadata StepResponse()
         {
             OpenApiSchemaMetadata schema = Object("Persisted step definition response.");
@@ -102,7 +142,7 @@ namespace Tempo.Server.Routes
             schema.Properties["entrypoint"] = String("Manifest entrypoint name.", true);
             schema.Properties["module"] = String("Python module name or JavaScript module path. Defaults from fileName.", true);
             schema.Properties["function"] = String("Python function or JavaScript export to call.", true);
-            schema.Properties["handlerType"] = String("C# handler type implementing Tempo.Protocol.ITempoStepHandler.", true);
+            schema.Properties["handlerType"] = String("C# handler type implementing Tempo.Protocol.ITempoStepHandler or inheriting Tempo.Protocol.TempoStepHandlerBase.", true);
             schema.Properties["contractType"] = ContractTypeSchema();
             schema.Properties["inputSchema"] = String("Optional JSON schema for step input.", true);
             schema.Properties["outputSchema"] = String("Optional JSON schema for step output.", true);
@@ -1041,6 +1081,25 @@ namespace Tempo.Server.Routes
         private static OpenApiSchemaMetadata RuntimeKeyLiteral(RuntimeKey key)
         {
             return EnumString("Runtime discriminator value.", key.ToString());
+        }
+
+        private static OpenApiSchemaMetadata DataFlowShape(string description)
+        {
+            OpenApiSchemaMetadata schema = Object(description);
+            schema.Properties["name"] = String("Display name.", false);
+            schema.Properties["description"] = String("Optional description.", true);
+            schema.Properties["triggerId"] = String("Optional associated trigger identifier.", true);
+            schema.Properties["startStepId"] = String("First execution key in the transition graph.", false);
+            schema.Properties["routingHintLabel"] = String("Optional worker-placement label for label-pinned scheduling.", true);
+            schema.Properties["invocationAuthMode"] = EnumString("HTTP trigger invocation authentication policy.", "Public", "ApiAuthenticated");
+            schema.Properties["maxRuntimeMs"] = NonNegativeInteger("Maximum flow runtime in milliseconds. Zero means no timeout.");
+            schema.Properties["transitions"] = Object("Transition map keyed by step execution key.");
+            schema.Properties["active"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["isProtected"] = OpenApiSchemaMetadata.Boolean();
+            schema.Required.Add("name");
+            schema.Required.Add("startStepId");
+            schema.Required.Add("transitions");
+            return schema;
         }
 
         private static OpenApiSchemaMetadata StringArray(string itemDescription)

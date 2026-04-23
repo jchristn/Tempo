@@ -303,7 +303,7 @@ internal static class Program
         Type? handlerType = ResolveType(handlerTypeName);
         if (handlerType == null) throw new InvalidOperationException("Handler type not found: " + handlerTypeName);
         if (Activator.CreateInstance(handlerType) is not ITempoStepHandler handler)
-            throw new InvalidOperationException("Handler type must implement Tempo.Protocol.ITempoStepHandler: " + handlerTypeName);
+            throw new InvalidOperationException("Handler type must implement Tempo.Protocol.ITempoStepHandler or inherit Tempo.Protocol.TempoStepHandlerBase: " + handlerTypeName);
         return await TempoStepHost.RunAsync(handler);
     }
 

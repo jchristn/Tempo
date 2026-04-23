@@ -1,4 +1,4 @@
-namespace Tempo.Sdk
+namespace Tempo.Protocol
 {
     using System;
     using System.Globalization;
@@ -87,11 +87,15 @@ namespace Tempo.Sdk
         private static void Write(string severity, string? message)
         {
             if (string.IsNullOrWhiteSpace(message)) return;
-            foreach (string line in message.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+            foreach (string line in Normalize(message))
             {
-                if (string.IsNullOrWhiteSpace(line)) continue;
                 Console.Error.WriteLine(DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " [" + severity + "] " + line);
             }
+        }
+
+        private static string[] Normalize(string message)
+        {
+            return message.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         }
     }
 }

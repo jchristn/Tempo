@@ -462,6 +462,14 @@ namespace Tempo.Core.Database.Sqlite.Queries
             });
             list.Add(m13);
 
+            SchemaMigration m14 = new SchemaMigration { Version = 14, Description = "flow invocation authentication policy" };
+            m14.Statements.AddRange(new[]
+            {
+                "ALTER TABLE data_flows ADD COLUMN invocation_auth_mode TEXT NOT NULL DEFAULT 'Public';",
+                "UPDATE data_flows SET invocation_auth_mode = 'Public' WHERE invocation_auth_mode IS NULL OR length(trim(invocation_auth_mode)) = 0;"
+            });
+            list.Add(m14);
+
             return list;
         }
     }

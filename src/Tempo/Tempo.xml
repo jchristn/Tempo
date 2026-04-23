@@ -828,6 +828,21 @@
         <member name="M:Tempo.Protocol.ITempoStepHandler.RunAsync(Tempo.StepRequest,System.Threading.CancellationToken)">
             <summary>Handle a single Tempo step request.</summary>
         </member>
+        <member name="T:Tempo.Protocol.ITempoStepLogger">
+            <summary>Minimal logging surface exposed to step handlers during execution.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.ITempoStepLogger.Debug(System.String)">
+            <summary>Write a debug log line.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.ITempoStepLogger.Info(System.String)">
+            <summary>Write an informational log line.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.ITempoStepLogger.Warn(System.String)">
+            <summary>Write a warning log line.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.ITempoStepLogger.Error(System.String)">
+            <summary>Write an error log line.</summary>
+        </member>
         <member name="T:Tempo.Protocol.ProtocolVersions">
             <summary>
             Public step protocol version constants and compatibility checks.
@@ -853,6 +868,72 @@
         </member>
         <member name="M:Tempo.Protocol.ProtocolVersions.Normalize(System.String)">
             <summary>Return the canonical version string or throw for unsupported versions.</summary>
+        </member>
+        <member name="T:Tempo.Protocol.TempoExecutionContext">
+            <summary>Ambient execution context for the currently running step handler.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.Current">
+            <summary>Ambient current execution context.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.TenantId">
+            <summary>Tenant identifier.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.DataFlowId">
+            <summary>Data-flow identifier.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.FlowRunId">
+            <summary>Flow-run identifier.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.RunAssignmentId">
+            <summary>Run-assignment identifier.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.StepId">
+            <summary>Step identifier.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.StepRunId">
+            <summary>Step-run identifier.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.RequestId">
+            <summary>Request identifier.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.WorkerId">
+            <summary>Worker identifier.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoExecutionContext.Logger">
+            <summary>Ambient step logger.</summary>
+        </member>
+        <member name="T:Tempo.Protocol.TempoStepHandlerBase">
+            <summary>Base class for .NET process-backed Tempo step handlers.</summary>
+        </member>
+        <member name="P:Tempo.Protocol.TempoStepHandlerBase.ExecutionContext">
+            <summary>Ambient context for the current handler invocation.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.RunAsync(Tempo.StepRequest,System.Threading.CancellationToken)">
+            <summary>Handle one Tempo step request.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.Success(Tempo.StepRequest,System.Object,System.Object)">
+            <summary>Create a successful result correlated to the request.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.Error(Tempo.StepRequest,System.Object,System.Object)">
+            <summary>Create an error result correlated to the request.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.Exception(Tempo.StepRequest,System.Exception,System.Object)">
+            <summary>Create an exception result correlated to the request.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.LogDebug(System.String)">
+            <summary>Write a debug log line.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.LogInfo(System.String)">
+            <summary>Write an informational log line.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.LogWarn(System.String)">
+            <summary>Write a warning log line.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.LogWarning(System.String)">
+            <summary>Write a warning log line.</summary>
+        </member>
+        <member name="M:Tempo.Protocol.TempoStepHandlerBase.LogError(System.String)">
+            <summary>Write an error log line.</summary>
         </member>
         <member name="T:Tempo.Protocol.TempoStepHost">
             <summary>Minimal stdin/stdout host for .NET process-backed Tempo step artifacts.</summary>

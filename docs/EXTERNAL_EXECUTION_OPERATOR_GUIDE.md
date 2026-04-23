@@ -88,7 +88,7 @@ Behavior by runtime:
 | `Artifact.Process` | Child stderr is captured separately and the host writes runtime/protocol diagnostics to `host.log` |
 | `Artifact.Python` | `print(...)`, root `logging`, and stderr are redirected into the run-log files |
 | `Artifact.JavaScript` | `console.*` and stderr are redirected into the run-log files |
-| `Artifact.DotnetProcess` | `TempoStepHost` installs a file-backed logger and redirects `Console.Out` and `Console.Error` away from protocol stdout |
+| `Artifact.DotnetProcess` | `TempoStepHost` installs a file-backed logger; handlers should inherit `TempoStepHandlerBase` and use `LogInfo`/`LogWarn`/`LogError` while the host redirects `Console.Out` and `Console.Error` away from protocol stdout |
 
 Operator guidance:
 

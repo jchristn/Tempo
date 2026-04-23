@@ -2,6 +2,7 @@ namespace Tempo.Core.Models
 {
     using System;
     using System.Collections.Generic;
+    using Tempo.Core.Enums;
     using Tempo.Core.Helpers;
 
     /// <summary>
@@ -95,6 +96,9 @@ namespace Tempo.Core.Models
 
         /// <summary>Optional placement label used by label-pinned scheduling.</summary>
         public string? RoutingHintLabel { get; set; } = null;
+
+        /// <summary>Authentication policy for invoking this flow through an HTTP trigger.</summary>
+        public DataFlowInvocationAuthModeEnum InvocationAuthMode { get; set; } = DataFlowInvocationAuthModeEnum.Public;
 
         /// <summary>Whether the flow is protected from deletion.</summary>
         public bool IsProtected { get; set; } = false;

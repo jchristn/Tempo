@@ -252,7 +252,7 @@ Provide:
 | `executionKey` | Keeps flows readable and stable |
 | `fileName` | Makes artifact editing understandable |
 | `function` | Makes Python and JavaScript handler resolution explicit |
-| `handlerType` | Makes C# handler resolution explicit |
+| `handlerType` | Makes C# handler resolution explicit, typically a `TempoStepHandlerBase` subclass |
 | `maxRuntimeMs` | Prevents runaway code |
 
 Python handler shape:
@@ -271,6 +271,19 @@ exports.run = async function(input) {
 ```
 
 C# source-step packages compile to an executable entrypoint. Editing `.cs` files inside the artifact is useful for inspection and versioning, but it does not recompile the assembly by itself. To change C# runtime behavior, recreate the source step or upload a rebuilt artifact package.
+
+C# handler shape:
+
+```csharp
+public sealed class Handler : TempoStepHandlerBase
+{
+    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+    {
+        LogInfo("processing request " + request.RequestId);
+        return Task.FromResult(Success(request, new { ok = true, input = request.Data }));
+    }
+}
+```
 
 ## Artifact Management
 
@@ -487,14 +500,17 @@ Always log or capture `x-run-id` when a caller reports a problem.
 
 Public trigger endpoints are not tenant-scoped and are intended for invocation. Treat trigger IDs as sensitive.
 
+For flows that should not be callable by anyone holding the trigger URL, set the flow's `invocationAuthMode` to `ApiAuthenticated`. The HTTP trigger route will then require the same Tempo API credentials used by management endpoints and will only enqueue the run if the principal can act on the flow's tenant.
+
 For production:
 
 1. Put Tempo behind TLS.
-2. Use a gateway if caller authentication, rate limiting, or request signing is required.
-3. Prefer POST for user-provided input.
-4. Validate the first step input.
-5. Set flow and step timeouts.
-6. Monitor failed and exceptioned runs.
+2. Use `ApiAuthenticated` for tenant-private flows.
+3. Use a gateway if external caller authentication, rate limiting, or request signing needs to differ from Tempo API authentication.
+4. Prefer POST for user-provided input.
+5. Validate the first step input.
+6. Set flow and step timeouts.
+7. Monitor failed and exceptioned runs.
 
 ## Monitoring and Operations
 
@@ -696,12 +712,13 @@ Before promoting a flow to production:
 4. Artifacts are pinned where reproducibility matters.
 5. Flow `maxRuntimeMs` is set.
 6. Process-backed steps have timeouts.
-7. Public trigger `allowedMethods` is explicit.
-8. First-step input validation is enabled for public input.
-9. Trigger invocation has been tested with production-like curl or client code.
-10. Run and step-run records are reviewed.
-11. Production records are protected.
-12. Rollback artifact versions or previous flow definitions are available.
+7. Flow `invocationAuthMode` matches the intended exposure: `Public` for URL-capability calls, `ApiAuthenticated` for tenant-private calls.
+8. Public trigger `allowedMethods` is explicit.
+9. First-step input validation is enabled for public input.
+10. Trigger invocation has been tested with production-like curl or client code, including auth headers when `ApiAuthenticated` is used.
+11. Run and step-run records are reviewed.
+12. Production records are protected.
+13. Rollback artifact versions or previous flow definitions are available.
 
 ## Troubleshooting Patterns
 

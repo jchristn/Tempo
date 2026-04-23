@@ -11,7 +11,8 @@ Protocol v1 SDK for .NET artifact step handlers.
 - `StepResultType`: valid result states.
 - `ITempoStepHandler`: async handler interface.
 - `ITempoStepLogger`: ambient file-backed logger exposed during execution.
-- `TempoExecutionContext.Current`: ambient run, step, assignment, worker, and logger context.
+- `TempoExecutionContext.Current`: ambient run, step, assignment, request, worker, and logger context.
+- `TempoStepHandlerBase`: base handler with result helpers and `Log*` methods.
 - `TempoStepHost`: JSON serialization, result helpers, correlation, and
   stdin/stdout runner.
 - `Tempo.Sdk.Workers.*`: worker-protocol frame DTOs and JSON options for
@@ -22,11 +23,12 @@ Protocol v1 SDK for .NET artifact step handlers.
 ```csharp
 using Tempo.Sdk;
 
-public sealed class Handler : ITempoStepHandler
+public sealed class Handler : TempoStepHandlerBase
 {
-    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
     {
-        return Task.FromResult(TempoStepHost.Success(request, new { ok = true }));
+        LogInfo("processing request " + request.RequestId);
+        return Task.FromResult(Success(request, new { ok = true }));
     }
 }
 
@@ -45,12 +47,12 @@ writing diagnostic output to stdout.
 ```csharp
 using Tempo.Sdk;
 
-public sealed class Handler : ITempoStepHandler
+public sealed class Handler : TempoStepHandlerBase
 {
-    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
     {
-        TempoExecutionContext.Current?.Logger.Info("processing order");
-        return Task.FromResult(TempoStepHost.Success(request, new { ok = true }));
+        LogInfo("processing order");
+        return Task.FromResult(Success(request, new { ok = true }));
     }
 }
 ```
@@ -58,6 +60,11 @@ public sealed class Handler : ITempoStepHandler
 When `TEMPO_RUN_LOG_FILE` is present, `TempoStepHost.RunAsync` installs a
 file-backed logger and redirects `Console.Out` and `Console.Error` into the
 run-log file so protocol stdout remains clean.
+
+New C# handlers should inherit `TempoStepHandlerBase` and use `LogInfo`,
+`LogWarn`, `LogError`, or `TempoExecutionContext.Current.Logger`. The host
+resolves `TEMPO_RUN_LOG_FILE` once per invocation; step code should not read the
+environment variable or call `File.AppendAllText` per log message.
 
 ## Worker Protocol DTOs
 

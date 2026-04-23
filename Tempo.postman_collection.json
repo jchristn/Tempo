@@ -775,7 +775,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"hello world\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
+                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"hello world\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"invocationAuthMode\": \"Public\",\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
                                                                }
                                                   }
                                   },
@@ -799,7 +799,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"updated from Postman\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
+                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"updated from Postman\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"invocationAuthMode\": \"Public\",\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
                                                                }
                                                   }
                                   },
@@ -975,6 +975,37 @@
                                                       "body":  {
                                                                    "mode":  "raw",
                                                                    "raw":  "{\n  \"executionKey\": \"postman.echo_js\",\n  \"name\": \"Postman Echo JavaScript\",\n  \"language\": \"JavaScript\",\n  \"fileName\": \"handler.js\",\n  \"function\": \"run\",\n  \"code\": \"exports.run = async function(input) { return { ok: true, input }; };\"\n}"
+                                                               }
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.step \u0026\u0026 res.step.id) pm.collectionVariables.set(\u0027stepId\u0027, res.step.id);",
+                                                                                    "if (res \u0026\u0026 res.artifact \u0026\u0026 res.artifact.id) pm.collectionVariables.set(\u0027artifactId\u0027, res.artifact.id);",
+                                                                                    "if (res \u0026\u0026 res.artifactVersion \u0026\u0026 res.artifactVersion.version) pm.collectionVariables.set(\u0027artifactVersion\u0027, res.artifactVersion.version);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Create step from source (C#)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps/source",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"executionKey\": \"postman.echo_csharp\",\n  \"name\": \"Postman Echo C#\",\n  \"language\": \"CSharp\",\n  \"fileName\": \"Handler.cs\",\n  \"handlerType\": \"Tempo.UserSteps.Handler\",\n  \"code\": \"using System.Threading;\\nusing System.Threading.Tasks;\\nusing Tempo;\\nusing Tempo.Protocol;\\n\\nnamespace Tempo.UserSteps;\\n\\npublic sealed class Handler : TempoStepHandlerBase\\n{\\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\\n    {\\n        LogInfo(\\\"Echo step received input: \\\" + request.Data);\\n        return Task.FromResult(Success(request, new { ok = true, input = request.Data }));\\n    }\\n}\\n\"\n}"
                                                                }
                                                   },
                                       "event":  [

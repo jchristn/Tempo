@@ -341,7 +341,7 @@ Arguments:
 | `executionKey` | no | Stable key used by data flows |
 | `description` | no | Step description |
 | `function` | no | Python or JavaScript function, default is server-defined |
-| `handlerType` | no | C# handler type |
+| `handlerType` | no | C# handler type, usually a class inheriting `TempoStepHandlerBase` |
 | `entrypoint` | no | Entrypoint file or assembly |
 | `fileName` | no | Simple source file name, no path separators |
 | `artifactName` | no | Artifact display name |
@@ -379,6 +379,7 @@ Example `flow_create` body:
   "body": {
     "name": "MCP echo flow",
     "startStepId": "mcp.echo_js",
+    "invocationAuthMode": "Public",
     "transitions": {
       "mcp.echo_js": {
         "name": "Echo",
@@ -412,6 +413,8 @@ Example direct run:
 
 `flow_enqueue_run` returns the run record and does not wait for completion. Use `run_get` and `run_steps` to monitor.
 
+Set flow `invocationAuthMode` to `ApiAuthenticated` when HTTP trigger invocation should require the same Tempo credentials configured for the MCP server. `trigger_fire` and `tempo_request` forward those credentials automatically when `tempo.token`, `tempo.apiKey`, or credential-pair settings are configured.
+
 ### Trigger Tools
 
 | Tool | Arguments | Purpose |
@@ -420,7 +423,7 @@ Example direct run:
 | `trigger_get` | `id`, optional `tenantId` | Read one trigger |
 | `trigger_create` | `body`, optional `tenantId` | Create a trigger |
 | `trigger_update` | `id`, `body`, optional `tenantId` | Update a trigger |
-| `trigger_fire` | `triggerId`, optional `body` | POST to a public HTTP trigger |
+| `trigger_fire` | `triggerId`, optional `body` | POST to an HTTP trigger |
 
 Example trigger creation:
 
@@ -519,7 +522,7 @@ The typed `artifact_file_save` tool is for text content. Use `tempo_request` aga
 | `run_logs_delete` | `id`, `path`, optional `tenantId` | Delete one archived run-log file |
 | `run_logs_delete_all` | `id`, optional `tenantId` | Delete every run-log file for one completed run |
 
-Generic collection helpers also register `run_create` and `run_update`, but Tempo's workflow API creates runs through `flow_enqueue_run` or public trigger invocation. Prefer those workflow tools. Use `tempo_request` for cancel and delete operations:
+Generic collection helpers also register `run_create` and `run_update`, but Tempo's workflow API creates runs through `flow_enqueue_run` or HTTP trigger invocation. Prefer those workflow tools. Use `tempo_request` for cancel and delete operations:
 
 ```json
 {
@@ -791,7 +794,7 @@ MCP tools can mutate Tempo resources. Agents should follow these rules:
 | Inspect run headers after `trigger_fire` | Trigger responses put metadata in headers |
 | Use `includeInactive` when reconciling records | Inactive resources may still explain historical runs |
 | Do not delete referenced resources through `tempo_request` casually | REST deletion guards will block unsafe deletes, but attempted deletes still create operator noise |
-| Keep trigger IDs private | Public trigger routes are not tenant-scoped |
+| Keep public trigger IDs private | `Public` trigger invocation is not tenant-scoped; use `ApiAuthenticated` for private flows |
 
 ## Troubleshooting
 

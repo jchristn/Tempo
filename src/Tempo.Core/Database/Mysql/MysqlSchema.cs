@@ -373,6 +373,14 @@ namespace Tempo.Core.Database.Mysql
             });
             list.Add(m13);
 
+            SchemaMigration m14 = new SchemaMigration { Version = 14, Description = "flow invocation authentication policy" };
+            m14.Statements.AddRange(new[]
+            {
+                "ALTER TABLE data_flows ADD COLUMN invocation_auth_mode VARCHAR(32) NOT NULL DEFAULT 'Public' AFTER routing_hint_label;",
+                "UPDATE data_flows SET invocation_auth_mode = 'Public' WHERE invocation_auth_mode IS NULL OR TRIM(invocation_auth_mode) = '';"
+            });
+            list.Add(m14);
+
             return list;
         }
     }

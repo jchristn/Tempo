@@ -472,6 +472,15 @@ namespace Tempo.Core.Database.SqlServer
             });
             list.Add(m13);
 
+            SchemaMigration m14 = new SchemaMigration { Version = 14, Description = "flow invocation authentication policy" };
+            m14.Statements.AddRange(new[]
+            {
+                @"IF COL_LENGTH('dbo.data_flows', 'invocation_auth_mode') IS NULL
+                  ALTER TABLE data_flows ADD invocation_auth_mode NVARCHAR(32) NOT NULL CONSTRAINT DF_data_flows_invocation_auth_mode DEFAULT 'Public';",
+                @"UPDATE data_flows SET invocation_auth_mode = 'Public' WHERE invocation_auth_mode IS NULL OR LTRIM(RTRIM(invocation_auth_mode)) = '';"
+            });
+            list.Add(m14);
+
             return list;
         }
     }

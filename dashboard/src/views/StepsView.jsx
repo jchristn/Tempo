@@ -73,7 +73,7 @@ function sourceTemplate(language) {
       fileName: 'Handler.cs',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'using System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        return Task.FromResult(TempoStepHost.Success(request, new { ok = true, input = request.Data }));\n    }\n}\n'
+      code: 'using System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : TempoStepHandlerBase\n{\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        LogInfo("Echo step received input: " + request.Data);\n        return Task.FromResult(Success(request, new { ok = true, input = request.Data }));\n    }\n}\n'
     };
   }
   if (language === 'Python') {
@@ -534,7 +534,7 @@ function StepsView({ apiClient, principal }) {
           <div className="grid-2">
             <div className="form-row"><label title="Manifest entrypoint name">Entrypoint</label><input value={sourceEditing.entrypoint || 'main'} onChange={(e) => setSourceEditing({ ...sourceEditing, entrypoint: e.target.value })} /></div>
             {sourceEditing.language === 'CSharp' ? (
-              <div className="form-row"><label title="C# handler type implementing Tempo.Protocol.ITempoStepHandler">Handler type</label><input value={sourceEditing.handlerType || ''} onChange={(e) => setSourceEditing({ ...sourceEditing, handlerType: e.target.value })} /></div>
+              <div className="form-row"><label title="C# handler type implementing Tempo.Protocol.ITempoStepHandler or inheriting Tempo.Protocol.TempoStepHandlerBase">Handler type</label><input value={sourceEditing.handlerType || ''} onChange={(e) => setSourceEditing({ ...sourceEditing, handlerType: e.target.value })} /></div>
             ) : (
               <div className="form-row"><label title="Function/export called when the step runs">Function</label><input value={sourceEditing.function || 'run'} onChange={(e) => setSourceEditing({ ...sourceEditing, function: e.target.value })} /></div>
             )}
@@ -547,7 +547,7 @@ function StepsView({ apiClient, principal }) {
           <div className="form-row">
             <label title="Complete source file contents">Source code</label>
             <textarea rows={14} value={sourceEditing.code || ''} onChange={(e) => setSourceEditing({ ...sourceEditing, code: e.target.value })} spellCheck={false} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }} />
-            <div className="form-help">Python and JavaScript functions receive the StepRequest object. C# handlers implement <code>ITempoStepHandler</code>.</div>
+            <div className="form-help">Python and JavaScript functions receive the StepRequest object. C# handlers should inherit <code>TempoStepHandlerBase</code> or implement <code>ITempoStepHandler</code>.</div>
           </div>
 
           <div className="grid-2">

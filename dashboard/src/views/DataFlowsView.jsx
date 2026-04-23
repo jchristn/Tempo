@@ -17,11 +17,61 @@ function emptyFlow() {
     description: '',
     startStepId: 'start',
     maxRuntimeMs: 0,
+    invocationAuthMode: 'Public',
     transitions: {
       start: { OnSuccess: null, OnFailure: null, OnException: null }
     },
     active: true
   };
+}
+
+function authModeLabel(value) {
+  return value === 'ApiAuthenticated' ? 'API auth' : 'Public';
+}
+
+function authModePillClass(value) {
+  return value === 'ApiAuthenticated' ? 'pill-warning' : 'pill-info';
+}
+
+function AuthModePill({ value }) {
+  const mode = value || 'Public';
+  return <span className={'pill ' + authModePillClass(mode)} title={mode === 'ApiAuthenticated' ? 'HTTP trigger invocation requires normal Tempo API authentication' : 'HTTP trigger invocation is allowed for anyone with the trigger URL'}>{authModeLabel(mode)}</span>;
+}
+
+function InvocationAuthSelector({ value, onChange }) {
+  const selected = value || 'Public';
+  const options = [
+    {
+      value: 'Public',
+      title: 'Public trigger URL',
+      badge: 'Public',
+      description: 'Anyone with the trigger ID can invoke this flow. Use for demos, webhooks, or gateway-protected routes.'
+    },
+    {
+      value: 'ApiAuthenticated',
+      title: 'Require API authentication',
+      badge: 'API auth',
+      description: 'Callers must send normal Tempo API credentials and have access to this tenant.'
+    }
+  ];
+
+  return (
+    <div className="auth-mode-options">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={'auth-mode-card' + (selected === option.value ? ' selected' : '')}
+          title={option.description}
+          onClick={() => onChange(option.value)}
+        >
+          <span className={'pill ' + authModePillClass(option.value)}>{option.badge}</span>
+          <span className="auth-mode-title">{option.title}</span>
+          <span className="auth-mode-description">{option.description}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function DataFlowsView({ apiClient, principal }) {
@@ -83,6 +133,7 @@ function DataFlowsView({ apiClient, principal }) {
   const columns = [
     { key: 'name', label: 'Name', tip: 'Flow name; can be referenced by triggers and from the Run page' },
     { key: 'startStepId', label: 'Start step', tip: 'The step identifier executed first when the flow runs', cellClass: 'monospace' },
+    { key: 'invocationAuthMode', label: 'Invocation', tip: 'Authentication required when this flow is invoked through an HTTP trigger', render: (f) => <AuthModePill value={f.invocationAuthMode} /> },
     { key: 'steps', label: 'Steps', tip: 'Number of step nodes defined in the transition graph', render: (f) => Object.keys(f.transitions || {}).length },
     { key: 'id', label: 'Identifier', tip: 'Globally unique flow id (prefix flow_)', render: (f) => <CopyableId value={f.id} /> },
     { key: 'createdUtc', label: 'Created', tip: 'When the flow was created', render: (f) => formatTime(f.createdUtc) },
@@ -144,6 +195,26 @@ function DataFlowsView({ apiClient, principal }) {
             <div className="form-row"><label title="Identifier (or name) of the step that runs first">Start step</label><input value={editing.startStepId || ''} placeholder="start" onChange={(e) => setEditing({ ...editing, startStepId: e.target.value })} /></div>
           </div>
           <div className="form-row"><label title="Optional human-readable description of the flow's purpose">Description</label><input value={editing.description || ''} placeholder="Validates the order, charges payment, and sends confirmation" onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
+          <div className="flow-settings-grid">
+            <div className="form-row">
+              <label title="Controls whether HTTP trigger invocation is public or requires normal Tempo API authentication">Invocation auth</label>
+              <InvocationAuthSelector value={editing.invocationAuthMode} onChange={(invocationAuthMode) => setEditing({ ...editing, invocationAuthMode })} />
+            </div>
+            <div className="flow-runtime-card">
+              <div className="form-row">
+                <label title="Flow-level runtime ceiling in milliseconds; 0 disables the flow timeout">Timeout (ms)</label>
+                <input type="number" min="0" value={editing.maxRuntimeMs || 0} placeholder="0" onChange={(e) => setEditing({ ...editing, maxRuntimeMs: parseInt(e.target.value || '0', 10) })} />
+                <div className="form-help">HTTP trigger calls wait up to the flow timeout plus a small server buffer.</div>
+              </div>
+              <label className="flow-active-toggle" title="Inactive flows reject new runs while existing runs continue to completion">
+                <input type="checkbox" checked={!!editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} style={{ width: 'auto' }} />
+                <span>
+                  <strong>Active</strong>
+                  <small>Accept new direct runs and trigger invocations</small>
+                </span>
+              </label>
+            </div>
+          </div>
 
           <div style={{ display: 'flex', gap: 4, marginBottom: 'var(--spacing-sm)' }}>
             <div className="range-selector">
@@ -177,8 +248,6 @@ function DataFlowsView({ apiClient, principal }) {
               {transitionsError && <div className="form-help" style={{ color: 'var(--color-danger)' }}>{transitionsError}</div>}
             </div>
           )}
-
-          <div className="form-row" style={{ marginTop: 'var(--spacing-sm)' }}><label title="Inactive flows reject new runs (existing runs continue to completion)"><input type="checkbox" checked={!!editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} style={{ width: 'auto' }} /> Active</label></div>
         </Modal>
       )}
 
