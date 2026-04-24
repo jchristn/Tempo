@@ -1,37 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import CopyButton from '../components/CopyButton';
 import CopyableId from '../components/CopyableId';
 import PageHeader from '../components/PageHeader';
 import TableFrame from '../components/TableFrame';
-import { formatTime } from '../utils/formatters';
+import { formatBytes, formatTime } from '../utils/formatters';
+import { normalizeApiError, translateLiteral } from '../utils/i18n';
 
-function normalizeError(err) {
-  if (!err) return 'Request failed.';
-  if (err.body) {
-    try {
-      const parsed = JSON.parse(err.body);
-      return parsed.message || parsed.details || err.message;
-    } catch {
-      return err.body;
-    }
-  }
-  return err.message || String(err);
-}
-
-function formatBytes(value) {
-  const n = Number(value || 0);
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
-  return (n / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-}
-
-function stateLabel(source) {
+function stateLabel(source, t) {
   if (!source) return '-';
-  if (source.sourceKind === 'server') return 'Online';
-  return source.state || (source.active ? 'Online' : 'Offline');
+  if (source.sourceKind === 'server') return translateLiteral(t, 'Online');
+  return source.state ? translateLiteral(t, source.state) : (source.active ? translateLiteral(t, 'Online') : translateLiteral(t, 'Offline'));
 }
 
 function sourceKey(sourceKind, sourceId) {
@@ -53,6 +34,8 @@ function updateSearch(navigate, location, updates) {
 }
 
 function LogsView({ apiClient, principal }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const navigate = useNavigate();
   const location = useLocation();
   const search = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -102,7 +85,7 @@ function LogsView({ apiClient, principal }) {
           if (fallback) updateSearch(navigate, location, { sourceKind: fallback.sourceKind, sourceId: fallback.sourceId, path: '' });
         }
       })
-      .catch((err) => { if (!cancelled) setError(normalizeError(err)); })
+      .catch((err) => { if (!cancelled) setError(normalizeApiError(err, t)); })
       .finally(() => { if (!cancelled) setLoadingSources(false); });
     return () => { cancelled = true; };
   }, [apiClient, isAdmin, navigate, location, selectedSourceKind, selectedSourceId, refreshKey]);
@@ -129,7 +112,7 @@ function LogsView({ apiClient, principal }) {
         if (cancelled) return;
         setFiles([]);
         setFileData(null);
-        setError(normalizeError(err));
+        setError(normalizeApiError(err, t));
       })
       .finally(() => { if (!cancelled) setLoadingFiles(false); });
     return () => { cancelled = true; };
@@ -154,7 +137,7 @@ function LogsView({ apiClient, principal }) {
       .catch((err) => {
         if (cancelled) return;
         setFileData(null);
-        setError(normalizeError(err));
+        setError(normalizeApiError(err, t));
       })
       .finally(() => { if (!cancelled) setLoadingContent(false); });
 
@@ -213,7 +196,7 @@ function LogsView({ apiClient, principal }) {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(normalizeError(err));
+      setError(normalizeApiError(err, t));
     }
   };
 
@@ -225,15 +208,15 @@ function LogsView({ apiClient, principal }) {
       refresh();
     } catch (err) {
       setDeleteTarget(null);
-      setError(normalizeError(err));
+      setError(normalizeApiError(err, t));
     }
   };
 
   if (!isAdmin) {
     return (
       <div>
-        <PageHeader title="Logs" subtitle="The log viewer is only available to administrators." />
-        <div className="login-error">This view is only available to administrators.</div>
+        <PageHeader title={tl('Logs')} subtitle={tl('The log viewer is only available to administrators.')} />
+        <div className="login-error">{tl('This view is only available to administrators.')}</div>
       </div>
     );
   }
@@ -241,52 +224,52 @@ function LogsView({ apiClient, principal }) {
   return (
     <div>
       <PageHeader
-        title="Logs"
-        subtitle="Browse server and worker log files, read bounded tails, download complete files, and clear or delete files from stable storage."
+        title={tl('Logs')}
+        subtitle={tl('Browse server and worker log files, read bounded tails, download complete files, and clear or delete files from stable storage.')}
       />
 
       <div className="logs-page-controls">
-        <label className="logs-page-source-picker" title="Select the server or worker log source to browse">
-          <span className="logs-page-controls-label">Source</span>
+        <label className="logs-page-source-picker" title={tl('Select the server or worker log source to browse')}>
+          <span className="logs-page-controls-label">{tl('Source')}</span>
           <select
             value={sourceKey(selectedSourceKind, selectedSourceId)}
             onChange={(e) => {
               const [sourceKind, sourceId] = e.target.value.split(':');
               updateSearch(navigate, location, { sourceKind, sourceId, path: '' });
             }}
-            title="Select a server or worker log source"
+            title={tl('Select a server or worker log source')}
           >
             {sources.map((source) => (
               <option key={sourceKey(source.sourceKind, source.sourceId)} value={sourceKey(source.sourceKind, source.sourceId)}>
-                {source.displayName} ({source.sourceKind})
+                {source.displayName} ({tl(source.sourceKind)})
               </option>
             ))}
           </select>
         </label>
-        <label className="logs-page-auto-refresh" title="Refresh the selected source and file every five seconds">
+        <label className="logs-page-auto-refresh" title={tl('Refresh the selected source and file every five seconds')}>
           <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} style={{ width: 'auto' }} />
-          Auto-refresh
+          {tl('Auto-refresh')}
         </label>
-        <button className="button-secondary" onClick={refresh} title="Refresh sources, files, and the selected file content">Refresh</button>
+        <button className="button-secondary" onClick={refresh} title={tl('Refresh sources, files, and the selected file content')}>{t('common.actions.refresh')}</button>
       </div>
 
       {error && <div className="login-error">{error}</div>}
 
       <div className="summary-tiles">
         <div className="summary-tile">
-          <div className="label">Source</div>
+          <div className="label">{tl('Source')}</div>
           <div className="value" style={{ fontSize: '1.2rem' }}>{selectedSource?.displayName || '-'}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">Source ID</div>
+          <div className="label">{tl('Source ID')}</div>
           <div className="value" style={{ fontSize: '1rem' }}>{selectedSource ? <CopyableId value={selectedSource.sourceId} max={18} /> : '-'}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">State</div>
-          <div className="value" style={{ fontSize: '1.2rem' }}>{stateLabel(selectedSource)}</div>
+          <div className="label">{tl('State')}</div>
+          <div className="value" style={{ fontSize: '1.2rem' }}>{stateLabel(selectedSource, t)}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">Files</div>
+          <div className="label">{tl('Files')}</div>
           <div className="value">{selectedSource?.fileCount ?? files.length}</div>
         </div>
       </div>
@@ -295,10 +278,10 @@ function LogsView({ apiClient, principal }) {
         <div className="logs-sidebar-panel">
           <div className="logs-panel-header">
             <div>
-              <div className="drawer-section-title">Files</div>
-              <div className="view-subtitle">Choose a log file from the selected source.</div>
-            </div>
-          </div>
+               <div className="drawer-section-title">{tl('Files')}</div>
+               <div className="view-subtitle">{tl('Choose a log file from the selected source.')}</div>
+             </div>
+           </div>
           <TableFrame
             columns={fileColumns}
             items={files}
@@ -309,7 +292,7 @@ function LogsView({ apiClient, principal }) {
             onPageSizeChange={(size) => { setPageSize(size); setPageNumber(1); }}
             onRefresh={refresh}
             loading={loadingSources || loadingFiles}
-            emptyMessage={selectedSource ? 'No log files are visible for this source.' : 'Loading sources...'}
+            emptyMessage={selectedSource ? tl('No log files are visible for this source.') : t('common.generic.loading')}
             onRowClick={(file) => updateSearch(navigate, location, { path: file.path })}
           />
         </div>
@@ -317,50 +300,50 @@ function LogsView({ apiClient, principal }) {
         <div className="log-viewer-panel">
           <div className="logs-panel-header">
             <div>
-              <div className="drawer-section-title">Viewer</div>
-              <div className="view-subtitle">{selectedFile ? 'Reading ' + selectedFile.fileName : 'Select a file to read its bounded tail.'}</div>
-            </div>
-            {selectedFile && (
-              <div className="log-viewer-toolbar">
-                <button className="button-secondary" onClick={() => runDownload(selectedFile)} title="Download the complete selected log file">Download</button>
-                <button className={selectedFile.isCurrent ? 'button-danger' : 'button-secondary'} onClick={() => setDeleteTarget(selectedFile)} title={selectedFile.isCurrent ? 'Clear the current log file by truncating it to zero bytes' : 'Delete this archived log file'}>
-                  {selectedFile.isCurrent ? 'Clear current log' : 'Delete file'}
-                </button>
-                <CopyButton value={fileData?.content || ''} title="Copy the current log viewer text to the clipboard" />
-              </div>
-            )}
-          </div>
+               <div className="drawer-section-title">{tl('Viewer')}</div>
+               <div className="view-subtitle">{selectedFile ? tl('Reading {{fileName}}', { fileName: selectedFile.fileName }) : tl('Select a file to read its bounded tail.')}</div>
+             </div>
+             {selectedFile && (
+               <div className="log-viewer-toolbar">
+                 <button className="button-secondary" onClick={() => runDownload(selectedFile)} title={tl('Download the complete selected log file')}>{t('common.actions.download')}</button>
+                 <button className={selectedFile.isCurrent ? 'button-danger' : 'button-secondary'} onClick={() => setDeleteTarget(selectedFile)} title={selectedFile.isCurrent ? tl('Clear the current log file by truncating it to zero bytes') : tl('Delete this archived log file')}>
+                   {selectedFile.isCurrent ? tl('Clear current log') : tl('Delete file')}
+                 </button>
+                 <CopyButton value={fileData?.content || ''} title={tl('Copy the current log viewer text to the clipboard')} />
+               </div>
+             )}
+           </div>
 
           <div className="filter-bar compact" style={{ marginBottom: 'var(--spacing-sm)' }}>
             <div className="field">
-              <label title="Maximum number of lines returned from the end of the file">Tail lines</label>
-              <input type="number" min="1" value={tailLines} onChange={(e) => setTailLines(e.target.value)} title="Maximum number of lines returned from the end of the file" />
+              <label title={tl('Maximum number of lines returned from the end of the file')}>{tl('Tail lines')}</label>
+              <input type="number" min="1" value={tailLines} onChange={(e) => setTailLines(e.target.value)} title={tl('Maximum number of lines returned from the end of the file')} />
             </div>
             <div className="field">
-              <label title="Maximum number of UTF-8 bytes returned in the viewer">Max bytes</label>
-              <input type="number" min="1" value={maxBytes} onChange={(e) => setMaxBytes(e.target.value)} title="Maximum number of UTF-8 bytes returned in the viewer" />
+              <label title={tl('Maximum number of UTF-8 bytes returned in the viewer')}>{tl('Max bytes')}</label>
+              <input type="number" min="1" value={maxBytes} onChange={(e) => setMaxBytes(e.target.value)} title={tl('Maximum number of UTF-8 bytes returned in the viewer')} />
             </div>
             <div style={{ display: 'flex', alignItems: 'end' }}>
-              <button className="button-secondary" onClick={refresh} style={{ width: '100%' }} title="Re-read the selected file using the current tail bounds">Re-read</button>
+              <button className="button-secondary" onClick={refresh} style={{ width: '100%' }} title={tl('Re-read the selected file using the current tail bounds')}>{tl('Re-read')}</button>
             </div>
           </div>
 
-          {!selectedFile && <div className="empty-state">Select a file from the list to read it.</div>}
+          {!selectedFile && <div className="empty-state">{tl('Select a file from the list to read it.')}</div>}
           {selectedFile && (
             <>
               <div className="logs-meta-strip">
-                <span title="Selected file path"><code className="monospace">{selectedFile.path}</code></span>
-                <span title="Current file size">{formatBytes(selectedFile.byteLength)}</span>
-                <span title="Last write time">{formatTime(selectedFile.lastModifiedUtc)}</span>
-                <span title="Delete behavior for this file">{selectedFile.deleteMode === 'Truncate' ? 'Clears current file' : 'Deletes archived file'}</span>
+                <span title={tl('Selected file path')}><code className="monospace">{selectedFile.path}</code></span>
+                <span title={tl('Current file size')}>{formatBytes(selectedFile.byteLength)}</span>
+                <span title={tl('Last write time')}>{formatTime(selectedFile.lastModifiedUtc)}</span>
+                <span title={tl('Delete behavior for this file')}>{selectedFile.deleteMode === 'Truncate' ? tl('Clears current file') : tl('Deletes archived file')}</span>
               </div>
               {fileData?.truncated && (
                 <div className="callout callout-warning">
-                  Viewer output is truncated to the last {fileData.tailLines} lines and {formatBytes(fileData.maxBytes)}.
+                  {tl('Viewer output is truncated to the last {{tailLines}} lines and {{maxBytes}}.', { tailLines: fileData.tailLines, maxBytes: formatBytes(fileData.maxBytes) })}
                 </div>
               )}
-              <div className="log-viewer-content" title="Bounded log text rendered in a monospace viewer">
-                {loadingContent ? 'Loading...' : fileData?.content || ''}
+              <div className="log-viewer-content" title={tl('Bounded log text rendered in a monospace viewer')}>
+                {loadingContent ? t('common.generic.loading') : fileData?.content || ''}
               </div>
             </>
           )}
@@ -370,15 +353,15 @@ function LogsView({ apiClient, principal }) {
       <ConfirmModal
         open={!!deleteTarget}
         danger={deleteTarget?.isCurrent}
-        title={deleteTarget?.isCurrent ? 'Clear current log' : 'Delete log file'}
+        title={deleteTarget?.isCurrent ? tl('Clear current log') : tl('Delete log file')}
         recordId={deleteTarget?.path || ''}
-        recordIdLabel="Path"
+        recordIdLabel={tl('Path')}
         message={
           deleteTarget?.isCurrent
-            ? 'Clear this current log file by truncating it to zero bytes? The running process can continue writing to the same path afterward.'
-            : 'Delete this archived log file from disk? This cannot be undone.'
+            ? tl('Clear this current log file by truncating it to zero bytes? The running process can continue writing to the same path afterward.')
+            : tl('Delete this archived log file from disk? This cannot be undone.')
         }
-        confirmLabel={deleteTarget?.isCurrent ? 'Clear' : 'Delete'}
+        confirmLabel={deleteTarget?.isCurrent ? t('common.actions.clear') : t('common.actions.delete')}
         onConfirm={confirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />

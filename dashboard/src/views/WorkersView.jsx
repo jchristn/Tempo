@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import ActivityChart from '../components/ActivityChart';
 import ConfirmModal from '../components/ConfirmModal';
@@ -10,6 +11,7 @@ import PageHeader from '../components/PageHeader';
 import RowActions from '../components/RowActions';
 import TableFrame from '../components/TableFrame';
 import { formatDuration, formatRelative, formatTime } from '../utils/formatters';
+import { normalizeApiError, translateLiteral } from '../utils/i18n';
 
 const WORKER_STATE_CLASS = {
   Online: 'pill-success',
@@ -83,26 +85,26 @@ function buildWorkerSummary(workers, rangeId) {
   };
 }
 
-function capabilitySummary(capabilities) {
+function capabilitySummary(capabilities, t) {
   const normalized = (capabilities || []).map((item) => {
     const runtimeKey = pick(item, 'runtimeKey', 'RuntimeKey', '');
     const sourceKind = pick(item, 'sourceKind', 'SourceKind', '');
     return [runtimeKey, sourceKind].filter(Boolean).join(' | ');
   }).filter(Boolean);
-  return normalized.length > 0 ? normalized.join(', ') : 'No advertised capabilities';
+  return normalized.length > 0 ? normalized.join(', ') : translateLiteral(t, 'No advertised capabilities');
 }
 
-function labelSummary(labels) {
-  return (labels || []).length > 0 ? labels.join(', ') : 'None';
+function labelSummary(labels, t) {
+  return (labels || []).length > 0 ? labels.join(', ') : translateLiteral(t, 'None');
 }
 
-function formatTaskTimeout(timeoutMs) {
+function formatTaskTimeout(timeoutMs, t) {
   const numeric = Number(timeoutMs || 0);
-  return numeric > 0 ? formatDuration(numeric) : 'Unlimited';
+  return numeric > 0 ? formatDuration(numeric) : translateLiteral(t, 'Unlimited');
 }
 
-function enabledLabel(enabled) {
-  return enabled ? 'Enabled' : 'Blocked';
+function enabledLabel(enabled, t) {
+  return enabled ? translateLiteral(t, 'Enabled') : translateLiteral(t, 'Blocked');
 }
 
 function enabledClass(enabled) {
@@ -110,6 +112,8 @@ function enabledClass(enabled) {
 }
 
 function WorkersView({ apiClient, principal }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const navigate = useNavigate();
   const isAdmin = !!principal?.isAdmin || principal?.type === 'administrator';
   const [data, setData] = useState(null);
@@ -162,7 +166,7 @@ function WorkersView({ apiClient, principal }) {
       setAllWorkers(all?.items || []);
     }).catch((err) => {
       if (!cancelled) {
-        setError(err.message);
+        setError(normalizeApiError(err, t));
         setData({ items: [], totalCount: 0 });
         setAllWorkers([]);
       }
@@ -215,7 +219,7 @@ function WorkersView({ apiClient, principal }) {
       }
       refresh();
     } catch (err) {
-      setError(err.message);
+      setError(normalizeApiError(err, t));
     } finally {
       setConfirmAction(null);
     }
@@ -231,7 +235,10 @@ function WorkersView({ apiClient, principal }) {
       key: 'state',
       label: 'State',
       tip: 'Current worker liveness state',
-      render: (worker) => <span className={'pill ' + stateClass(pick(worker, 'state', 'State', 'Offline'))}>{pick(worker, 'state', 'State', 'Offline')}</span>
+      render: (worker) => {
+        const state = pick(worker, 'state', 'State', 'Offline');
+        return <span className={'pill ' + stateClass(state)}>{tl(state)}</span>;
+      }
     },
     {
       key: 'name',
@@ -256,7 +263,7 @@ function WorkersView({ apiClient, principal }) {
       key: 'labels',
       label: 'Labels',
       tip: 'Placement labels used by LabelPinned scheduling',
-      render: (worker) => labelSummary(pick(worker, 'labels', 'Labels', []))
+      render: (worker) => labelSummary(pick(worker, 'labels', 'Labels', []), t)
     },
     {
       key: 'enabled',
@@ -264,7 +271,7 @@ function WorkersView({ apiClient, principal }) {
       tip: 'Whether this worker is allowed to connect and accept work',
       render: (worker) => {
         const enabled = !!pick(worker, 'enabled', 'Enabled', false);
-        return <span className={'pill ' + enabledClass(enabled)}>{enabledLabel(enabled)}</span>;
+        return <span className={'pill ' + enabledClass(enabled)}>{enabledLabel(enabled, t)}</span>;
       }
     },
     {
@@ -285,7 +292,7 @@ function WorkersView({ apiClient, principal }) {
       key: 'maxTaskTimeoutMs',
       label: 'Task timeout',
       tip: 'Worker-enforced assignment timeout. Zero means unlimited.',
-      render: (worker) => formatTaskTimeout(pick(worker, 'maxTaskTimeoutMs', 'MaxTaskTimeoutMs', 0))
+      render: (worker) => formatTaskTimeout(pick(worker, 'maxTaskTimeoutMs', 'MaxTaskTimeoutMs', 0), t)
     },
     {
       key: 'lastHeartbeatUtc',
@@ -324,8 +331,8 @@ function WorkersView({ apiClient, principal }) {
   if (!isAdmin) {
     return (
       <div>
-        <PageHeader title="Workers" subtitle="Worker management requires an administrator account." />
-        <div className="login-error">This view is only available to administrators.</div>
+        <PageHeader title={tl('Workers')} subtitle={tl('Worker management requires an administrator account.')} />
+        <div className="login-error">{tl('This view is only available to administrators.')}</div>
       </div>
     );
   }
@@ -333,12 +340,12 @@ function WorkersView({ apiClient, principal }) {
   return (
     <div>
       <PageHeader
-        title="Workers"
-        subtitle={'Inspect worker state, block or unblock nodes, drain or resume admission, and verify placement availability. ' + (data?.totalCount ?? 0) + ' worker(s) match the current filters.'}
+        title={tl('Workers')}
+        subtitle={tl('Inspect worker state, block or unblock nodes, drain or resume admission, and verify placement availability. {{count}} worker(s) match the current filters.', { count: data?.totalCount ?? 0 })}
         actions={(
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }} title="Refresh the worker list automatically every five seconds">
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }} title={tl('Refresh the worker list automatically every five seconds')}>
             <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} style={{ width: 'auto' }} />
-            Auto-refresh
+            {tl('Auto-refresh')}
           </label>
         )}
       />
@@ -350,53 +357,53 @@ function WorkersView({ apiClient, principal }) {
         rangeId={rangeId}
         onRangeChange={setRangeId}
         onRefresh={refresh}
-        title="Worker Heartbeat Recency"
-        totalLabel="Workers"
-        successLabel="Online"
-        failureLabel="Non-online"
-        successLegend="Workers currently online"
-        failureLegend="Workers currently offline, draining, or stale"
-        emptyMessage="No workers match the current filters."
+        title={tl('Worker Heartbeat Recency')}
+        totalLabel={tl('Workers')}
+        successLabel={tl('Online')}
+        failureLabel={tl('Non-online')}
+        successLegend={tl('Workers currently online')}
+        failureLegend={tl('Workers currently offline, draining, or stale')}
+        emptyMessage={tl('No workers match the current filters.')}
       />
 
       <div className="summary-tiles">
-        <div className="summary-tile"><div className="label">Workers</div><div className="value">{activitySummary.totalCount}</div></div>
-        <div className="summary-tile success"><div className="label">Online</div><div className="value">{activitySummary.totalSuccess}</div></div>
-        <div className="summary-tile danger"><div className="label">Blocked</div><div className="value">{allWorkers.filter((worker) => !pick(worker, 'enabled', 'Enabled', false)).length}</div></div>
-        <div className="summary-tile warning"><div className="label">Draining</div><div className="value">{allWorkers.filter((worker) => !!pick(worker, 'drainMode', 'DrainMode')).length}</div></div>
-        <div className="summary-tile"><div className="label">Active runs</div><div className="value">{allWorkers.reduce((sum, worker) => sum + Number(pick(worker, 'activeAssignmentCount', 'ActiveAssignmentCount', 0) || 0), 0)}</div></div>
+        <div className="summary-tile"><div className="label">{tl('Workers')}</div><div className="value">{activitySummary.totalCount}</div></div>
+        <div className="summary-tile success"><div className="label">{tl('Online')}</div><div className="value">{activitySummary.totalSuccess}</div></div>
+        <div className="summary-tile danger"><div className="label">{tl('Blocked')}</div><div className="value">{allWorkers.filter((worker) => !pick(worker, 'enabled', 'Enabled', false)).length}</div></div>
+        <div className="summary-tile warning"><div className="label">{tl('Draining')}</div><div className="value">{allWorkers.filter((worker) => !!pick(worker, 'drainMode', 'DrainMode')).length}</div></div>
+        <div className="summary-tile"><div className="label">{tl('Active runs')}</div><div className="value">{allWorkers.reduce((sum, worker) => sum + Number(pick(worker, 'activeAssignmentCount', 'ActiveAssignmentCount', 0) || 0), 0)}</div></div>
       </div>
 
       <div className="filter-bar compact" style={{ marginBottom: 'var(--spacing-sm)' }}>
         <div className="field">
-          <label title="Filter workers by current state">State</label>
+          <label title={tl('Filter workers by current state')}>{tl('State')}</label>
           <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setPageNumber(1); }}>
-            <option value="">Any</option>
-            <option value="Online">Online</option>
-            <option value="Offline">Offline</option>
-            <option value="Draining">Draining</option>
-            <option value="Stale">Stale</option>
+            <option value="">{tl('Any')}</option>
+            <option value="Online">{tl('Online')}</option>
+            <option value="Offline">{tl('Offline')}</option>
+            <option value="Draining">{tl('Draining')}</option>
+            <option value="Stale">{tl('Stale')}</option>
           </select>
         </div>
         <div className="field">
-          <label title="Filter workers by enabled flag">Enabled</label>
+          <label title={tl('Filter workers by enabled flag')}>{tl('Enabled')}</label>
           <select value={enabledFilter} onChange={(e) => { setEnabledFilter(e.target.value); setPageNumber(1); }}>
-            <option value="">Any</option>
-            <option value="true">Enabled</option>
-            <option value="false">Blocked</option>
+            <option value="">{tl('Any')}</option>
+            <option value="true">{tl('Enabled')}</option>
+            <option value="false">{tl('Blocked')}</option>
           </select>
         </div>
         <div className="field">
-          <label title="Filter workers by drain mode">Drain mode</label>
+          <label title={tl('Filter workers by drain mode')}>{tl('Drain mode')}</label>
           <select value={drainFilter} onChange={(e) => { setDrainFilter(e.target.value); setPageNumber(1); }}>
-            <option value="">Any</option>
-            <option value="true">Draining</option>
-            <option value="false">Admitting</option>
+            <option value="">{tl('Any')}</option>
+            <option value="true">{tl('Draining')}</option>
+            <option value="false">{tl('Admitting')}</option>
           </select>
         </div>
         <div className="field" style={{ minWidth: 220 }}>
-          <label title="Search by worker id, name, or host name">Search</label>
-          <input value={search} onChange={(e) => { setSearch(e.target.value); setPageNumber(1); }} placeholder="wrk_..., host, or name" />
+          <label title={tl('Search by worker id, name, or host name')}>{tl('Search')}</label>
+          <input value={search} onChange={(e) => { setSearch(e.target.value); setPageNumber(1); }} placeholder={tl('wrk_..., host, or name')} />
         </div>
         <div style={{ display: 'flex', alignItems: 'end' }}>
           <button
@@ -409,9 +416,9 @@ function WorkersView({ apiClient, principal }) {
               setPageNumber(1);
             }}
             style={{ width: '100%' }}
-            title="Clear all worker filters"
+            title={tl('Clear all worker filters')}
           >
-            Clear
+            {t('common.actions.clear')}
           </button>
         </div>
       </div>
@@ -433,13 +440,13 @@ function WorkersView({ apiClient, principal }) {
         <Modal
           open
           onClose={() => { setViewing(null); setTokenIssued(null); }}
-          title={'Worker - ' + pick(viewing, 'name', 'Name', pick(viewing, 'id', 'Id', ''))}
+          title={tl('Worker - {{name}}', { name: pick(viewing, 'name', 'Name', pick(viewing, 'id', 'Id', '')) })}
           size="drawer"
-          headerMeta={<ModalRecordId label="Worker ID" value={pick(viewing, 'id', 'Id', '')} />}
+          headerMeta={<ModalRecordId label={tl('Worker ID')} value={pick(viewing, 'id', 'Id', '')} />}
         >
           {tokenIssued && (
             <div className="callout callout-warning">
-              Token rotated for <strong>{pick(tokenIssued, 'workerId', 'WorkerId', '')}</strong>. Copy the plaintext token now; it will not be returned again.
+              {tl('Token rotated for {{workerId}}. Copy the plaintext token now; it will not be returned again.', { workerId: pick(tokenIssued, 'workerId', 'WorkerId', '') })}
               <div style={{ marginTop: 'var(--spacing-sm)' }}>
                 <CopyableId value={pick(tokenIssued, 'token', 'Token', '')} max={28} />
               </div>
@@ -448,128 +455,128 @@ function WorkersView({ apiClient, principal }) {
 
           <div className="summary-tiles">
             <div className="summary-tile">
-              <div className="label">State</div>
-              <div className="value" style={{ fontSize: '1.25rem' }}>{pick(viewing, 'state', 'State', '-')}</div>
+              <div className="label">{tl('State')}</div>
+              <div className="value" style={{ fontSize: '1.25rem' }}>{pick(viewing, 'state', 'State', '-') === '-' ? '-' : tl(pick(viewing, 'state', 'State', '-'))}</div>
             </div>
             <div className="summary-tile">
-              <div className="label">Active runs</div>
+              <div className="label">{tl('Active runs')}</div>
               <div className="value">{pick(viewing, 'activeAssignmentCount', 'ActiveAssignmentCount', 0)}</div>
             </div>
             <div className="summary-tile">
-              <div className="label">Max concurrency</div>
+              <div className="label">{tl('Max concurrency')}</div>
               <div className="value">{pick(viewing, 'maxConcurrentRuns', 'MaxConcurrentRuns', 0)}</div>
             </div>
             <div className="summary-tile">
-              <div className="label">Task timeout</div>
-              <div className="value">{formatTaskTimeout(pick(viewing, 'maxTaskTimeoutMs', 'MaxTaskTimeoutMs', 0))}</div>
+              <div className="label">{tl('Task timeout')}</div>
+              <div className="value">{formatTaskTimeout(pick(viewing, 'maxTaskTimeoutMs', 'MaxTaskTimeoutMs', 0), t)}</div>
             </div>
             <div className="summary-tile">
-              <div className="label">Admission</div>
-              <div className="value">{enabledLabel(!!pick(viewing, 'enabled', 'Enabled', false))}</div>
+              <div className="label">{tl('Admission')}</div>
+              <div className="value">{enabledLabel(!!pick(viewing, 'enabled', 'Enabled', false), t)}</div>
             </div>
             <div className="summary-tile">
-              <div className="label">Drain mode</div>
-              <div className="value">{pick(viewing, 'drainMode', 'DrainMode') ? 'On' : 'Off'}</div>
+              <div className="label">{tl('Drain mode')}</div>
+              <div className="value">{pick(viewing, 'drainMode', 'DrainMode') ? tl('On') : tl('Off')}</div>
             </div>
           </div>
 
           <div className="drawer-actions">
-            <button className="button-secondary" onClick={() => openLogs(viewing)} title="Open the dedicated log viewer for this worker">View logs</button>
+            <button className="button-secondary" onClick={() => openLogs(viewing)} title={tl('Open the dedicated log viewer for this worker')}>{tl('View logs')}</button>
             <button
               className={pick(viewing, 'enabled', 'Enabled', false) ? 'button-danger' : 'button-secondary'}
               onClick={() => setConfirmAction({ type: pick(viewing, 'enabled', 'Enabled', false) ? 'block' : 'unblock', worker: viewing })}
-              title={pick(viewing, 'enabled', 'Enabled', false) ? 'Block this worker, disconnect it, and deny future connections' : 'Allow this worker to connect and accept work again'}
+              title={pick(viewing, 'enabled', 'Enabled', false) ? tl('Block this worker, disconnect it, and deny future connections') : tl('Allow this worker to connect and accept work again')}
             >
-              {pick(viewing, 'enabled', 'Enabled', false) ? 'Block worker' : 'Unblock worker'}
+              {pick(viewing, 'enabled', 'Enabled', false) ? tl('Block worker') : tl('Unblock worker')}
             </button>
             <button
               className="button-secondary"
               onClick={() => setConfirmAction({ type: pick(viewing, 'drainMode', 'DrainMode') ? 'resume' : 'drain', worker: viewing })}
-              title={pick(viewing, 'drainMode', 'DrainMode') ? 'Allow this worker to admit new runs again' : 'Stop this worker from taking new runs while letting current runs finish'}
+              title={pick(viewing, 'drainMode', 'DrainMode') ? tl('Allow this worker to admit new runs again') : tl('Stop this worker from taking new runs while letting current runs finish')}
             >
-              {pick(viewing, 'drainMode', 'DrainMode') ? 'Resume worker' : 'Drain worker'}
+              {pick(viewing, 'drainMode', 'DrainMode') ? tl('Resume worker') : tl('Drain worker')}
             </button>
-            <button className="button-primary" onClick={() => setConfirmAction({ type: 'rotate-token', worker: viewing })} title="Issue a new worker token and invalidate the previous one immediately">Rotate token</button>
+            <button className="button-primary" onClick={() => setConfirmAction({ type: 'rotate-token', worker: viewing })} title={tl('Issue a new worker token and invalidate the previous one immediately')}>{tl('Rotate token')}</button>
           </div>
 
           <div className="drawer-section">
-            <div className="drawer-section-title">Identity</div>
+            <div className="drawer-section-title">{tl('Identity')}</div>
             <dl className="details-kv">
-              <dt>Worker ID</dt><dd><CopyableId value={pick(viewing, 'id', 'Id', '')} /></dd>
-              <dt>Name</dt><dd>{pick(viewing, 'name', 'Name', '-')}</dd>
-              <dt>Kind</dt><dd>{pick(viewing, 'kind', 'Kind', '-')}</dd>
-              <dt>Host</dt><dd>{pick(viewing, 'hostName', 'HostName', '-')}</dd>
-              <dt>Version</dt><dd>{pick(viewing, 'version', 'Version', '-')}</dd>
-              <dt>Enabled</dt><dd>{pick(viewing, 'enabled', 'Enabled') ? 'Yes' : 'No'}</dd>
-              <dt>Created</dt><dd>{formatTime(pick(viewing, 'createdUtc', 'CreatedUtc'))}</dd>
-              <dt>Last heartbeat</dt><dd>{formatTime(pick(viewing, 'lastHeartbeatUtc', 'LastHeartbeatUtc'))}</dd>
-              <dt>Token rotated</dt><dd>{formatTime(pick(viewing, 'tokenLastRotatedUtc', 'TokenLastRotatedUtc'))}</dd>
+              <dt>{tl('Worker ID')}</dt><dd><CopyableId value={pick(viewing, 'id', 'Id', '')} /></dd>
+              <dt>{tl('Name')}</dt><dd>{pick(viewing, 'name', 'Name', '-')}</dd>
+              <dt>{tl('Kind')}</dt><dd>{pick(viewing, 'kind', 'Kind', '-')}</dd>
+              <dt>{tl('Host')}</dt><dd>{pick(viewing, 'hostName', 'HostName', '-')}</dd>
+              <dt>{tl('Version')}</dt><dd>{pick(viewing, 'version', 'Version', '-')}</dd>
+              <dt>{tl('Enabled')}</dt><dd>{pick(viewing, 'enabled', 'Enabled') ? t('common.boolean.yes') : t('common.boolean.no')}</dd>
+              <dt>{tl('Created')}</dt><dd>{formatTime(pick(viewing, 'createdUtc', 'CreatedUtc'))}</dd>
+              <dt>{tl('Last heartbeat')}</dt><dd>{formatTime(pick(viewing, 'lastHeartbeatUtc', 'LastHeartbeatUtc'))}</dd>
+              <dt>{tl('Token rotated')}</dt><dd>{formatTime(pick(viewing, 'tokenLastRotatedUtc', 'TokenLastRotatedUtc'))}</dd>
             </dl>
           </div>
 
           <div className="drawer-section">
-            <div className="drawer-section-title">Placement</div>
+            <div className="drawer-section-title">{tl('Placement')}</div>
             <dl className="details-kv">
-              <dt>Max concurrency</dt><dd>{pick(viewing, 'maxConcurrentRuns', 'MaxConcurrentRuns', 0)}</dd>
-              <dt>Max task timeout</dt><dd>{formatTaskTimeout(pick(viewing, 'maxTaskTimeoutMs', 'MaxTaskTimeoutMs', 0))}</dd>
-              <dt>Labels</dt><dd>{labelSummary(pick(viewing, 'labels', 'Labels', []))}</dd>
-              <dt>Capabilities</dt><dd>{capabilitySummary(pick(viewing, 'capabilities', 'Capabilities', []))}</dd>
+              <dt>{tl('Max concurrency')}</dt><dd>{pick(viewing, 'maxConcurrentRuns', 'MaxConcurrentRuns', 0)}</dd>
+              <dt>{tl('Max task timeout')}</dt><dd>{formatTaskTimeout(pick(viewing, 'maxTaskTimeoutMs', 'MaxTaskTimeoutMs', 0), t)}</dd>
+              <dt>{tl('Labels')}</dt><dd>{labelSummary(pick(viewing, 'labels', 'Labels', []), t)}</dd>
+              <dt>{tl('Capabilities')}</dt><dd>{capabilitySummary(pick(viewing, 'capabilities', 'Capabilities', []), t)}</dd>
             </dl>
           </div>
 
           {pick(viewing, 'latestSession', 'LatestSession') && (
             <div className="drawer-section">
-              <div className="drawer-section-title">Latest session</div>
+              <div className="drawer-section-title">{tl('Latest session')}</div>
               <dl className="details-kv">
-                <dt>Session ID</dt><dd><CopyableId value={pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'id', 'Id', '')} /></dd>
-                <dt>Connected</dt><dd>{formatTime(pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'connectedUtc', 'ConnectedUtc'))}</dd>
-                <dt>Disconnected</dt><dd>{formatTime(pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'disconnectedUtc', 'DisconnectedUtc'))}</dd>
-                <dt>Disconnect reason</dt><dd>{pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'disconnectReason', 'DisconnectReason', '-')}</dd>
-                <dt>Protocol</dt><dd>{pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'protocolVersion', 'ProtocolVersion', '-')}</dd>
+                <dt>{tl('Session ID')}</dt><dd><CopyableId value={pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'id', 'Id', '')} /></dd>
+                <dt>{tl('Connected')}</dt><dd>{formatTime(pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'connectedUtc', 'ConnectedUtc'))}</dd>
+                <dt>{tl('Disconnected')}</dt><dd>{formatTime(pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'disconnectedUtc', 'DisconnectedUtc'))}</dd>
+                <dt>{tl('Disconnect reason')}</dt><dd>{pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'disconnectReason', 'DisconnectReason', '-')}</dd>
+                <dt>{tl('Protocol')}</dt><dd>{pick(pick(viewing, 'latestSession', 'LatestSession', {}), 'protocolVersion', 'ProtocolVersion', '-')}</dd>
               </dl>
             </div>
           )}
         </Modal>
       )}
 
-      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Worker JSON" />
+      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title={tl('Worker JSON')} />
 
       <ConfirmModal
         open={!!confirmAction}
         title={
           confirmAction?.type === 'rotate-token'
-            ? 'Rotate worker token'
+            ? tl('Rotate worker token')
             : confirmAction?.type === 'drain'
-              ? 'Drain worker'
+              ? tl('Drain worker')
               : confirmAction?.type === 'resume'
-                ? 'Resume worker'
+                ? tl('Resume worker')
                 : confirmAction?.type === 'block'
-                  ? 'Block worker'
-                  : 'Unblock worker'
+                  ? tl('Block worker')
+                  : tl('Unblock worker')
         }
         recordId={confirmAction?.worker?.id || ''}
-        recordIdLabel="Worker ID"
+        recordIdLabel={tl('Worker ID')}
         message={
           confirmAction?.type === 'rotate-token'
-            ? 'Issue a new worker token? The previous token stops working immediately.'
+            ? tl('Issue a new worker token? The previous token stops working immediately.')
             : confirmAction?.type === 'drain'
-              ? 'Set this worker to drain mode so it stops accepting new runs?'
+              ? tl('Set this worker to drain mode so it stops accepting new runs?')
               : confirmAction?.type === 'resume'
-                ? 'Resume this worker so it can accept new runs again?'
+                ? tl('Resume this worker so it can accept new runs again?')
                 : confirmAction?.type === 'block'
-                  ? 'Block this worker, disconnect any active session, and deny future connection attempts until it is unblocked?'
-                  : 'Unblock this worker so it can reconnect and accept new runs again?'
+                  ? tl('Block this worker, disconnect any active session, and deny future connection attempts until it is unblocked?')
+                  : tl('Unblock this worker so it can reconnect and accept new runs again?')
         }
         confirmLabel={
           confirmAction?.type === 'rotate-token'
-            ? 'Rotate token'
+            ? tl('Rotate token')
             : confirmAction?.type === 'drain'
-              ? 'Drain'
+              ? tl('Drain')
               : confirmAction?.type === 'resume'
-                ? 'Resume'
+                ? tl('Resume')
                 : confirmAction?.type === 'block'
-                  ? 'Block'
-                  : 'Unblock'
+                  ? tl('Block')
+                  : tl('Unblock')
         }
         onConfirm={() => runAction(confirmAction?.type, confirmAction?.worker)}
         onCancel={() => setConfirmAction(null)}

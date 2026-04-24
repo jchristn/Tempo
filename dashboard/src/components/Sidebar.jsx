@@ -1,41 +1,43 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { translateLiteral } from '../utils/i18n';
 
 const SECTIONS = [
   {
-    heading: 'Observability',
+    id: 'observability',
     items: [
-      { id: 'home', label: 'Home', icon: 'chart', tip: 'Activity and health at a glance' },
-      { id: 'requests', label: 'Request History', icon: 'list', tip: 'Every captured HTTP request, with bucketed activity chart' },
-      { id: 'explorer', label: 'API Explorer', icon: 'play', tip: 'Browse and exercise every endpoint discovered from /openapi.json' }
+      { id: 'home', icon: 'chart' },
+      { id: 'requests', icon: 'list' },
+      { id: 'explorer', icon: 'play' }
     ]
   },
   {
-    heading: 'Flows',
+    id: 'flows',
     items: [
-      { id: 'steps', label: 'Steps', icon: 'steps', tip: 'Create reusable units of work first' },
-      { id: 'flows', label: 'Data Flows', icon: 'flow', tip: 'Connect steps into an executable graph next' },
-      { id: 'triggers', label: 'Triggers', icon: 'trigger', tip: 'Create inbound entry points after a flow exists' },
-      { id: 'runs', label: 'Runs', icon: 'runs', tip: 'Review each execution and per-step timeline' },
-      { id: 'artifacts', label: 'Artifacts', icon: 'artifact', tip: 'Manage uploaded packages used by artifact-backed steps' },
-      { id: 'runtimes', label: 'Runtimes', icon: 'runtime', tip: 'Review runtime providers and tenant availability' }
+      { id: 'steps', icon: 'steps' },
+      { id: 'flows', icon: 'flow' },
+      { id: 'triggers', icon: 'trigger' },
+      { id: 'runs', icon: 'runs' },
+      { id: 'artifacts', icon: 'artifact' },
+      { id: 'runtimes', icon: 'runtime' }
     ]
   },
   {
-    heading: 'Administration',
+    id: 'administration',
     items: [
-      { id: 'tenants', label: 'Tenants', icon: 'tenant', tip: 'Top-level isolation boundary; owns users, flows, runs, etc.' },
-      { id: 'users', label: 'Users', icon: 'user', tip: 'Tenant-scoped login accounts and their role assignments' },
-      { id: 'credentials', label: 'Credentials', icon: 'key', tip: 'API access key / secret key pairs used by integrations' },
-      { id: 'roles', label: 'Roles', icon: 'shield', tip: 'Containers for granular permission grants' },
-      { id: 'permissions', label: 'Permissions', icon: 'lock', tip: 'Granular permit/deny rules over resource + operation pairs' }
+      { id: 'tenants', icon: 'tenant' },
+      { id: 'users', icon: 'user' },
+      { id: 'credentials', icon: 'key' },
+      { id: 'roles', icon: 'shield' },
+      { id: 'permissions', icon: 'lock' }
     ]
   },
   {
-    heading: 'System',
+    id: 'system',
     items: [
-      { id: 'workers', label: 'Workers', icon: 'workers', tip: 'Inspect worker state, placement labels, and drain or resume nodes' },
-      { id: 'logs', label: 'Logs', icon: 'list', tip: 'Browse server and worker log files, read bounded tails, and download or clear logs' },
-      { id: 'settings', label: 'Settings', icon: 'gear', tip: 'Server configuration and dashboard preferences' }
+      { id: 'workers', icon: 'workers' },
+      { id: 'logs', icon: 'list' },
+      { id: 'settings', icon: 'gear' }
     ]
   }
 ];
@@ -66,36 +68,39 @@ function Icon({ name }) {
 }
 
 function Sidebar({ activeSection, collapsed, onOpenSetupWizard }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
+
   return (
     <aside className="dashboard-sidebar">
       <div className="sidebar-brand">
-        <img src="/logo.png" alt="Tempo" />
-        <span>Tempo</span>
+        <img src="/logo.png" alt={t('common.appName')} />
+        <span>{t('common.appName')}</span>
       </div>
       <nav className="sidebar-nav">
         {SECTIONS.map((section) => (
-          <div key={section.heading}>
-            {!collapsed && <div className="sidebar-section">{section.heading}</div>}
+          <div key={section.id}>
+            {!collapsed && <div className="sidebar-section">{tl(t('navigation.sections.' + section.id))}</div>}
             {section.items.map((item) => (
               <Link
                 key={item.id}
                 to={'/dashboard/' + item.id}
                 className={'sidebar-item' + (activeSection === item.id ? ' active' : '')}
-                title={item.tip || item.label}
+                title={tl(t('navigation.items.' + item.id + '.tip'))}
               >
                 <Icon name={item.icon} />
-                <span className="label">{item.label}</span>
+                <span className="label">{tl(t('navigation.items.' + item.id + '.label'))}</span>
               </Link>
             ))}
           </div>
         ))}
       </nav>
       <div className="sidebar-footer">
-        <button type="button" className="sidebar-setup" onClick={onOpenSetupWizard} title="Open setup wizard">
+        <button type="button" className="sidebar-setup" onClick={onOpenSetupWizard} title={tl(t('navigation.openSetupWizard'))}>
           <Icon name="play" />
-          <span className="label">Setup wizard</span>
+          <span className="label">{tl(t('navigation.setupWizard'))}</span>
         </button>
-        <div className="sidebar-version" title={'Tempo version ' + APP_VERSION}>
+        <div className="sidebar-version" title={t('navigation.version', { version: APP_VERSION })}>
           <span className="label">v{APP_VERSION}</span>
         </div>
       </div>

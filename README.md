@@ -27,6 +27,7 @@ Tempo ships as:
 ## Highlights
 
 - Tenant-scoped CRUD for data flows, steps, triggers, runs, artifacts, users, credentials, roles, and permissions
+- Flow-level invocation auth modes so HTTP-triggered data flows can be public bearer-capability endpoints or require normal Tempo API authentication (`Public` vs `ApiAuthenticated`)
 - Runtime model that supports `Builtin.Class`, `Builtin.Method`, `External.Rest`, `Artifact.Process`, `Artifact.Python`, `Artifact.JavaScript`, `Artifact.DotnetProcess`, and `Host.Executable`
 - Source-step creation from the UI or API for Python, JavaScript, and C#
 - Mutable artifact packages with dashboard file browsing and in-place editing
@@ -37,6 +38,7 @@ Tempo ships as:
 - Admin log viewer for file-backed server and worker logs in the dashboard, REST API, MCP, and Postman
 - OpenAPI-backed API Explorer and MCP server for agent-driven automation
 - First-run setup wizard that creates and invokes example flows end to end
+- Dashboard internationalization across login, shell navigation, workspace headers, tables, filters, modals, and hover/help text, with locale selection, locale-aware formatting, generated locale resources, and audit enforcement for supported ship locales
 - K-sortable PrettyId identifiers with fixed prefixes and a maximum length of 32
 - Docker Compose deployment, image build scripts, and NuGet publish script
 
@@ -123,6 +125,50 @@ Helper scripts at the repository root:
 
 Flows reference steps by `executionKey`, not by step record ID. This keeps flow definitions stable even when the step row is edited or replaced.
 
+Each flow also controls how its HTTP trigger is invoked through `invocationAuthMode`:
+
+- `Public` - anyone with the trigger URL can invoke the flow
+- `ApiAuthenticated` - the caller must present normal Tempo API credentials and be allowed to act on the flow's tenant
+
+The dashboard surfaces this in the Data Flows workspace as explicit public versus API-authenticated trigger choices.
+
+## Dashboard Internationalization
+
+The dashboard now ships with operator-facing internationalization wired through the core UI surface:
+
+- language selection before authentication on the login page and after authentication in the topbar
+- persisted locale preference via `tempo.locale`
+- locale-aware formatting for dates, times, numbers, durations, byte sizes, booleans, and lists
+- localized workspace titles and subtitles, table headers, buttons, modal labels, filters, tooltips, status/enum chips, and shared navigation chrome
+- generated locale resources plus an audit test that fails CI if new raw localizable UI text or unsupported English fallback is introduced
+
+Supported ship locales in the dashboard selector are:
+
+- `en`
+- `es`
+- `zh-Hans`
+- `yue-Hant-HK`
+- `ja`
+- `de`
+- `fr`
+- `it`
+- `zh-Hant-TW`
+
+If product or operators refer to "Kanji" as a selector label, the locale registry treats it as an alias for `ja` rather than a separate language.
+
+## Authenticated And Public Data Flows
+
+Tempo supports two HTTP-trigger invocation modes at the data-flow level:
+
+| `invocationAuthMode` | Behavior | Typical use |
+| --- | --- | --- |
+| `Public` | Anyone with the trigger URL can invoke the flow | Webhooks, low-friction inbound automation, capability-URL patterns |
+| `ApiAuthenticated` | Caller must supply standard Tempo API credentials and have access to the flow tenant | Internal automations, tenant-private flows, operator-driven integrations |
+
+The generated `curl` guidance in the dashboard follows the selected mode. Public flows generate a bare trigger call, while API-authenticated flows add an `Authorization: Bearer ...` header placeholder.
+
+This distinction is carried through the dashboard UX: the Data Flows workspace exposes the run policy explicitly, the API Explorer and trigger guidance reflect the expected auth shape, and route-level docs call out whether a trigger should be treated as a capability URL or a tenant-authenticated endpoint.
+
 ## Runtime Keys
 
 | Runtime key | Purpose |
@@ -158,7 +204,7 @@ The dashboard opens a setup wizard on first access. The wizard explains what Tem
 
 Every workspace in the dashboard includes a page title and subtitle, and sidebar scrolling is independent from workspace scrolling.
 
-## HTTP Trigger Response Contract
+## HTTP Trigger Invocation And Response Contract
 
 HTTP trigger routes are:
 
@@ -236,6 +282,11 @@ Additional operator and implementation guides:
 - [docs/INLINE_REST_MIGRATION.md](docs/INLINE_REST_MIGRATION.md)
 - [docs/DASHBOARD_ARTIFACTS_RUNTIMES.md](docs/DASHBOARD_ARTIFACTS_RUNTIMES.md)
 
+Archived planning docs:
+
+- [archive/I18N.md](archive/I18N.md)
+- [archive/SCALE.md](archive/SCALE.md)
+
 OpenAPI is exposed at:
 
 ```text
@@ -291,6 +342,7 @@ That script packs and pushes:
 | `sdk/python` | Python SDK and test app |
 | `docker` | Compose file and container config |
 | `docs` | Focused operator and developer guides |
+| `archive` | Superseded planning notes and archived implementation docs |
 
 ## Technology Stack
 
@@ -302,6 +354,7 @@ That script packs and pushes:
 | [React 19](https://react.dev/) | Component model for the dashboard UI |
 | [React Router 7](https://reactrouter.com/) | Client-side routing for dashboard workspaces and navigation |
 | [Vite 6](https://vite.dev/) | Dashboard development server and production build toolchain |
+| [i18next](https://www.i18next.com/) and [react-i18next](https://react.i18next.com/) | Dashboard internationalization, locale detection, translation lookup, and locale-aware UI wiring |
 | [Microsoft.Data.Sqlite](https://www.nuget.org/packages/Microsoft.Data.Sqlite/) | SQLite persistence provider for local and lightweight Tempo deployments |
 | [Microsoft.Data.SqlClient](https://www.nuget.org/packages/Microsoft.Data.SqlClient/) | SQL Server persistence provider |
 | [Npgsql](https://www.nuget.org/packages/Npgsql/) | PostgreSQL persistence provider |

@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "generate:i18n": "python scripts/generate_i18n_resources.py",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
+    "i18next": "^26.0.7",
+    "i18next-browser-languagedetector": "^8.2.1",
+    "i18next-icu": "^2.4.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-i18next": "^17.0.4",
     "react-router-dom": "^7.1.0"
   },
   "devDependencies": {
@@ -20,8 +25,7 @@
     "@testing-library/user-event": "^14.6.1",
     "@vitejs/plugin-react": "^4.3.0",
     "jsdom": "^26.1.0",
-    "vite": "^6.0.0"
-    ,
+    "vite": "^6.0.0",
     "vitest": "^2.1.9"
   }
 }

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import PageHeader from '../components/PageHeader';
 import TableFrame from '../components/TableFrame';
 import Modal from '../components/Modal';
@@ -9,6 +11,7 @@ import JsonViewerModal from '../components/JsonViewerModal';
 import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
+import { normalizeApiError, translateLiteral } from '../utils/i18n';
 
 const REST = 'External.Rest';
 const ARTIFACT_PROCESS = 'Artifact.Process';
@@ -128,7 +131,14 @@ function editStep(step) {
 function parseJsonObject(text, label) {
   if (!text || !text.trim()) return {};
   const value = JSON.parse(text);
-  if (!value || Array.isArray(value) || typeof value !== 'object') throw new Error(label + ' must be a JSON object.');
+  if (!value || Array.isArray(value) || typeof value !== 'object') {
+    const resolvedLabel = translateLiteral(i18n.t.bind(i18n), label);
+    throw new Error(i18n.t('The value for "{{label}}" must be a JSON object.', {
+      defaultValue: `The value for "${resolvedLabel}" must be a JSON object.`,
+      keySeparator: false,
+      label: resolvedLabel
+    }));
+  }
   return value;
 }
 
@@ -152,17 +162,6 @@ function runtimePill(runtimeKey) {
 
 function availabilityPill(availability) {
   return availability === 'Available' ? 'pill-success' : availability === 'DisabledBySettings' ? 'pill-warning' : 'pill-neutral';
-}
-
-function normalizeError(err) {
-  if (!err) return 'Request failed.';
-  if (err.body) {
-    try {
-      const parsed = JSON.parse(err.body);
-      return parsed.message || parsed.details || err.message;
-    } catch { return err.body; }
-  }
-  return err.message || String(err);
 }
 
 function registeredIdentifierSet(registered) {
@@ -201,6 +200,8 @@ function normalizeDescriptorConfig(config, descriptor) {
 }
 
 function StepsView({ apiClient, principal }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const [tenantId, setTenantId] = useState(principal?.tenantId || '');
   const [data, setData] = useState(null);
   const [registered, setRegistered] = useState([]);
@@ -307,7 +308,7 @@ function StepsView({ apiClient, principal }) {
       setEditing(null);
       refresh();
     } catch (err) {
-      setFormError(normalizeError(err));
+      setFormError(normalizeApiError(err, t));
     }
   };
 
@@ -344,7 +345,7 @@ function StepsView({ apiClient, principal }) {
       setSourceEditing(null);
       refresh();
     } catch (err) {
-      setSourceError(normalizeError(err));
+      setSourceError(normalizeApiError(err, t));
     } finally {
       setSourceSaving(false);
     }
@@ -355,12 +356,12 @@ function StepsView({ apiClient, principal }) {
     { key: 'executionKey', label: 'Execution key', tip: 'Stable key used by flow transitions', render: (s) => s.executionKey || s.name },
     { key: 'runtimeKey', label: 'Runtime', tip: 'Runtime provider used to execute this step', render: (s) => (
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-        <span className={'pill ' + runtimePill(String(s.runtimeKey))}>{String(s.runtimeKey || s.stepType)}</span>
-        {isOrphanedBuiltin(s, registeredIds) && <span className="pill pill-danger" title="No matching in-process registration is available">Orphaned</span>}
-        {s.runtimeBindingState === 'Ambiguous' && <span className="pill pill-warning" title="More than one built-in registration matched this step">Ambiguous</span>}
+        <span className={'pill ' + runtimePill(String(s.runtimeKey))}>{tl(String(s.runtimeKey || s.stepType))}</span>
+        {isOrphanedBuiltin(s, registeredIds) && <span className="pill pill-danger" title={tl('No matching in-process registration is available')}>{tl('Orphaned')}</span>}
+        {s.runtimeBindingState === 'Ambiguous' && <span className="pill pill-warning" title={tl('More than one built-in registration matched this step')}>{tl('Ambiguous')}</span>}
       </div>
     ) },
-    { key: 'artifactId', label: 'Artifact', tip: 'Artifact referenced by artifact-backed runtimes', render: (s) => s.artifactId ? <CopyableId value={s.artifactId} /> : '-' },
+    { key: 'artifactId', label: 'Artifact', tip: 'Artifact referenced by artifact-backed runtimes', render: (s) => s.artifactId ? <CopyableId value={s.artifactId} /> : t('common.placeholders.dash') },
     { key: 'maxRuntimeMs', label: 'Timeout', tip: 'Per-step timeout in milliseconds', render: (s) => s.maxRuntimeMs ? s.maxRuntimeMs + ' ms' : '-' },
     { key: 'id', label: 'Identifier', tip: 'Globally unique step id', render: (s) => <CopyableId value={s.id} /> },
     { key: 'createdUtc', label: 'Created', tip: 'When the step was created', render: (s) => formatTime(s.createdUtc) },
@@ -379,22 +380,25 @@ function StepsView({ apiClient, principal }) {
   return (
     <div>
       <PageHeader
-        title="Steps"
-        subtitle={'Create reusable work units first, then wire them into data flows. ' + (data?.totalCount ?? '-') + ' persisted | ' + registered.length + ' registered in-process.'}
+        title={tl('Steps')}
+        subtitle={tl('Create reusable work units first, then wire them into data flows. {{persisted}} persisted | {{registered}} registered in-process.', {
+          persisted: data?.totalCount ?? 0,
+          registered: registered.length
+        })}
         actions={
           <>
             <TenantPicker apiClient={apiClient} value={tenantId} onChange={setTenantId} />
-            <button className="button-secondary" onClick={() => { setEditing(newStep()); setFormError(''); }}>+ Config step</button>
-            <button className="button-primary" onClick={() => { setSourceEditing(newSourceStep()); setSourceError(''); }}>+ Step from code</button>
+            <button className="button-secondary" onClick={() => { setEditing(newStep()); setFormError(''); }}>{tl('+ Config step')}</button>
+            <button className="button-primary" onClick={() => { setSourceEditing(newSourceStep()); setSourceError(''); }}>{tl('+ Step from code')}</button>
           </>
         }
       />
 
       {registered.length > 0 && (
-        <div className="card" style={{ marginBottom: 'var(--spacing-md)' }} title="Code-based steps registered at server startup">
-          <div className="card-title" style={{ marginBottom: 'var(--spacing-sm)' }}>Registered steps</div>
+        <div className="card" style={{ marginBottom: 'var(--spacing-md)' }} title={tl('Code-based steps registered at server startup')}>
+          <div className="card-title" style={{ marginBottom: 'var(--spacing-sm)' }}>{tl('Registered steps')}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--spacing-sm)' }}>
-            {registered.map((s) => <div key={s.identifier} className="pill pill-info" title="Registered in-process">{s.identifier}</div>)}
+            {registered.map((s) => <div key={s.identifier} className="pill pill-info" title={tl('Registered in-process')}>{s.identifier}</div>)}
           </div>
         </div>
       )}
@@ -418,39 +422,39 @@ function StepsView({ apiClient, principal }) {
         <Modal
           open
           onClose={() => setEditing(null)}
-          title={editing.id ? 'Edit step' : 'Create step'}
-          headerMeta={<ModalRecordId label="Step ID" value={editing.id} />}
+          title={editing.id ? tl('Edit step') : tl('Create step')}
+          headerMeta={<ModalRecordId label={tl('Step ID')} value={editing.id} />}
           footer={<>
-            <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
-            <button className="button-primary" onClick={save}>Save</button>
+            <button className="button-secondary" onClick={() => setEditing(null)}>{t('common.actions.cancel')}</button>
+            <button className="button-primary" onClick={save}>{t('common.actions.save')}</button>
           </>}
         >
           {formError && <div className="login-error">{formError}</div>}
 
           <div className="grid-2">
-            <div className="form-row"><label title="Stable key referenced by flow transitions">Execution key</label><input value={editing.executionKey || ''} placeholder="validate_order" onChange={(e) => setEditing({ ...editing, executionKey: e.target.value })} /></div>
-            <div className="form-row"><label title="Display name">Name</label><input value={editing.name || ''} placeholder="Validate Order" onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Stable key referenced by flow transitions')}>{tl('Execution key')}</label><input value={editing.executionKey || ''} placeholder="validate_order" onChange={(e) => setEditing({ ...editing, executionKey: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Display name')}>{tl('Name')}</label><input value={editing.name || ''} placeholder={tl('Validate Order')} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
           </div>
-          <div className="form-row"><label title="Optional description">Description</label><input value={editing.description || ''} placeholder="Validate order payload" onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
+          <div className="form-row"><label title={tl('Optional description')}>{tl('Description')}</label><input value={editing.description || ''} placeholder={tl('Validate order payload')} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
 
           <div className="grid-2">
             <div className="form-row">
-              <label title="Runtime provider">Runtime</label>
+              <label title={tl('Runtime provider')}>{tl('Runtime')}</label>
               <select value={editing.runtimeKey || REST} onChange={(e) => setRuntimeKey(e.target.value)}>
                 {(runtimes.length ? runtimes : [{ runtimeKey: REST, displayName: 'External REST', availability: 'Available' }]).map((runtime) => (
                   <option key={String(runtime.runtimeKey)} value={String(runtime.runtimeKey)}>
-                    {runtime.displayName || String(runtime.runtimeKey)} ({runtime.availability || 'Available'})
+                    {tl(runtime.displayName || String(runtime.runtimeKey))} ({tl(runtime.availability || 'Available')})
                   </option>
                 ))}
               </select>
               {selectedRuntime && (
                 <div className="form-help">
-                  <span className={'pill ' + availabilityPill(selectedRuntime.availability)}>{selectedRuntime.availability}</span>
-                  {' '}{selectedRuntime.securityNotes || selectedRuntime.description}
+                  <span className={'pill ' + availabilityPill(selectedRuntime.availability)}>{tl(selectedRuntime.availability)}</span>
+                  {' '}{tl(selectedRuntime.securityNotes || selectedRuntime.description || '')}
                 </div>
               )}
             </div>
-            <div className="form-row"><label title="Per-step runtime ceiling in milliseconds">Timeout (ms)</label><input type="number" value={editing.maxRuntimeMs || 0} placeholder="0" onChange={(e) => setEditing({ ...editing, maxRuntimeMs: parseInt(e.target.value || '0', 10) })} /></div>
+            <div className="form-row"><label title={tl('Per-step runtime ceiling in milliseconds')}>{tl('Timeout (ms)')}</label><input type="number" value={editing.maxRuntimeMs || 0} placeholder="0" onChange={(e) => setEditing({ ...editing, maxRuntimeMs: parseInt(e.target.value || '0', 10) })} /></div>
           </div>
 
           {editing.runtimeKey === REST && <RestFields config={editing.runtimeConfig || defaultConfig(REST)} updateConfig={updateConfig} />}
@@ -471,117 +475,117 @@ function StepsView({ apiClient, principal }) {
 
           <div className="grid-2">
             <div className="form-row">
-              <label title="Contract validation mode">Contract</label>
+              <label title={tl('Contract validation mode')}>{tl('Contract')}</label>
               <select value={editing.contractType || 'Loose'} onChange={(e) => setEditing({ ...editing, contractType: e.target.value })}>
-                <option value="Loose">Loose</option>
-                <option value="Schema">Schema</option>
+                <option value="Loose">{tl('Loose')}</option>
+                <option value="Schema">{tl('Schema')}</option>
               </select>
             </div>
             <div className="form-row">
-              <label title="Inactive steps do not run normally">Active</label>
+              <label title={tl('Inactive steps do not run normally')}>{tl('Active')}</label>
               <select value={editing.active === false ? 'false' : 'true'} onChange={(e) => setEditing({ ...editing, active: e.target.value === 'true' })}>
-                <option value="true">Active</option>
-                <option value="false">Inactive</option>
+                <option value="true">{tl('Active')}</option>
+                <option value="false">{tl('Inactive')}</option>
               </select>
             </div>
           </div>
 
           <div className="grid-2">
             <div className="form-row">
-              <label title="Optional JSON schema for input">Input schema</label>
+              <label title={tl('Optional JSON schema for input')}>{tl('Input schema')}</label>
               <textarea rows={4} value={editing.inputSchema || ''} placeholder='{"type":"object"}' onChange={(e) => setEditing({ ...editing, inputSchema: e.target.value })} style={{ fontFamily: 'var(--font-mono)' }} />
-              <label className="form-help"><input type="checkbox" checked={!!editing.validateInput} onChange={(e) => setEditing({ ...editing, validateInput: e.target.checked })} style={{ width: 'auto' }} /> Validate input</label>
+              <label className="form-help"><input type="checkbox" checked={!!editing.validateInput} onChange={(e) => setEditing({ ...editing, validateInput: e.target.checked })} style={{ width: 'auto' }} /> {tl('Validate input')}</label>
             </div>
             <div className="form-row">
-              <label title="Optional JSON schema for output">Output schema</label>
+              <label title={tl('Optional JSON schema for output')}>{tl('Output schema')}</label>
               <textarea rows={4} value={editing.outputSchema || ''} placeholder='{"type":"object"}' onChange={(e) => setEditing({ ...editing, outputSchema: e.target.value })} style={{ fontFamily: 'var(--font-mono)' }} />
-              <label className="form-help"><input type="checkbox" checked={!!editing.validateOutput} onChange={(e) => setEditing({ ...editing, validateOutput: e.target.checked })} style={{ width: 'auto' }} /> Validate output</label>
+              <label className="form-help"><input type="checkbox" checked={!!editing.validateOutput} onChange={(e) => setEditing({ ...editing, validateOutput: e.target.checked })} style={{ width: 'auto' }} /> {tl('Validate output')}</label>
             </div>
           </div>
         </Modal>
       )}
 
       {sourceEditing && (
-        <Modal open onClose={() => setSourceEditing(null)} title="Create step from code"
+        <Modal open onClose={() => setSourceEditing(null)} title={tl('Create step from code')}
           footer={<>
-            <button className="button-secondary" onClick={() => setSourceEditing(null)}>Cancel</button>
-            <button className="button-primary" onClick={saveSource} disabled={sourceSaving}>{sourceSaving ? 'Creating...' : 'Create source step'}</button>
+            <button className="button-secondary" onClick={() => setSourceEditing(null)}>{t('common.actions.cancel')}</button>
+            <button className="button-primary" onClick={saveSource} disabled={sourceSaving}>{sourceSaving ? tl('Creating...') : tl('Create source step')}</button>
           </>}>
           {sourceError && <div className="login-error">{sourceError}</div>}
 
           <div className="grid-2">
-            <div className="form-row"><label title="Stable key referenced by flow transitions">Execution key</label><input value={sourceEditing.executionKey || ''} placeholder="transform_order" onChange={(e) => setSourceEditing({ ...sourceEditing, executionKey: e.target.value })} /></div>
-            <div className="form-row"><label title="Display name">Name</label><input value={sourceEditing.name || ''} placeholder="Transform Order" onChange={(e) => setSourceEditing({ ...sourceEditing, name: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Stable key referenced by flow transitions')}>{tl('Execution key')}</label><input value={sourceEditing.executionKey || ''} placeholder="transform_order" onChange={(e) => setSourceEditing({ ...sourceEditing, executionKey: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Display name')}>{tl('Name')}</label><input value={sourceEditing.name || ''} placeholder={tl('Transform Order')} onChange={(e) => setSourceEditing({ ...sourceEditing, name: e.target.value })} /></div>
           </div>
-          <div className="form-row"><label title="Optional description">Description</label><input value={sourceEditing.description || ''} placeholder="Transforms the incoming payload" onChange={(e) => setSourceEditing({ ...sourceEditing, description: e.target.value })} /></div>
+          <div className="form-row"><label title={tl('Optional description')}>{tl('Description')}</label><input value={sourceEditing.description || ''} placeholder={tl('Transforms the incoming payload')} onChange={(e) => setSourceEditing({ ...sourceEditing, description: e.target.value })} /></div>
 
           <div className="grid-2">
             <div className="form-row">
-              <label title="Source language">Language</label>
+              <label title={tl('Source language')}>{tl('Language')}</label>
               <select value={sourceEditing.language} onChange={(e) => setSourceLanguage(e.target.value)}>
-                <option value="JavaScript">JavaScript</option>
-                <option value="Python">Python</option>
-                <option value="CSharp">C#</option>
+                <option value="JavaScript">{tl('JavaScript')}</option>
+                <option value="Python">{tl('Python')}</option>
+                <option value="CSharp">{tl('C#')}</option>
               </select>
             </div>
-            <div className="form-row"><label title="Generated artifact package name">Artifact name</label><input value={sourceEditing.artifactName || ''} placeholder="Transform Order source package" onChange={(e) => setSourceEditing({ ...sourceEditing, artifactName: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Generated artifact package name')}>{tl('Artifact name')}</label><input value={sourceEditing.artifactName || ''} placeholder={tl('Transform Order source package')} onChange={(e) => setSourceEditing({ ...sourceEditing, artifactName: e.target.value })} /></div>
           </div>
 
           <div className="grid-2">
-            <div className="form-row"><label title="Source file name in the generated artifact">File name</label><input value={sourceEditing.fileName || ''} onChange={(e) => setSourceEditing({ ...sourceEditing, fileName: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Source file name in the generated artifact')}>{tl('File name')}</label><input value={sourceEditing.fileName || ''} onChange={(e) => setSourceEditing({ ...sourceEditing, fileName: e.target.value })} /></div>
           </div>
 
           <div className="grid-2">
-            <div className="form-row"><label title="Manifest entrypoint name">Entrypoint</label><input value={sourceEditing.entrypoint || 'main'} onChange={(e) => setSourceEditing({ ...sourceEditing, entrypoint: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Manifest entrypoint name')}>{tl('Entrypoint')}</label><input value={sourceEditing.entrypoint || 'main'} onChange={(e) => setSourceEditing({ ...sourceEditing, entrypoint: e.target.value })} /></div>
             {sourceEditing.language === 'CSharp' ? (
-              <div className="form-row"><label title="C# handler type implementing Tempo.Protocol.ITempoStepHandler or inheriting Tempo.Protocol.TempoStepHandlerBase">Handler type</label><input value={sourceEditing.handlerType || ''} onChange={(e) => setSourceEditing({ ...sourceEditing, handlerType: e.target.value })} /></div>
+              <div className="form-row"><label title={tl('C# handler type implementing Tempo.Protocol.ITempoStepHandler or inheriting Tempo.Protocol.TempoStepHandlerBase')}>{tl('Handler type')}</label><input value={sourceEditing.handlerType || ''} onChange={(e) => setSourceEditing({ ...sourceEditing, handlerType: e.target.value })} /></div>
             ) : (
-              <div className="form-row"><label title="Function/export called when the step runs">Function</label><input value={sourceEditing.function || 'run'} onChange={(e) => setSourceEditing({ ...sourceEditing, function: e.target.value })} /></div>
+              <div className="form-row"><label title={tl('Function/export called when the step runs')}>{tl('Function')}</label><input value={sourceEditing.function || 'run'} onChange={(e) => setSourceEditing({ ...sourceEditing, function: e.target.value })} /></div>
             )}
           </div>
 
           {(sourceEditing.language === 'Python' || sourceEditing.language === 'JavaScript') && (
-            <div className="form-row"><label title="Optional module override; defaults from file name">Module</label><input value={sourceEditing.module || ''} placeholder={sourceEditing.language === 'Python' ? 'handler' : 'handler.js'} onChange={(e) => setSourceEditing({ ...sourceEditing, module: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Optional module override; defaults from file name')}>{tl('Module')}</label><input value={sourceEditing.module || ''} placeholder={sourceEditing.language === 'Python' ? 'handler' : 'handler.js'} onChange={(e) => setSourceEditing({ ...sourceEditing, module: e.target.value })} /></div>
           )}
 
           <div className="form-row">
-            <label title="Complete source file contents">Source code</label>
+            <label title={tl('Complete source file contents')}>{tl('Source code')}</label>
             <textarea rows={14} value={sourceEditing.code || ''} onChange={(e) => setSourceEditing({ ...sourceEditing, code: e.target.value })} spellCheck={false} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }} />
-            <div className="form-help">Python and JavaScript functions receive the StepRequest object. C# handlers should inherit <code>TempoStepHandlerBase</code> or implement <code>ITempoStepHandler</code>.</div>
+            <div className="form-help">{tl('Python and JavaScript functions receive the StepRequest object. C# handlers should inherit')} <code>TempoStepHandlerBase</code> {tl('or implement')} <code>ITempoStepHandler</code>.</div>
           </div>
 
           <div className="grid-2">
             <div className="form-row">
-              <label title="Contract validation mode">Contract</label>
+              <label title={tl('Contract validation mode')}>{tl('Contract')}</label>
               <select value={sourceEditing.contractType || 'Loose'} onChange={(e) => setSourceEditing({ ...sourceEditing, contractType: e.target.value })}>
-                <option value="Loose">Loose</option>
-                <option value="Schema">Schema</option>
+                <option value="Loose">{tl('Loose')}</option>
+                <option value="Schema">{tl('Schema')}</option>
               </select>
             </div>
-            <div className="form-row"><label title="Per-step runtime ceiling in milliseconds">Timeout (ms)</label><input type="number" value={sourceEditing.maxRuntimeMs || 0} placeholder="0" onChange={(e) => setSourceEditing({ ...sourceEditing, maxRuntimeMs: parseInt(e.target.value || '0', 10) })} /></div>
+            <div className="form-row"><label title={tl('Per-step runtime ceiling in milliseconds')}>{tl('Timeout (ms)')}</label><input type="number" value={sourceEditing.maxRuntimeMs || 0} placeholder="0" onChange={(e) => setSourceEditing({ ...sourceEditing, maxRuntimeMs: parseInt(e.target.value || '0', 10) })} /></div>
           </div>
 
           <div className="grid-2">
             <div className="form-row">
-              <label title="Optional JSON schema for input">Input schema</label>
+              <label title={tl('Optional JSON schema for input')}>{tl('Input schema')}</label>
               <textarea rows={4} value={sourceEditing.inputSchema || ''} placeholder='{"type":"object"}' onChange={(e) => setSourceEditing({ ...sourceEditing, inputSchema: e.target.value })} style={{ fontFamily: 'var(--font-mono)' }} />
-              <label className="form-help"><input type="checkbox" checked={!!sourceEditing.validateInput} onChange={(e) => setSourceEditing({ ...sourceEditing, validateInput: e.target.checked })} style={{ width: 'auto' }} /> Validate input</label>
+              <label className="form-help"><input type="checkbox" checked={!!sourceEditing.validateInput} onChange={(e) => setSourceEditing({ ...sourceEditing, validateInput: e.target.checked })} style={{ width: 'auto' }} /> {tl('Validate input')}</label>
             </div>
             <div className="form-row">
-              <label title="Optional JSON schema for output">Output schema</label>
+              <label title={tl('Optional JSON schema for output')}>{tl('Output schema')}</label>
               <textarea rows={4} value={sourceEditing.outputSchema || ''} placeholder='{"type":"object"}' onChange={(e) => setSourceEditing({ ...sourceEditing, outputSchema: e.target.value })} style={{ fontFamily: 'var(--font-mono)' }} />
-              <label className="form-help"><input type="checkbox" checked={!!sourceEditing.validateOutput} onChange={(e) => setSourceEditing({ ...sourceEditing, validateOutput: e.target.checked })} style={{ width: 'auto' }} /> Validate output</label>
+              <label className="form-help"><input type="checkbox" checked={!!sourceEditing.validateOutput} onChange={(e) => setSourceEditing({ ...sourceEditing, validateOutput: e.target.checked })} style={{ width: 'auto' }} /> {tl('Validate output')}</label>
             </div>
           </div>
         </Modal>
       )}
 
-      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Step JSON" />
-      <ConfirmModal open={!!confirmDelete} danger title="Delete step"
+      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title={tl('Step JSON')} />
+      <ConfirmModal open={!!confirmDelete} danger title={tl('Delete step')}
         recordId={confirmDelete?.id || ''}
-        recordIdLabel="Step ID"
-        message={'Delete step "' + (confirmDelete?.name || '') + '"?'}
-        confirmLabel="Delete"
+        recordIdLabel={tl('Step ID')}
+        message={tl('Delete step "{{name}}"?', { name: confirmDelete?.name || '' })}
+        confirmLabel={t('common.actions.delete')}
         onConfirm={async () => { await apiClient.deleteStep(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}
         onCancel={() => setConfirmDelete(null)} />
     </div>
@@ -598,14 +602,16 @@ function descriptorTextValue(config, prop) {
 }
 
 function GenericRuntimeFields({ runtime, runtimeKey, config, updateConfig, replaceConfig, setFormError }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const props = (runtime?.configProperties || []).filter((prop) => prop.name !== 'runtimeKey');
   if (props.length === 0) {
     return (
       <div className="form-row">
-        <label title="Runtime configuration JSON">Runtime config JSON</label>
+        <label title={tl('Runtime configuration JSON')}>{tl('Runtime config JSON')}</label>
         <textarea rows={8} value={JSON.stringify(config || defaultConfig(runtimeKey), null, 2)} onChange={(e) => {
           try { replaceConfig(JSON.parse(e.target.value)); setFormError(''); }
-          catch { setFormError('Runtime config JSON is invalid.'); }
+          catch { setFormError(tl('Runtime config JSON is invalid.')); }
         }} style={{ fontFamily: 'var(--font-mono)' }} />
       </div>
     );
@@ -627,10 +633,12 @@ function GenericRuntimeFields({ runtime, runtimeKey, config, updateConfig, repla
 }
 
 function DescriptorRuntimeField({ prop, config, updateConfig, setFormError }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const type = (prop.type || 'string').toLowerCase();
   const value = config?.[prop.name];
-  const label = prop.name + (prop.required ? ' *' : '');
-  const title = prop.description || (prop.required ? 'Required runtime config field' : 'Runtime config field');
+  const label = tl(prop.name) + (prop.required ? ' *' : '');
+  const title = tl(prop.description || (prop.required ? 'Required runtime config field' : 'Runtime config field'));
   const onChange = (next) => {
     setFormError('');
     updateConfig({ [prop.name]: next });
@@ -641,8 +649,8 @@ function DescriptorRuntimeField({ prop, config, updateConfig, setFormError }) {
       <div className="form-row">
         <label title={title}>{label}</label>
         <select value={value === true || value === 'true' ? 'true' : 'false'} onChange={(e) => onChange(e.target.value === 'true')}>
-          <option value="true">True</option>
-          <option value="false">False</option>
+          <option value="true">{tl('True')}</option>
+          <option value="false">{tl('False')}</option>
         </select>
       </div>
     );
@@ -653,7 +661,7 @@ function DescriptorRuntimeField({ prop, config, updateConfig, setFormError }) {
       <div className="form-row">
         <label title={title}>{label}</label>
         <textarea rows={4} value={descriptorTextValue(config, prop)} onChange={(e) => onChange(e.target.value)} />
-        <div className="form-help">One item per line, or comma-separated.</div>
+        <div className="form-help">{tl('One item per line, or comma-separated.')}</div>
       </div>
     );
   }
@@ -680,24 +688,26 @@ function DescriptorRuntimeField({ prop, config, updateConfig, setFormError }) {
 }
 
 function RestFields({ config, updateConfig }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   return (
     <>
       <div className="grid-2">
         <div className="form-row">
-          <label title="HTTP method">Method</label>
+          <label title={tl('HTTP method')}>{tl('Method')}</label>
           <select value={config.method || 'GET'} onChange={(e) => updateConfig({ method: e.target.value })}>
             {['GET','POST','PUT','DELETE','PATCH'].map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
-        <div className="form-row"><label title="HTTP request timeout">REST timeout (ms)</label><input type="number" value={config.timeoutMs || 30000} onChange={(e) => updateConfig({ timeoutMs: parseInt(e.target.value || '0', 10) })} /></div>
+        <div className="form-row"><label title={tl('HTTP request timeout')}>{tl('REST timeout (ms)')}</label><input type="number" value={config.timeoutMs || 30000} onChange={(e) => updateConfig({ timeoutMs: parseInt(e.target.value || '0', 10) })} /></div>
       </div>
       <div className="form-row">
-        <label title="Outbound URL called when the step runs">URL template</label>
+        <label title={tl('Outbound URL called when the step runs')}>{tl('URL template')}</label>
         <input value={config.url || ''} placeholder="https://api.example.com/orders/{orderId}" onChange={(e) => updateConfig({ url: e.target.value })} />
-        <div className="form-help">Use {'{tokenName}'} placeholders to read values from StepRequest.Data.</div>
+        <div className="form-help">{tl('Use {tokenName} placeholders to read values from StepRequest.Data.')}</div>
       </div>
       <div className="form-row">
-        <label title="HTTP headers sent with each request">Headers JSON</label>
+        <label title={tl('HTTP headers sent with each request')}>{tl('Headers JSON')}</label>
         <textarea rows={4} value={typeof config.headers === 'string' ? config.headers : JSON.stringify(config.headers || {}, null, 2)} onChange={(e) => updateConfig({ headers: e.target.value })} style={{ fontFamily: 'var(--font-mono)' }} />
       </div>
     </>
@@ -705,60 +715,70 @@ function RestFields({ config, updateConfig }) {
 }
 
 function ArtifactSelector({ artifacts, value, onChange }) {
+  const { t } = useTranslation();
+  const tl = (val, options) => translateLiteral(t, val, options);
   return (
     <select value={value || ''} onChange={(e) => onChange(e.target.value)}>
-      <option value="">Select artifact</option>
+      <option value="">{tl('Select artifact')}</option>
       {artifacts.map((artifact) => <option key={artifact.id} value={artifact.id}>{artifact.name} ({artifact.id})</option>)}
     </select>
   );
 }
 
 function ArtifactProcessFields({ config, updateConfig, artifacts }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   return (
     <>
       <div className="grid-2">
-        <div className="form-row"><label title="Uploaded artifact package">Artifact</label><ArtifactSelector artifacts={artifacts} value={config.artifactId} onChange={(artifactId) => updateConfig({ artifactId })} /></div>
-        <div className="form-row"><label title="Artifact version label or current">Artifact version</label><input value={config.artifactVersion || 'current'} onChange={(e) => updateConfig({ artifactVersion: e.target.value })} /></div>
+        <div className="form-row"><label title={tl('Uploaded artifact package')}>{tl('Artifact')}</label><ArtifactSelector artifacts={artifacts} value={config.artifactId} onChange={(artifactId) => updateConfig({ artifactId })} /></div>
+        <div className="form-row"><label title={tl('Artifact version label or current')}>{tl('Artifact version')}</label><input value={config.artifactVersion || 'current'} onChange={(e) => updateConfig({ artifactVersion: e.target.value })} /></div>
       </div>
-      <div className="form-row"><label title="Manifest entrypoint name">Entrypoint</label><input value={config.entrypoint || ''} placeholder="main" onChange={(e) => updateConfig({ entrypoint: e.target.value })} /></div>
+      <div className="form-row"><label title={tl('Manifest entrypoint name')}>{tl('Entrypoint')}</label><input value={config.entrypoint || ''} placeholder="main" onChange={(e) => updateConfig({ entrypoint: e.target.value })} /></div>
       <div className="grid-2">
-        <div className="form-row"><label title="Arguments passed to the manifest command">Arguments</label><textarea rows={4} value={listText(config.arguments)} onChange={(e) => updateConfig({ arguments: parseList(e.target.value) })} /></div>
-        <div className="form-row"><label title="Allowed environment variable names, never values">Environment names</label><textarea rows={4} value={listText(config.environmentReferences)} onChange={(e) => updateConfig({ environmentReferences: parseList(e.target.value) })} /></div>
+        <div className="form-row"><label title={tl('Arguments passed to the manifest command')}>{tl('Arguments')}</label><textarea rows={4} value={listText(config.arguments)} onChange={(e) => updateConfig({ arguments: parseList(e.target.value) })} /></div>
+        <div className="form-row"><label title={tl('Allowed environment variable names, never values')}>{tl('Environment names')}</label><textarea rows={4} value={listText(config.environmentReferences)} onChange={(e) => updateConfig({ environmentReferences: parseList(e.target.value) })} /></div>
       </div>
     </>
   );
 }
 
 function ArtifactPythonFields({ config, updateConfig, artifacts }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   return (
     <>
       <ArtifactProcessFields config={config} updateConfig={updateConfig} artifacts={artifacts} />
       <div className="grid-2">
-        <div className="form-row"><label title="Python module inside the artifact">Module</label><input value={config.module || ''} placeholder="handler" onChange={(e) => updateConfig({ module: e.target.value })} /></div>
-        <div className="form-row"><label title="Function called by the SDK envelope">Function</label><input value={config.function || 'run'} placeholder="run" onChange={(e) => updateConfig({ function: e.target.value })} /></div>
+        <div className="form-row"><label title={tl('Python module inside the artifact')}>{tl('Module')}</label><input value={config.module || ''} placeholder="handler" onChange={(e) => updateConfig({ module: e.target.value })} /></div>
+        <div className="form-row"><label title={tl('Function called by the SDK envelope')}>{tl('Function')}</label><input value={config.function || 'run'} placeholder="run" onChange={(e) => updateConfig({ function: e.target.value })} /></div>
       </div>
-      <div className="form-row"><label title="Optional Python executable/version selector">Python version</label><input value={config.pythonVersion || ''} placeholder="3.11" onChange={(e) => updateConfig({ pythonVersion: e.target.value })} /></div>
+      <div className="form-row"><label title={tl('Optional Python executable/version selector')}>{tl('Python version')}</label><input value={config.pythonVersion || ''} placeholder="3.11" onChange={(e) => updateConfig({ pythonVersion: e.target.value })} /></div>
     </>
   );
 }
 
 function ArtifactJavaScriptFields({ config, updateConfig, artifacts }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   return (
     <>
       <ArtifactProcessFields config={config} updateConfig={updateConfig} artifacts={artifacts} />
       <div className="grid-2">
-        <div className="form-row"><label title="JavaScript module path inside the artifact">Module</label><input value={config.module || ''} placeholder="handler.js" onChange={(e) => updateConfig({ module: e.target.value })} /></div>
-        <div className="form-row"><label title="Exported function called by the SDK envelope">Function</label><input value={config.function || 'run'} placeholder="run" onChange={(e) => updateConfig({ function: e.target.value })} /></div>
+        <div className="form-row"><label title={tl('JavaScript module path inside the artifact')}>{tl('Module')}</label><input value={config.module || ''} placeholder="handler.js" onChange={(e) => updateConfig({ module: e.target.value })} /></div>
+        <div className="form-row"><label title={tl('Exported function called by the SDK envelope')}>{tl('Function')}</label><input value={config.function || 'run'} placeholder="run" onChange={(e) => updateConfig({ function: e.target.value })} /></div>
       </div>
     </>
   );
 }
 
 function ArtifactDotnetProcessFields({ config, updateConfig, artifacts }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   return (
     <>
       <ArtifactProcessFields config={config} updateConfig={updateConfig} artifacts={artifacts} />
-      <div className="form-help">The selected manifest entrypoint must point to a .dll with a Tempo SDK handler type.</div>
+      <div className="form-help">{tl('The selected manifest entrypoint must point to a .dll with a Tempo SDK handler type.')}</div>
     </>
   );
 }

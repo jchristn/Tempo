@@ -142,6 +142,12 @@ namespace Tempo.Server.Routes
 
         private async Task FireHttpTriggerAsync(HttpContextBase ctx)
         {
+            if (RouteHelpers.HasUnsupportedSecretKeyHeader(ctx))
+            {
+                await RouteHelpers.UnsupportedSecretKeyAsync(ctx).ConfigureAwait(false);
+                return;
+            }
+
             string? id = RouteHelpers.Path(ctx, "id");
             if (string.IsNullOrEmpty(id)) { await RouteHelpers.BadRequestAsync(ctx, "id required."); return; }
 
@@ -218,10 +224,10 @@ namespace Tempo.Server.Routes
                 bearerToken,
                 ctx.Request.Headers[Constants.HeaderApiKey],
                 ctx.Request.Headers[Constants.HeaderAccessKey],
-                ctx.Request.Headers[Constants.HeaderSecretKey],
                 ctx.Request.Headers[Constants.HeaderTenantId],
                 ctx.Request.Headers[Constants.HeaderEmail],
-                ctx.Request.Headers[Constants.HeaderPassword]).ConfigureAwait(false);
+                ctx.Request.Headers[Constants.HeaderPassword],
+                containsUnsupportedSecretKeyHeader: !string.IsNullOrWhiteSpace(ctx.Request.Headers[Constants.HeaderSecretKey])).ConfigureAwait(false);
             ctx.Metadata = rc;
             return rc;
         }

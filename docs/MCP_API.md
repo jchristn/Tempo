@@ -129,8 +129,7 @@ Root settings shape:
     "defaultTenantId": "ten_example",
     "token": null,
     "apiKey": null,
-    "accessKey": null,
-    "secretKey": null
+    "accessKey": null
   },
   "http": {
     "enabled": true,
@@ -161,7 +160,6 @@ Environment variables override the settings file:
 | `TEMPO_TOKEN` | `tempo.token` |
 | `TEMPO_API_KEY` | `tempo.apiKey` |
 | `TEMPO_ACCESS_KEY` | `tempo.accessKey` |
-| `TEMPO_SECRET_KEY` | `tempo.secretKey` |
 | `TEMPO_TENANT_ID` | `tempo.defaultTenantId` |
 | `TEMPO_MCP_HTTP_HOSTNAME` | `http.hostname` |
 | `TEMPO_MCP_HTTP_PORT` | `http.port` |
@@ -180,11 +178,10 @@ Tempo.McpServer forwards these authentication settings as REST headers:
 | --- | --- |
 | `tempo.token` | `x-token` |
 | `tempo.apiKey` | `x-api-key` |
-| `tempo.accessKey` | `x-access-key` |
-| `tempo.secretKey` | `x-secret-key` |
+| `tempo.accessKey` | `Authorization: Bearer {accessKey}` when no token or API key is configured, otherwise `x-access-key` |
 | `tempo.defaultTenantId` | `x-tenant-id` |
 
-Store credentials in environment variables for local agent sessions when possible. Treat settings files containing tokens or secrets as private.
+Store credentials in environment variables for local agent sessions when possible. Treat settings files containing tokens or access keys as private. `x-secret-key` is not supported for Tempo API authentication.
 
 ## Tool Response Envelope
 
@@ -413,7 +410,7 @@ Example direct run:
 
 `flow_enqueue_run` returns the run record and does not wait for completion. Use `run_get` and `run_steps` to monitor.
 
-Set flow `invocationAuthMode` to `ApiAuthenticated` when HTTP trigger invocation should require the same Tempo credentials configured for the MCP server. `trigger_fire` and `tempo_request` forward those credentials automatically when `tempo.token`, `tempo.apiKey`, or credential-pair settings are configured.
+Set flow `invocationAuthMode` to `ApiAuthenticated` when HTTP trigger invocation should require the same Tempo credentials configured for the MCP server. `trigger_fire` and `tempo_request` forward those credentials automatically when `tempo.token`, `tempo.apiKey`, or `tempo.accessKey` is configured.
 
 ### Trigger Tools
 
@@ -801,7 +798,7 @@ MCP tools can mutate Tempo resources. Agents should follow these rules:
 | Symptom | Likely cause | Next step |
 | --- | --- | --- |
 | Tenant-scoped tool says tenant is required | Neither `tenantId` argument nor `tempo.defaultTenantId` is set | Set `TEMPO_TENANT_ID` or pass `tenantId` |
-| Tool returns `401` | Missing or invalid credentials | Check token, API key, access key, or secret |
+| Tool returns `401` | Missing or invalid credentials | Check token, API key, or access key |
 | Tool returns `403` | Principal lacks tenant or operation permission | Use a principal with the required permission |
 | `trigger_fire` returns `405` | Trigger does not allow POST | Use `tempo_request` GET or update `allowedMethods` |
 | Source step creation fails for Python/JS/.NET | Runtime dependency is unavailable | Call `runtime_list` and inspect server runtime settings |

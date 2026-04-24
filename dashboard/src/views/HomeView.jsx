@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import PageHeader from '../components/PageHeader';
 import ActivityChart, { getTimeRange } from '../components/ActivityChart';
-import { formatDuration } from '../utils/formatters';
+import { formatDuration, formatNumber } from '../utils/formatters';
+import { normalizeApiError } from '../utils/i18n';
 
 function HomeView({ apiClient }) {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [rangeId, setRangeId] = useState('day');
   const [summary, setSummary] = useState(null);
@@ -12,6 +15,7 @@ function HomeView({ apiClient }) {
   const [error, setError] = useState(null);
   const [runtimeError, setRuntimeError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const locale = i18n.resolvedLanguage;
 
   useEffect(() => {
     if (!apiClient) return;
@@ -24,13 +28,13 @@ function HomeView({ apiClient }) {
     setError(null);
     setRuntimeError(null);
     apiClient.getRequestHistorySummary({ fromUtc: startUtc, toUtc: endUtc, bucketMinutes: range.bucketMinutes })
-      .then((s) => { if (!cancelled) setSummary(s); })
-      .catch((err) => { if (!cancelled) setError(err.message); });
+      .then((result) => { if (!cancelled) setSummary(result); })
+      .catch((err) => { if (!cancelled) setError(normalizeApiError(err, t)); });
     apiClient.getExternalExecutionStatus()
-      .then((s) => { if (!cancelled) setRuntimeStatus(s); })
-      .catch((err) => { if (!cancelled) setRuntimeError(err.message); });
+      .then((result) => { if (!cancelled) setRuntimeStatus(result); })
+      .catch((err) => { if (!cancelled) setRuntimeError(normalizeApiError(err, t)); });
     return () => { cancelled = true; };
-  }, [apiClient, rangeId, refreshKey]);
+  }, [apiClient, rangeId, refreshKey, t]);
 
   const handleBucketClick = (bucket) => {
     const from = encodeURIComponent(bucket.bucketStartUtc);
@@ -39,37 +43,47 @@ function HomeView({ apiClient }) {
   };
 
   const runtime = normalizeRuntimeStatus(runtimeStatus);
+  const dash = t('common.placeholders.dash');
 
   return (
     <div>
       <PageHeader
-        title="Home"
-        subtitle="Monitor request activity, runtime pressure, and recent health at a glance."
-        actions={<button className="button-secondary" onClick={() => navigate('/dashboard/logs?sourceKind=server&sourceId=server')} title="Open the current Tempo Server logs">Server logs</button>}
+        title={t('views.home.title')}
+        subtitle={t('views.home.subtitle')}
+        actions={
+          <button
+            className="button-secondary"
+            onClick={() => navigate('/dashboard/logs?sourceKind=server&sourceId=server')}
+            title={t('views.home.serverLogsTitle', { defaultValue: 'Open the current Tempo Server logs' })}
+          >
+            {t('views.home.serverLogs')}
+          </button>
+        }
       />
+
       <div className="summary-tiles">
-        <div className="summary-tile"><div className="label">Total requests</div><div className="value">{summary ? summary.totalCount.toLocaleString() : '—'}</div></div>
-        <div className="summary-tile success"><div className="label">Successful</div><div className="value">{summary ? summary.totalSuccess.toLocaleString() : '—'}</div></div>
-        <div className="summary-tile danger"><div className="label">Failed</div><div className="value">{summary ? summary.totalFailure.toLocaleString() : '—'}</div></div>
-        <div className="summary-tile"><div className="label">Avg duration</div><div className="value">{summary ? formatDuration(summary.averageDurationMs) : '—'}</div></div>
+        <div className="summary-tile"><div className="label">{t('views.home.totalRequests', { defaultValue: 'Total requests' })}</div><div className="value">{summary ? formatNumber(summary.totalCount, undefined, locale) : dash}</div></div>
+        <div className="summary-tile success"><div className="label">{t('views.home.successful', { defaultValue: 'Successful' })}</div><div className="value">{summary ? formatNumber(summary.totalSuccess, undefined, locale) : dash}</div></div>
+        <div className="summary-tile danger"><div className="label">{t('views.home.failed', { defaultValue: 'Failed' })}</div><div className="value">{summary ? formatNumber(summary.totalFailure, undefined, locale) : dash}</div></div>
+        <div className="summary-tile"><div className="label">{t('views.home.averageDuration', { defaultValue: 'Avg duration' })}</div><div className="value">{summary ? formatDuration(summary.averageDurationMs, locale) : dash}</div></div>
       </div>
 
       <div className="summary-tiles external-execution-tiles">
         <div className="summary-tile">
-          <div className="label">Artifact execution</div>
-          <div className="value">{runtimeStatus ? 'Available' : '-'}</div>
+          <div className="label">{t('views.home.artifactExecution', { defaultValue: 'Artifact execution' })}</div>
+          <div className="value">{runtimeStatus ? t('common.generic.active') : dash}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">Active processes</div>
-          <div className="value">{runtimeStatus ? runtime.activeServerWide.toLocaleString() : '-'}</div>
+          <div className="label">{t('views.home.activeProcesses', { defaultValue: 'Active processes' })}</div>
+          <div className="value">{runtimeStatus ? formatNumber(runtime.activeServerWide, undefined, locale) : dash}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">Queued steps</div>
-          <div className="value">{runtimeStatus ? runtime.queuedServerWide.toLocaleString() : '-'}</div>
+          <div className="label">{t('views.home.queuedSteps', { defaultValue: 'Queued steps' })}</div>
+          <div className="value">{runtimeStatus ? formatNumber(runtime.queuedServerWide, undefined, locale) : dash}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">Tenants queued</div>
-          <div className="value">{runtimeStatus ? runtime.tenantsQueued.toLocaleString() : '-'}</div>
+          <div className="label">{t('views.home.tenantsQueued', { defaultValue: 'Tenants queued' })}</div>
+          <div className="value">{runtimeStatus ? formatNumber(runtime.tenantsQueued, undefined, locale) : dash}</div>
         </div>
       </div>
 
@@ -81,14 +95,14 @@ function HomeView({ apiClient }) {
         rangeId={rangeId}
         onRangeChange={setRangeId}
         onBucketClick={handleBucketClick}
-        onRefresh={() => setRefreshKey((k) => k + 1)}
-        title="Request Activity"
-        totalLabel="Total"
-        successLabel="Success"
-        failureLabel="Failed"
-        successLegend="Success (1xx-3xx)"
-        failureLegend="Failed (4xx-5xx)"
-        emptyMessage="No request data for this time range"
+        onRefresh={() => setRefreshKey((value) => value + 1)}
+        title={t('views.home.requestActivity', { defaultValue: 'Request activity' })}
+        totalLabel={t('components.chart.total')}
+        successLabel={t('components.chart.success')}
+        failureLabel={t('components.chart.failed')}
+        successLegend={t('views.home.requestSuccessLegend', { defaultValue: 'Success (1xx-3xx)' })}
+        failureLegend={t('views.home.requestFailureLegend', { defaultValue: 'Failed (4xx-5xx)' })}
+        emptyMessage={t('views.home.requestActivityEmpty', { defaultValue: 'No request data for this time range' })}
       />
     </div>
   );
@@ -100,7 +114,7 @@ function normalizeRuntimeStatus(status) {
   return {
     activeServerWide: pick(capacity, 'activeServerWide', 'ActiveServerWide', 0),
     queuedServerWide: pick(capacity, 'queuedServerWide', 'QueuedServerWide', 0),
-    tenantsQueued: Object.values(queuedByTenant || {}).filter((v) => Number(v) > 0).length
+    tenantsQueued: Object.values(queuedByTenant || {}).filter((value) => Number(value) > 0).length
   };
 }
 

@@ -230,15 +230,18 @@ namespace Tempo.Server
             string? email = ctx.Request.Headers[Constants.HeaderEmail];
             string? password = ctx.Request.Headers[Constants.HeaderPassword];
             string? authz = ctx.Request.Headers["Authorization"];
-
-            string? bearerToken = null;
-            if (!string.IsNullOrEmpty(authz) && authz.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                bearerToken = authz.Substring(7).Trim();
-            }
+            bool containsUnsupportedSecretKeyHeader = !string.IsNullOrWhiteSpace(secretKey);
+            string? bearerToken = ReadBearerToken(authz);
 
             RequestContext rc = await _Auth.AuthenticateAsync(
-                tokenHeader, bearerToken, apiKey, accessKey, secretKey, tenantIdHeader, email, password).ConfigureAwait(false);
+                tokenHeader,
+                bearerToken,
+                apiKey,
+                accessKey,
+                tenantIdHeader,
+                email,
+                password,
+                containsUnsupportedSecretKeyHeader: containsUnsupportedSecretKeyHeader).ConfigureAwait(false);
 
             ctx.Metadata = rc;
         }
@@ -286,7 +289,7 @@ namespace Tempo.Server
         {
             SetHeaderIfMissing(ctx, "Access-Control-Allow-Origin", "*");
             SetHeaderIfMissing(ctx, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
-            SetHeaderIfMissing(ctx, "Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Token, X-Tenant-Id, X-Worker-Id, X-Worker-Token, X-Access-Key, X-Secret-Key, X-Email, X-Password, X-Request");
+            SetHeaderIfMissing(ctx, "Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Token, X-Tenant-Id, X-Worker-Id, X-Worker-Token, X-Access-Key, X-Email, X-Password, X-Request");
             SetHeaderIfMissing(ctx, "Access-Control-Expose-Headers", Constants.HeaderRunMetadataExposeList);
         }
 
@@ -298,6 +301,13 @@ namespace Tempo.Server
                 if (string.Equals(existing, key, System.StringComparison.OrdinalIgnoreCase)) return;
             }
             headers.Add(key, value);
+        }
+
+        private static string? ReadBearerToken(string? authorizationHeader)
+        {
+            if (string.IsNullOrEmpty(authorizationHeader)) return null;
+            if (!authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return null;
+            return authorizationHeader.Substring(7).Trim();
         }
 
         private RequestHistoryEntry BuildHistoryEntry(HttpContextBase ctx)

@@ -11,8 +11,7 @@
     "defaultTenantId": null,
     "token": null,
     "apiKey": null,
-    "accessKey": null,
-    "secretKey": null
+    "accessKey": null
   },
   "http": {
     "enabled": true,

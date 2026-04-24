@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ConfirmModal from '../components/ConfirmModal';
 import CopyableId from '../components/CopyableId';
 import JsonViewerModal from '../components/JsonViewerModal';
@@ -8,7 +9,8 @@ import PageHeader from '../components/PageHeader';
 import RowActions from '../components/RowActions';
 import TableFrame from '../components/TableFrame';
 import TenantPicker from '../components/TenantPicker';
-import { formatDuration, formatTime } from '../utils/formatters';
+import { formatBytes, formatDuration, formatTime } from '../utils/formatters';
+import { normalizeApiError, translateLiteral } from '../utils/i18n';
 
 const STATE_PILL = {
   Queued: 'pill-neutral',
@@ -24,27 +26,6 @@ function pick(obj, camel, pascal, fallback = undefined) {
   if (obj[camel] !== undefined && obj[camel] !== null) return obj[camel];
   if (obj[pascal] !== undefined && obj[pascal] !== null) return obj[pascal];
   return fallback;
-}
-
-function normalizeError(err) {
-  if (!err) return 'Request failed.';
-  if (err.body) {
-    try {
-      const parsed = JSON.parse(err.body);
-      return parsed.message || parsed.details || err.message;
-    } catch {
-      return err.body;
-    }
-  }
-  return err.message || String(err);
-}
-
-function formatBytes(value) {
-  const n = Number(value || 0);
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
-  return (n / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
 }
 
 function parsePositiveNumber(value, fallback) {
@@ -106,6 +87,8 @@ function logKindLabel(file) {
 }
 
 function RunsView({ apiClient, principal }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const [tenantId, setTenantId] = useState(principal?.tenantId || '');
   const [data, setData] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -188,7 +171,7 @@ function RunsView({ apiClient, principal }) {
       setRunLogs(nextLogs);
       setSelectedRunLogPath(fallbackLog?.path || '');
     } catch (err) {
-      setRunError(normalizeError(err));
+      setRunError(normalizeApiError(err, t));
     } finally {
       setRunDetailLoading(false);
     }
@@ -221,7 +204,7 @@ function RunsView({ apiClient, principal }) {
     }).catch((err) => {
       if (!cancelled) {
         setRunLogData(null);
-        setRunError(normalizeError(err));
+        setRunError(normalizeApiError(err, t));
       }
     }).finally(() => {
       if (!cancelled) setRunLogLoading(false);
@@ -236,7 +219,7 @@ function RunsView({ apiClient, principal }) {
       refresh();
       if (viewing?.id === run.id) await loadRun(run.id);
     } catch (err) {
-      alert(normalizeError(err));
+      alert(normalizeApiError(err, t));
     }
   };
 
@@ -253,7 +236,7 @@ function RunsView({ apiClient, principal }) {
       link.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setRunError(normalizeError(err));
+      setRunError(normalizeApiError(err, t));
     }
   };
 
@@ -266,7 +249,7 @@ function RunsView({ apiClient, principal }) {
       await loadRun(viewing.id, { preferredPath: '' });
     } catch (err) {
       setConfirmDeleteRunLog(null);
-      setRunError(normalizeError(err));
+      setRunError(normalizeApiError(err, t));
     }
   };
 
@@ -281,7 +264,7 @@ function RunsView({ apiClient, principal }) {
       await loadRun(viewing.id, { preferredPath: '' });
     } catch (err) {
       setConfirmDeleteAllRunLogs(false);
-      setRunError(normalizeError(err));
+      setRunError(normalizeApiError(err, t));
     }
   };
 
@@ -291,13 +274,13 @@ function RunsView({ apiClient, principal }) {
       key: 'state',
       label: 'State',
       tip: 'Lifecycle state from queued to terminal',
-      render: (r) => <span className={'pill ' + (STATE_PILL[r.state] || 'pill-neutral')}>{r.state}</span>
+      render: (r) => <span className={'pill ' + (STATE_PILL[r.state] || 'pill-neutral')}>{tl(r.state)}</span>
     },
     {
       key: 'dispatchState',
       label: 'Dispatch',
       tip: 'Fine-grained dispatch and recovery state',
-      render: (r) => <span className="pill pill-neutral">{pick(r, 'dispatchState', 'DispatchState', '-')}</span>
+      render: (r) => <span className="pill pill-neutral">{tl(pick(r, 'dispatchState', 'DispatchState', '-'))}</span>
     },
     { key: 'dataFlowId', label: 'Flow', tip: 'The data flow being executed', render: (r) => <CopyableId value={r.dataFlowId} /> },
     {
@@ -313,11 +296,11 @@ function RunsView({ apiClient, principal }) {
       render: (r) => {
         const workerId = pick(r, 'assignedWorkerId', 'AssignedWorkerId', '');
         const nodeKind = pick(r, 'executionNodeKind', 'ExecutionNodeKind', '');
-        if (!workerId) return '-';
+        if (!workerId) return t('common.placeholders.dash');
         return (
           <div>
             <div><CopyableId value={workerId} max={16} /></div>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>{nodeKind || 'Worker'}</div>
+            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>{nodeKind ? tl(nodeKind) : tl('Worker')}</div>
           </div>
         );
       }
@@ -339,7 +322,7 @@ function RunsView({ apiClient, principal }) {
           onView={() => openRun(r)}
           onViewJson={() => setJsonRow(r)}
           onDelete={() => setConfirmDelete(r)}
-          extra={r.state === 'Queued' ? [{ label: 'Cancel', onClick: () => cancel(r), title: 'Cancel this queued run before assignment' }] : []}
+          extra={r.state === 'Queued' ? [{ label: tl('Cancel'), onClick: () => cancel(r), title: tl('Cancel this queued run before assignment') }] : []}
         />
       )
     }
@@ -355,14 +338,14 @@ function RunsView({ apiClient, principal }) {
   return (
     <div>
       <PageHeader
-        title="Runs"
-        subtitle={'Track queued, running, and completed flow executions with assignment history and durable per-run logs. ' + (data?.totalCount ?? '-') + ' runs in selected tenant.'}
+        title={tl('Runs')}
+        subtitle={tl('Track queued, running, and completed flow executions with assignment history and durable per-run logs. {{count}} runs in selected tenant.', { count: data?.totalCount ?? 0 })}
         actions={
           <>
             <TenantPicker apiClient={apiClient} value={tenantId} onChange={setTenantId} />
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }} title="Refresh the run list automatically every few seconds">
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }} title={tl('Refresh the run list automatically every few seconds')}>
               <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} style={{ width: 'auto' }} />
-              Auto-refresh
+              {tl('Auto-refresh')}
             </label>
           </>
         }
@@ -370,41 +353,41 @@ function RunsView({ apiClient, principal }) {
 
       <div className="filter-bar compact" style={{ marginBottom: 'var(--spacing-sm)' }}>
         <div className="field">
-          <label title="Filter to runs in a specific lifecycle state">State</label>
+          <label title={tl('Filter to runs in a specific lifecycle state')}>{tl('State')}</label>
           <select
             value={stateFilter}
             onChange={(e) => { setStateFilter(e.target.value); setPageNumber(1); }}
-            title="Filter to runs in a specific lifecycle state"
+            title={tl('Filter to runs in a specific lifecycle state')}
           >
-            <option value="">Any</option>
-            {Object.keys(STATE_PILL).map((s) => <option key={s} value={s}>{s}</option>)}
+            <option value="">{t('common.generic.any')}</option>
+            {Object.keys(STATE_PILL).map((s) => <option key={s} value={s}>{tl(s)}</option>)}
           </select>
         </div>
         <div className="field">
-          <label title="Show only runs of a single flow by identifier">Flow ID</label>
+          <label title={tl('Show only runs of a single flow by identifier')}>{tl('Flow ID')}</label>
           <input
             value={flowIdFilter}
             onChange={(e) => { setFlowIdFilter(e.target.value); setPageNumber(1); }}
             placeholder="flow_..."
-            title="Show only runs of a single flow by identifier"
+            title={tl('Show only runs of a single flow by identifier')}
           />
         </div>
         <div className="field">
-          <label title="Show only runs assigned to a specific worker identifier">Worker ID</label>
+          <label title={tl('Show only runs assigned to a specific worker identifier')}>{tl('Worker ID')}</label>
           <input
             value={workerIdFilter}
             onChange={(e) => { setWorkerIdFilter(e.target.value); setPageNumber(1); }}
             placeholder="wrk_..."
-            title="Show only runs assigned to a specific worker identifier"
+            title={tl('Show only runs assigned to a specific worker identifier')}
           />
         </div>
         <div className="field">
-          <label title="Show only runs observed from a specific client source IP">Source IP</label>
+          <label title={tl('Show only runs observed from a specific client source IP')}>{tl('Source IP')}</label>
           <input
             value={sourceIpFilter}
             onChange={(e) => { setSourceIpFilter(e.target.value); setPageNumber(1); }}
             placeholder="198.51.100.10"
-            title="Show only runs observed from a specific client source IP"
+            title={tl('Show only runs observed from a specific client source IP')}
           />
         </div>
         <div style={{ display: 'flex', alignItems: 'end' }}>
@@ -418,9 +401,9 @@ function RunsView({ apiClient, principal }) {
               setPageNumber(1);
             }}
             style={{ width: '100%' }}
-            title="Clear all run filters"
+            title={tl('Clear all run filters')}
           >
-            Clear
+            {t('common.actions.clear')}
           </button>
         </div>
       </div>
@@ -452,88 +435,88 @@ function RunsView({ apiClient, principal }) {
             setRunLogData(null);
             setRunError('');
           }}
-          title={'Run - ' + viewing.id.slice(0, 16)}
+          title={tl('Run - {{id}}', { id: viewing.id.slice(0, 16) })}
           size="xlarge"
-          headerMeta={<ModalRecordId label="Run ID" value={viewing.id} />}
+          headerMeta={<ModalRecordId label={tl('Run ID')} value={viewing.id} />}
         >
           {runError && <div className="login-error">{runError}</div>}
-          {runDetailLoading && <div className="callout callout-info">Refreshing run details and log catalog.</div>}
+          {runDetailLoading && <div className="callout callout-info">{tl('Refreshing run details and log catalog.')}</div>}
 
           <div className="summary-tiles">
-            <div className="summary-tile" title="Current lifecycle state for this run">
-              <div className="label">State</div>
-              <div className="value" style={{ fontSize: '1.25rem' }}>{pick(viewing, 'state', 'State', '-')}</div>
+            <div className="summary-tile" title={tl('Current lifecycle state for this run')}>
+              <div className="label">{tl('State')}</div>
+              <div className="value" style={{ fontSize: '1.25rem' }}>{tl(pick(viewing, 'state', 'State', '-'))}</div>
             </div>
-            <div className="summary-tile" title="The flow executed by this run">
-              <div className="label">Flow</div>
-              <div className="value" style={{ fontSize: '1rem' }}>{pick(viewing, 'dataFlowId', 'DataFlowId') ? <CopyableId value={pick(viewing, 'dataFlowId', 'DataFlowId')} max={18} /> : '-'}</div>
+            <div className="summary-tile" title={tl('The flow executed by this run')}>
+              <div className="label">{tl('Flow')}</div>
+              <div className="value" style={{ fontSize: '1rem' }}>{pick(viewing, 'dataFlowId', 'DataFlowId') ? <CopyableId value={pick(viewing, 'dataFlowId', 'DataFlowId')} max={18} /> : t('common.placeholders.dash')}</div>
             </div>
-            <div className="summary-tile" title="Worker currently or most recently assigned to this run">
-              <div className="label">Worker</div>
-              <div className="value" style={{ fontSize: '1rem' }}>{pick(viewing, 'assignedWorkerId', 'AssignedWorkerId') ? <CopyableId value={pick(viewing, 'assignedWorkerId', 'AssignedWorkerId')} max={18} /> : '-'}</div>
+            <div className="summary-tile" title={tl('Worker currently or most recently assigned to this run')}>
+              <div className="label">{tl('Worker')}</div>
+              <div className="value" style={{ fontSize: '1rem' }}>{pick(viewing, 'assignedWorkerId', 'AssignedWorkerId') ? <CopyableId value={pick(viewing, 'assignedWorkerId', 'AssignedWorkerId')} max={18} /> : t('common.placeholders.dash')}</div>
             </div>
-            <div className="summary-tile" title="Observed client source IP when the run was enqueued">
-              <div className="label">Source IP</div>
+            <div className="summary-tile" title={tl('Observed client source IP when the run was enqueued')}>
+              <div className="label">{tl('Source IP')}</div>
               <div className="value" style={{ fontSize: '1rem' }}>{pick(viewing, 'sourceIp', 'SourceIp', '-')}</div>
             </div>
-            <div className="summary-tile" title="How many assignment attempts were recorded for this run">
-              <div className="label">Attempts</div>
+            <div className="summary-tile" title={tl('How many assignment attempts were recorded for this run')}>
+              <div className="label">{tl('Attempts')}</div>
               <div className="value">{runActivity?.assignments?.length ?? pick(viewing, 'dispatchAttempt', 'DispatchAttempt', 0)}</div>
             </div>
-            <div className="summary-tile" title="Elapsed runtime from start to completion when available">
-              <div className="label">Runtime</div>
+            <div className="summary-tile" title={tl('Elapsed runtime from start to completion when available')}>
+              <div className="label">{tl('Runtime')}</div>
               <div className="value">{runDuration(viewing)}</div>
             </div>
           </div>
 
           <div className="drawer-actions">
-            <button className="button-secondary" onClick={() => loadRun(viewing.id)} title="Refresh this run, its assignment history, and its log file catalog">Refresh run</button>
+            <button className="button-secondary" onClick={() => loadRun(viewing.id)} title={tl('Refresh this run, its assignment history, and its log file catalog')}>{tl('Refresh run')}</button>
             {selectedRunLog && (
-              <button className="button-secondary" onClick={() => downloadRunLog(selectedRunLog)} title="Download the complete selected run log file">Download selected log</button>
+              <button className="button-secondary" onClick={() => downloadRunLog(selectedRunLog)} title={tl('Download the complete selected run log file')}>{tl('Download selected log')}</button>
             )}
             {selectedRunLog && selectedRunLog.deleteAllowed && (
-              <button className="button-secondary" onClick={() => setConfirmDeleteRunLog(selectedRunLog)} title="Delete the selected archived run log file">Delete selected log</button>
+              <button className="button-secondary" onClick={() => setConfirmDeleteRunLog(selectedRunLog)} title={tl('Delete the selected archived run log file')}>{tl('Delete selected log')}</button>
             )}
             {!runIsActive && runLogs.length > 0 && (
-              <button className="button-danger" onClick={() => setConfirmDeleteAllRunLogs(true)} title="Delete all archived log files for this completed run">Delete all run logs</button>
+              <button className="button-danger" onClick={() => setConfirmDeleteAllRunLogs(true)} title={tl('Delete all archived log files for this completed run')}>{tl('Delete all run logs')}</button>
             )}
           </div>
 
           <div className="drawer-section">
-            <div className="drawer-section-title">Summary</div>
+            <div className="drawer-section-title">{tl('Summary')}</div>
             <div className="run-summary-grid">
               <div className="summary-panel">
-                <div className="summary-panel-title">Execution</div>
+                <div className="summary-panel-title">{tl('Execution')}</div>
                 <dl className="details-kv run-summary-kv">
-                  <dt title="Lifecycle state for this run">State</dt><dd><span className={'pill ' + (STATE_PILL[pick(viewing, 'state', 'State', '')] || 'pill-neutral')}>{pick(viewing, 'state', 'State', '-')}</span></dd>
-                  <dt title="Flow identifier executed by this run">Flow</dt><dd>{pick(viewing, 'dataFlowId', 'DataFlowId') ? <CopyableId value={pick(viewing, 'dataFlowId', 'DataFlowId')} /> : '-'}</dd>
-                  <dt title="Client IP observed when the run was enqueued">Source IP</dt><dd><span className="monospace">{pick(viewing, 'sourceIp', 'SourceIp', '-')}</span></dd>
-                  <dt title="Fine-grained dispatch and recovery state">Dispatch</dt><dd><span className="pill pill-neutral">{pick(viewing, 'dispatchState', 'DispatchState', '-')}</span></dd>
-                  <dt title="Worker assigned to this run">Worker</dt><dd>{pick(viewing, 'assignedWorkerId', 'AssignedWorkerId') ? <CopyableId value={pick(viewing, 'assignedWorkerId', 'AssignedWorkerId')} /> : '-'}</dd>
-                  <dt title="Execution node type that ran the workload">Node kind</dt><dd>{pick(viewing, 'executionNodeKind', 'ExecutionNodeKind', '-')}</dd>
-                  <dt title="Current or last assignment record id">Assignment</dt><dd>{pick(viewing, 'runAssignmentId', 'RunAssignmentId') ? <CopyableId value={pick(viewing, 'runAssignmentId', 'RunAssignmentId')} /> : '-'}</dd>
-                  <dt title="Queued timestamp">Queued</dt><dd>{formatTime(pick(viewing, 'createdUtc', 'CreatedUtc'))}</dd>
-                  <dt title="Assigned timestamp">Assigned</dt><dd>{formatTime(pick(viewing, 'assignedUtc', 'AssignedUtc'))}</dd>
-                  <dt title="Started timestamp">Started</dt><dd>{formatTime(pick(viewing, 'startedUtc', 'StartedUtc'))}</dd>
-                  <dt title="Completed timestamp">Completed</dt><dd>{formatTime(pick(viewing, 'completedUtc', 'CompletedUtc'))}</dd>
-                  <dt title="Lease expiry for the current assignment">Lease expiry</dt><dd>{formatTime(pick(viewing, 'leaseExpiresUtc', 'LeaseExpiresUtc'))}</dd>
+                  <dt title={tl('Lifecycle state for this run')}>{tl('State')}</dt><dd><span className={'pill ' + (STATE_PILL[pick(viewing, 'state', 'State', '')] || 'pill-neutral')}>{tl(pick(viewing, 'state', 'State', '-'))}</span></dd>
+                  <dt title={tl('Flow identifier executed by this run')}>{tl('Flow')}</dt><dd>{pick(viewing, 'dataFlowId', 'DataFlowId') ? <CopyableId value={pick(viewing, 'dataFlowId', 'DataFlowId')} /> : t('common.placeholders.dash')}</dd>
+                  <dt title={tl('Client IP observed when the run was enqueued')}>{tl('Source IP')}</dt><dd><span className="monospace">{pick(viewing, 'sourceIp', 'SourceIp', '-')}</span></dd>
+                  <dt title={tl('Fine-grained dispatch and recovery state')}>{tl('Dispatch')}</dt><dd><span className="pill pill-neutral">{tl(pick(viewing, 'dispatchState', 'DispatchState', '-'))}</span></dd>
+                  <dt title={tl('Worker assigned to this run')}>{tl('Worker')}</dt><dd>{pick(viewing, 'assignedWorkerId', 'AssignedWorkerId') ? <CopyableId value={pick(viewing, 'assignedWorkerId', 'AssignedWorkerId')} /> : t('common.placeholders.dash')}</dd>
+                  <dt title={tl('Execution node type that ran the workload')}>{tl('Node kind')}</dt><dd>{tl(pick(viewing, 'executionNodeKind', 'ExecutionNodeKind', '-'))}</dd>
+                  <dt title={tl('Current or last assignment record id')}>{tl('Assignment')}</dt><dd>{pick(viewing, 'runAssignmentId', 'RunAssignmentId') ? <CopyableId value={pick(viewing, 'runAssignmentId', 'RunAssignmentId')} /> : t('common.placeholders.dash')}</dd>
+                  <dt title={tl('Queued timestamp')}>{tl('Queued')}</dt><dd>{formatTime(pick(viewing, 'createdUtc', 'CreatedUtc'))}</dd>
+                  <dt title={tl('Assigned timestamp')}>{tl('Assigned')}</dt><dd>{formatTime(pick(viewing, 'assignedUtc', 'AssignedUtc'))}</dd>
+                  <dt title={tl('Started timestamp')}>{tl('Started')}</dt><dd>{formatTime(pick(viewing, 'startedUtc', 'StartedUtc'))}</dd>
+                  <dt title={tl('Completed timestamp')}>{tl('Completed')}</dt><dd>{formatTime(pick(viewing, 'completedUtc', 'CompletedUtc'))}</dd>
+                  <dt title={tl('Lease expiry for the current assignment')}>{tl('Lease expiry')}</dt><dd>{formatTime(pick(viewing, 'leaseExpiresUtc', 'LeaseExpiresUtc'))}</dd>
                 </dl>
               </div>
 
               <div className="summary-panel">
-                <div className="summary-panel-title">Payloads</div>
+                <div className="summary-panel-title">{tl('Payloads')}</div>
                 <div className="summary-panel-stack">
                   <div className="summary-code-section">
-                    <div className="summary-code-label" title="Original run input payload">Input</div>
-                    <pre className="code-block">{pick(viewing, 'inputData', 'InputData', '') || '(empty)'}</pre>
+                    <div className="summary-code-label" title={tl('Original run input payload')}>{tl('Input')}</div>
+                    <pre className="code-block">{pick(viewing, 'inputData', 'InputData', '') || t('common.generic.empty')}</pre>
                   </div>
                   <div className="summary-code-section">
-                    <div className="summary-code-label" title="Final run output payload">Output</div>
-                    <pre className="code-block">{pick(viewing, 'outputData', 'OutputData', '') || '(empty)'}</pre>
+                    <div className="summary-code-label" title={tl('Final run output payload')}>{tl('Output')}</div>
+                    <pre className="code-block">{pick(viewing, 'outputData', 'OutputData', '') || t('common.generic.empty')}</pre>
                   </div>
                   {pick(viewing, 'errorMessage', 'ErrorMessage') && (
                     <div className="summary-code-section">
-                      <div className="summary-code-label" title="Terminal error message for this run">Error</div>
+                      <div className="summary-code-label" title={tl('Terminal error message for this run')}>{tl('Error')}</div>
                       <div className="summary-error-block">{pick(viewing, 'errorMessage', 'ErrorMessage')}</div>
                     </div>
                   )}
@@ -543,33 +526,33 @@ function RunsView({ apiClient, principal }) {
           </div>
 
           <div className="drawer-section">
-            <div className="drawer-section-title">Assignment History</div>
+            <div className="drawer-section-title">{tl('Assignment History')}</div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th title="Attempt number for this run assignment">Attempt</th>
-                  <th title="Run assignment identifier">Assignment</th>
-                  <th title="Worker that owned the assignment">Worker</th>
-                  <th title="Assignment state">State</th>
-                  <th title="Lease expiry for the assignment">Lease</th>
-                  <th title="Assignment start time">Assigned</th>
-                  <th title="Assignment completion time">Completed</th>
-                  <th title="Elapsed time from assignment to completion">Duration</th>
+                  <th title={tl('Attempt number for this run assignment')}>{tl('Attempt')}</th>
+                  <th title={tl('Run assignment identifier')}>{tl('Assignment')}</th>
+                  <th title={tl('Worker that owned the assignment')}>{tl('Worker')}</th>
+                  <th title={tl('Assignment state')}>{tl('State')}</th>
+                  <th title={tl('Lease expiry for the assignment')}>{tl('Lease')}</th>
+                  <th title={tl('Assignment start time')}>{tl('Assigned')}</th>
+                  <th title={tl('Assignment completion time')}>{tl('Completed')}</th>
+                  <th title={tl('Elapsed time from assignment to completion')}>{tl('Duration')}</th>
                 </tr>
               </thead>
               <tbody>
                 {(runActivity?.assignments || []).length < 1 ? (
-                  <tr><td colSpan={8} className="empty-state">No assignment history recorded yet.</td></tr>
+                  <tr><td colSpan={8} className="empty-state">{tl('No assignment history recorded yet.')}</td></tr>
                 ) : (runActivity?.assignments || []).map((assignment) => (
                   <tr key={pick(assignment, 'id', 'Id', Math.random().toString())}>
-                    <td title="Attempt number">{pick(assignment, 'attemptNumber', 'AttemptNumber', '-')}</td>
-                    <td title="Run assignment identifier">{pick(assignment, 'id', 'Id') ? <CopyableId value={pick(assignment, 'id', 'Id')} max={18} /> : '-'}</td>
-                    <td title="Worker assigned">{pick(assignment, 'workerId', 'WorkerId') ? <CopyableId value={pick(assignment, 'workerId', 'WorkerId')} max={18} /> : '-'}</td>
-                    <td title="Assignment state"><span className="pill pill-neutral">{pick(assignment, 'state', 'State', '-')}</span></td>
-                    <td title="Assignment lease expiry">{formatTime(pick(assignment, 'leaseExpiresUtc', 'LeaseExpiresUtc'))}</td>
-                    <td title="Assignment start time">{formatTime(pick(assignment, 'assignedUtc', 'AssignedUtc'))}</td>
-                    <td title="Assignment completion time">{formatTime(pick(assignment, 'completedUtc', 'CompletedUtc'))}</td>
-                    <td title="Elapsed time from assignment to completion">{assignmentDuration(assignment)}</td>
+                    <td title={tl('Attempt number')}>{pick(assignment, 'attemptNumber', 'AttemptNumber', '-')}</td>
+                    <td title={tl('Run assignment identifier')}>{pick(assignment, 'id', 'Id') ? <CopyableId value={pick(assignment, 'id', 'Id')} max={18} /> : t('common.placeholders.dash')}</td>
+                    <td title={tl('Worker assigned')}>{pick(assignment, 'workerId', 'WorkerId') ? <CopyableId value={pick(assignment, 'workerId', 'WorkerId')} max={18} /> : t('common.placeholders.dash')}</td>
+                    <td title={tl('Assignment state')}><span className="pill pill-neutral">{tl(pick(assignment, 'state', 'State', '-'))}</span></td>
+                    <td title={tl('Assignment lease expiry')}>{formatTime(pick(assignment, 'leaseExpiresUtc', 'LeaseExpiresUtc'))}</td>
+                    <td title={tl('Assignment start time')}>{formatTime(pick(assignment, 'assignedUtc', 'AssignedUtc'))}</td>
+                    <td title={tl('Assignment completion time')}>{formatTime(pick(assignment, 'completedUtc', 'CompletedUtc'))}</td>
+                    <td title={tl('Elapsed time from assignment to completion')}>{assignmentDuration(assignment)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -577,29 +560,29 @@ function RunsView({ apiClient, principal }) {
           </div>
 
           <div className="drawer-section">
-            <div className="drawer-section-title">Worker Activity</div>
+            <div className="drawer-section-title">{tl('Worker Activity')}</div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th title="Event timestamp">When</th>
-                  <th title="Worker activity event type">Event</th>
-                  <th title="Event severity">Severity</th>
-                  <th title="Worker identifier">Worker</th>
-                  <th title="Assignment identifier">Assignment</th>
-                  <th title="Message recorded for this event">Message</th>
+                  <th title={tl('Event timestamp')}>{tl('When')}</th>
+                  <th title={tl('Worker activity event type')}>{tl('Event')}</th>
+                  <th title={tl('Event severity')}>{tl('Severity')}</th>
+                  <th title={tl('Worker identifier')}>{tl('Worker')}</th>
+                  <th title={tl('Assignment identifier')}>{tl('Assignment')}</th>
+                  <th title={tl('Message recorded for this event')}>{tl('Message')}</th>
                 </tr>
               </thead>
               <tbody>
                 {(runActivity?.activity || []).length < 1 ? (
-                  <tr><td colSpan={6} className="empty-state">No worker activity recorded yet.</td></tr>
+                  <tr><td colSpan={6} className="empty-state">{tl('No worker activity recorded yet.')}</td></tr>
                 ) : (runActivity?.activity || []).map((activity) => (
                   <tr key={pick(activity, 'id', 'Id', Math.random().toString())}>
-                    <td title="Event timestamp">{formatTime(pick(activity, 'createdUtc', 'CreatedUtc'))}</td>
-                    <td title="Worker activity event type"><span className="pill pill-neutral">{pick(activity, 'eventType', 'EventType', '-')}</span></td>
-                    <td title="Event severity">{pick(activity, 'severity', 'Severity', '-')}</td>
-                    <td title="Worker identifier">{pick(activity, 'workerId', 'WorkerId') ? <CopyableId value={pick(activity, 'workerId', 'WorkerId')} max={16} /> : '-'}</td>
-                    <td title="Run assignment identifier">{pick(activity, 'runAssignmentId', 'RunAssignmentId') ? <CopyableId value={pick(activity, 'runAssignmentId', 'RunAssignmentId')} max={16} /> : '-'}</td>
-                    <td title="Worker activity message">{pick(activity, 'message', 'Message', '-')}</td>
+                    <td title={tl('Event timestamp')}>{formatTime(pick(activity, 'createdUtc', 'CreatedUtc'))}</td>
+                    <td title={tl('Worker activity event type')}><span className="pill pill-neutral">{tl(pick(activity, 'eventType', 'EventType', '-'))}</span></td>
+                    <td title={tl('Event severity')}>{tl(pick(activity, 'severity', 'Severity', '-'))}</td>
+                    <td title={tl('Worker identifier')}>{pick(activity, 'workerId', 'WorkerId') ? <CopyableId value={pick(activity, 'workerId', 'WorkerId')} max={16} /> : t('common.placeholders.dash')}</td>
+                    <td title={tl('Run assignment identifier')}>{pick(activity, 'runAssignmentId', 'RunAssignmentId') ? <CopyableId value={pick(activity, 'runAssignmentId', 'RunAssignmentId')} max={16} /> : t('common.placeholders.dash')}</td>
+                    <td title={tl('Worker activity message')}>{pick(activity, 'message', 'Message', '-')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -607,36 +590,36 @@ function RunsView({ apiClient, principal }) {
           </div>
 
           <div className="drawer-section">
-            <div className="drawer-section-title">Run Logs</div>
+            <div className="drawer-section-title">{tl('Run Logs')}</div>
             <div className="logs-workspace">
               <div className="logs-sidebar-panel">
                 <div className="logs-panel-header">
                   <div>
-                    <div className="drawer-section-title">Files</div>
-                    <div className="view-subtitle">Select one log file produced for this run.</div>
+                    <div className="drawer-section-title">{tl('Files')}</div>
+                    <div className="view-subtitle">{tl('Select one log file produced for this run.')}</div>
                   </div>
                 </div>
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th title="Log file type">Kind</th>
-                      <th title="Log file name and relative path">File</th>
-                      <th title="File size">Size</th>
-                      <th title="Last modification time">Modified</th>
+                      <th title={tl('Log file type')}>{tl('Kind')}</th>
+                      <th title={tl('Log file name and relative path')}>{tl('File')}</th>
+                      <th title={tl('File size')}>{tl('Size')}</th>
+                      <th title={tl('Last modification time')}>{tl('Modified')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {runLogs.length < 1 ? (
-                      <tr><td colSpan={4} className="empty-state">No run log files are visible yet.</td></tr>
+                      <tr><td colSpan={4} className="empty-state">{tl('No run log files are visible yet.')}</td></tr>
                     ) : runLogs.map((file) => (
                       <tr
                         key={file.path}
                         className={selectedRunLogPath === file.path ? 'clickable' : 'clickable'}
                         onClick={() => setSelectedRunLogPath(file.path)}
-                        title="Load this run log file in the viewer"
+                        title={tl('Load this run log file in the viewer')}
                         style={selectedRunLogPath === file.path ? { background: 'color-mix(in srgb, var(--color-primary) 8%, transparent)' } : undefined}
                       >
-                        <td title="Log file type"><span className="pill pill-neutral">{logKindLabel(file)}</span></td>
+                        <td title={tl('Log file type')}><span className="pill pill-neutral">{tl(logKindLabel(file))}</span></td>
                         <td title={file.path}>
                           <div style={{ minWidth: 0 }}>
                             <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><code className="monospace">{file.fileName}</code></div>
@@ -644,14 +627,14 @@ function RunsView({ apiClient, principal }) {
                               <span title={file.path}><code className="monospace">{file.path}</code></span>
                             </div>
                             <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)' }}>
-                              {file.attemptNumber ? 'Attempt ' + file.attemptNumber : 'Run-level'}
-                              {file.stepId ? ' | Step ' + file.stepId : ''}
-                              {file.workerId ? ' | Worker ' + file.workerId : ''}
+                              {file.attemptNumber ? tl('Attempt {{count}}', { count: file.attemptNumber }) : tl('Run-level')}
+                              {file.stepId ? tl(' | Step {{id}}', { id: file.stepId }) : ''}
+                              {file.workerId ? tl(' | Worker {{id}}', { id: file.workerId }) : ''}
                             </div>
                           </div>
                         </td>
-                        <td title="File size">{formatBytes(file.byteLength)}</td>
-                        <td title="Last modification time">{formatTime(file.lastModifiedUtc)}</td>
+                        <td title={tl('File size')}>{formatBytes(file.byteLength)}</td>
+                        <td title={tl('Last modification time')}>{formatTime(file.lastModifiedUtc)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -661,19 +644,19 @@ function RunsView({ apiClient, principal }) {
               <div className="log-viewer-panel">
                 <div className="logs-panel-header">
                   <div>
-                    <div className="drawer-section-title">Viewer</div>
-                    <div className="view-subtitle">{selectedRunLog ? 'Reading ' + selectedRunLog.fileName : 'Select a run log file to read a bounded tail.'}</div>
+                    <div className="drawer-section-title">{tl('Viewer')}</div>
+                    <div className="view-subtitle">{selectedRunLog ? tl('Reading {{fileName}}', { fileName: selectedRunLog.fileName }) : tl('Select a run log file to read a bounded tail.')}</div>
                   </div>
                   {selectedRunLog && (
                     <div className="log-viewer-toolbar">
-                      <button className="button-secondary" onClick={() => downloadRunLog(selectedRunLog)} title="Download the complete selected run log file">Download</button>
+                      <button className="button-secondary" onClick={() => downloadRunLog(selectedRunLog)} title={tl('Download the complete selected run log file')}>{t('common.actions.download')}</button>
                       <button
                         className={selectedRunLog.deleteAllowed ? 'button-secondary' : 'button-secondary'}
                         disabled={!selectedRunLog.deleteAllowed}
                         onClick={() => setConfirmDeleteRunLog(selectedRunLog)}
-                        title={selectedRunLog.deleteAllowed ? 'Delete this archived run log file' : 'Active run log files cannot be deleted while the run is still active'}
+                        title={selectedRunLog.deleteAllowed ? tl('Delete this archived run log file') : tl('Active run log files cannot be deleted while the run is still active')}
                       >
-                        Delete file
+                        {tl('Delete file')}
                       </button>
                     </div>
                   )}
@@ -681,34 +664,34 @@ function RunsView({ apiClient, principal }) {
 
                 <div className="filter-bar compact" style={{ marginBottom: 'var(--spacing-sm)' }}>
                   <div className="field">
-                    <label title="Maximum number of lines returned from the end of the selected run log file">Tail lines</label>
-                    <input type="number" min="1" value={runLogTailLines} onChange={(e) => setRunLogTailLines(e.target.value)} title="Maximum number of lines returned from the end of the selected run log file" />
+                    <label title={tl('Maximum number of lines returned from the end of the selected run log file')}>{tl('Tail lines')}</label>
+                    <input type="number" min="1" value={runLogTailLines} onChange={(e) => setRunLogTailLines(e.target.value)} title={tl('Maximum number of lines returned from the end of the selected run log file')} />
                   </div>
                   <div className="field">
-                    <label title="Maximum number of UTF-8 bytes returned in the viewer">Max bytes</label>
-                    <input type="number" min="1" value={runLogMaxBytes} onChange={(e) => setRunLogMaxBytes(e.target.value)} title="Maximum number of UTF-8 bytes returned in the viewer" />
+                    <label title={tl('Maximum number of UTF-8 bytes returned in the viewer')}>{tl('Max bytes')}</label>
+                    <input type="number" min="1" value={runLogMaxBytes} onChange={(e) => setRunLogMaxBytes(e.target.value)} title={tl('Maximum number of UTF-8 bytes returned in the viewer')} />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'end' }}>
-                    <button className="button-secondary" onClick={() => loadRun(viewing.id, { preferredPath: selectedRunLogPath })} style={{ width: '100%' }} title="Refresh the log catalog while keeping the current file selection when possible">Refresh files</button>
+                    <button className="button-secondary" onClick={() => loadRun(viewing.id, { preferredPath: selectedRunLogPath })} style={{ width: '100%' }} title={tl('Refresh the log catalog while keeping the current file selection when possible')}>{tl('Refresh files')}</button>
                   </div>
                 </div>
 
-                {!selectedRunLog && <div className="empty-state">Select a run log file from the list to read it.</div>}
+                {!selectedRunLog && <div className="empty-state">{tl('Select a run log file from the list to read it.')}</div>}
                 {selectedRunLog && (
                   <>
                     <div className="logs-meta-strip">
-                      <span title="Selected file path"><code className="monospace">{selectedRunLog.path}</code></span>
-                      <span title="Log file kind">{selectedRunLog.kind}</span>
-                      <span title="File size">{formatBytes(selectedRunLog.byteLength)}</span>
-                      <span title="Last modification time">{formatTime(selectedRunLog.lastModifiedUtc)}</span>
+                      <span title={tl('Selected file path')}><code className="monospace">{selectedRunLog.path}</code></span>
+                      <span title={tl('Log file kind')}>{tl(selectedRunLog.kind)}</span>
+                      <span title={tl('File size')}>{formatBytes(selectedRunLog.byteLength)}</span>
+                      <span title={tl('Last modification time')}>{formatTime(selectedRunLog.lastModifiedUtc)}</span>
                     </div>
                     {runLogData?.truncated && (
                       <div className="callout callout-warning">
-                        Viewer output is truncated to the last {runLogData.tailLines} lines and {formatBytes(runLogData.maxBytes)}.
+                        {tl('Viewer output is truncated to the last {{lines}} lines and {{bytes}}.', { lines: runLogData.tailLines, bytes: formatBytes(runLogData.maxBytes) })}
                       </div>
                     )}
-                    <div className="log-viewer-content" title="Bounded tail text from the selected run log file">
-                      {runLogLoading ? 'Loading...' : (runLogData?.content || '')}
+                    <div className="log-viewer-content" title={tl('Bounded tail text from the selected run log file')}>
+                      {runLogLoading ? t('common.generic.loading') : (runLogData?.content || '')}
                     </div>
                   </>
                 )}
@@ -718,29 +701,29 @@ function RunsView({ apiClient, principal }) {
 
           {artifactSnapshots.length > 0 && (
             <div className="drawer-section">
-              <div className="drawer-section-title">Artifact Snapshot</div>
+              <div className="drawer-section-title">{tl('Artifact Snapshot')}</div>
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th title="Artifact snapshot key within the execution plan">Key</th>
-                    <th title="Artifact identifier">Artifact</th>
-                    <th title="Requested artifact version">Requested</th>
-                    <th title="Resolved artifact version">Resolved</th>
-                    <th title="Artifact version identifier">Version ID</th>
-                    <th title="Artifact SHA-256">SHA-256</th>
-                    <th title="Manifest entrypoint">Entrypoint</th>
+                    <th title={tl('Artifact snapshot key within the execution plan')}>{tl('Key')}</th>
+                    <th title={tl('Artifact identifier')}>{tl('Artifact')}</th>
+                    <th title={tl('Requested artifact version')}>{tl('Requested')}</th>
+                    <th title={tl('Resolved artifact version')}>{tl('Resolved')}</th>
+                    <th title={tl('Artifact version identifier')}>{tl('Version ID')}</th>
+                    <th title={tl('Artifact SHA-256')}>{tl('SHA-256')}</th>
+                    <th title={tl('Manifest entrypoint')}>{tl('Entrypoint')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {artifactSnapshots.map((snapshot) => (
                     <tr key={snapshot.key}>
-                      <td className="monospace" title="Artifact snapshot key">{snapshot.key}</td>
-                      <td title="Artifact identifier">{snapshot.artifactId ? <CopyableId value={snapshot.artifactId} max={18} /> : '-'}</td>
-                      <td className="monospace" title="Requested version">{snapshot.requestedVersion || '-'}</td>
-                      <td className="monospace" title="Resolved version">{snapshot.version || '-'}</td>
-                      <td title="Artifact version identifier">{snapshot.versionId ? <CopyableId value={snapshot.versionId} max={18} /> : '-'}</td>
-                      <td title="Artifact SHA-256">{snapshot.sha256 ? <CopyableId value={snapshot.sha256} max={18} /> : '-'}</td>
-                      <td className="monospace" title="Manifest entrypoint">{snapshot.manifestEntrypoint || '-'}</td>
+                      <td className="monospace" title={tl('Artifact snapshot key')}>{snapshot.key}</td>
+                      <td title={tl('Artifact identifier')}>{snapshot.artifactId ? <CopyableId value={snapshot.artifactId} max={18} /> : t('common.placeholders.dash')}</td>
+                      <td className="monospace" title={tl('Requested version')}>{snapshot.requestedVersion || t('common.placeholders.dash')}</td>
+                      <td className="monospace" title={tl('Resolved version')}>{snapshot.version || t('common.placeholders.dash')}</td>
+                      <td title={tl('Artifact version identifier')}>{snapshot.versionId ? <CopyableId value={snapshot.versionId} max={18} /> : t('common.placeholders.dash')}</td>
+                      <td title={tl('Artifact SHA-256')}>{snapshot.sha256 ? <CopyableId value={snapshot.sha256} max={18} /> : t('common.placeholders.dash')}</td>
+                      <td className="monospace" title={tl('Manifest entrypoint')}>{snapshot.manifestEntrypoint || t('common.placeholders.dash')}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -749,33 +732,33 @@ function RunsView({ apiClient, principal }) {
           )}
 
           <div className="drawer-section">
-            <div className="drawer-section-title">Step Timeline</div>
+            <div className="drawer-section-title">{tl('Step Timeline')}</div>
             <table className="data-table">
               <thead>
                 <tr>
-                  <th title="Step sequence number">#</th>
-                  <th title="Step identifier">Step</th>
-                  <th title="Step result">Result</th>
-                  <th title="Artifact identifier">Artifact</th>
-                  <th title="Artifact version or version id">Version</th>
-                  <th title="Next step selected after this result">Next</th>
-                  <th title="Step start time">Started</th>
-                  <th title="Elapsed step runtime">Duration</th>
+                  <th title={tl('Step sequence number')}>#</th>
+                  <th title={tl('Step identifier')}>{tl('Step')}</th>
+                  <th title={tl('Step result')}>{tl('Result')}</th>
+                  <th title={tl('Artifact identifier')}>{tl('Artifact')}</th>
+                  <th title={tl('Artifact version or version id')}>{tl('Version')}</th>
+                  <th title={tl('Next step selected after this result')}>{tl('Next')}</th>
+                  <th title={tl('Step start time')}>{tl('Started')}</th>
+                  <th title={tl('Elapsed step runtime')}>{tl('Duration')}</th>
                 </tr>
               </thead>
               <tbody>
                 {steps.length === 0 ? (
-                  <tr><td colSpan={8} className="empty-state">No step runs recorded yet.</td></tr>
+                  <tr><td colSpan={8} className="empty-state">{tl('No step runs recorded yet.')}</td></tr>
                 ) : steps.map((s) => (
                   <tr key={s.id}>
-                    <td title="Step sequence number">{s.sequence}</td>
-                    <td className="monospace" title="Step identifier">{s.stepId}</td>
-                    <td title="Step result"><span className={'pill ' + (s.result === 'Success' ? 'pill-success' : s.result === 'Error' ? 'pill-warning' : 'pill-danger')}>{s.result}</span></td>
-                    <td title="Artifact identifier">{s.artifactId ? <CopyableId value={s.artifactId} max={18} /> : '-'}</td>
-                    <td title="Artifact version">{s.artifactVersionId ? <CopyableId value={s.artifactVersionId} max={18} /> : (s.artifactVersion || '-')}</td>
-                    <td className="monospace" title="Next step">{s.nextStepId || '(end)'}</td>
-                    <td title="Step start time">{formatTime(s.startedUtc)}</td>
-                    <td title="Elapsed step runtime">{s.completedUtc ? formatDuration(new Date(s.completedUtc) - new Date(s.startedUtc)) : '-'}</td>
+                    <td title={tl('Step sequence number')}>{s.sequence}</td>
+                    <td className="monospace" title={tl('Step identifier')}>{s.stepId}</td>
+                    <td title={tl('Step result')}><span className={'pill ' + (s.result === 'Success' ? 'pill-success' : s.result === 'Error' ? 'pill-warning' : 'pill-danger')}>{tl(s.result)}</span></td>
+                    <td title={tl('Artifact identifier')}>{s.artifactId ? <CopyableId value={s.artifactId} max={18} /> : t('common.placeholders.dash')}</td>
+                    <td title={tl('Artifact version')}>{s.artifactVersionId ? <CopyableId value={s.artifactVersionId} max={18} /> : (s.artifactVersion || t('common.placeholders.dash'))}</td>
+                    <td className="monospace" title={tl('Next step')}>{s.nextStepId || tl('(end)')}</td>
+                    <td title={tl('Step start time')}>{formatTime(s.startedUtc)}</td>
+                    <td title={tl('Elapsed step runtime')}>{s.completedUtc ? formatDuration(new Date(s.completedUtc) - new Date(s.startedUtc)) : t('common.placeholders.dash')}</td>
                   </tr>
                 ))}
               </tbody>
@@ -784,16 +767,16 @@ function RunsView({ apiClient, principal }) {
         </Modal>
       )}
 
-      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Run JSON" />
+      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title={tl('Run JSON')} />
 
       <ConfirmModal
         open={!!confirmDelete}
         danger
-        title="Delete run"
+        title={tl('Delete run')}
         recordId={confirmDelete?.id || ''}
-        recordIdLabel="Run ID"
-        message={'Delete this run? Step runs and per-run logs will also be removed.'}
-        confirmLabel="Delete"
+        recordIdLabel={tl('Run ID')}
+        message={tl('Delete this run? Step runs and per-run logs will also be removed.')}
+        confirmLabel={t('common.actions.delete')}
         onConfirm={async () => {
           await apiClient.deleteRun(tenantId, confirmDelete.id);
           if (viewing?.id === confirmDelete.id) {
@@ -813,11 +796,11 @@ function RunsView({ apiClient, principal }) {
       <ConfirmModal
         open={!!confirmDeleteRunLog}
         danger
-        title="Delete run log"
+        title={tl('Delete run log')}
         recordId={confirmDeleteRunLog?.path || ''}
-        recordIdLabel="Path"
-        message="Delete this archived run log file from disk? This cannot be undone."
-        confirmLabel="Delete"
+        recordIdLabel={tl('Path')}
+        message={tl('Delete this archived run log file from disk? This cannot be undone.')}
+        confirmLabel={t('common.actions.delete')}
         onConfirm={deleteRunLog}
         onCancel={() => setConfirmDeleteRunLog(null)}
       />
@@ -825,11 +808,11 @@ function RunsView({ apiClient, principal }) {
       <ConfirmModal
         open={confirmDeleteAllRunLogs}
         danger
-        title="Delete all run logs"
+        title={tl('Delete all run logs')}
         recordId={viewing?.id || ''}
-        recordIdLabel="Run ID"
-        message="Delete every archived log file for this run? This cannot be undone."
-        confirmLabel="Delete all"
+        recordIdLabel={tl('Run ID')}
+        message={tl('Delete every archived log file for this run? This cannot be undone.')}
+        confirmLabel={tl('Delete all')}
         onConfirm={deleteAllRunLogs}
         onCancel={() => setConfirmDeleteAllRunLogs(false)}
       />

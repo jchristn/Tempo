@@ -37,6 +37,12 @@ namespace Tempo.Server.Routes
 
         private async Task IssueTokenAsync(HttpContextBase ctx)
         {
+            if (RouteHelpers.HasUnsupportedSecretKeyHeader(ctx))
+            {
+                await RouteHelpers.UnsupportedSecretKeyAsync(ctx).ConfigureAwait(false);
+                return;
+            }
+
             LoginRequest? body = RouteHelpers.Body<LoginRequest>(ctx);
             if (body == null || string.IsNullOrEmpty(body.Email) || string.IsNullOrEmpty(body.Password))
             {
@@ -49,10 +55,10 @@ namespace Tempo.Server.Routes
                 bearerToken: null,
                 apiKey: null,
                 accessKey: null,
-                secretKey: null,
                 tenantIdHeader: body.TenantId,
                 emailHeader: body.Email,
-                passwordHeader: body.Password).ConfigureAwait(false);
+                passwordHeader: body.Password,
+                containsUnsupportedSecretKeyHeader: false).ConfigureAwait(false);
 
             if (!ctxAuth.IsAuthenticated)
             {

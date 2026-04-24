@@ -50,6 +50,8 @@ namespace Test.Shared.Suites
                     new TestCaseDescriptor("DistributedExecution", "CoordinatorOwnsQueuedCancel", "Queued cancel is centralized in the coordinator", CoordinatorOwnsQueuedCancelAsync),
                     new TestCaseDescriptor("DistributedExecution", "TriggerReturns202WhenNoExecutor", "Trigger wait remains backward-compatible when no executor is available", TriggerReturns202WhenNoExecutorAsync),
                     new TestCaseDescriptor("DistributedExecution", "ApiAuthenticatedTriggerRequiresTempoAuth", "HTTP triggers can require normal Tempo API authentication based on the flow policy", ApiAuthenticatedTriggerRequiresTempoAuthAsync),
+                    new TestCaseDescriptor("DistributedExecution", "ApiAuthenticatedTriggerAcceptsCredentialAccessKeyBearer", "HTTP triggers accept credential access keys supplied as bearer credentials", ApiAuthenticatedTriggerAcceptsCredentialAccessKeyBearerAsync),
+                    new TestCaseDescriptor("DistributedExecution", "SecretKeyHeaderRejectedEvenWhenCredentialWouldAuthenticate", "API requests reject x-secret-key even when a valid credential access key is supplied", SecretKeyHeaderRejectedEvenWhenCredentialWouldAuthenticateAsync),
                     new TestCaseDescriptor("DistributedExecution", "TriggerIncludesWorkerHeaderWhenRunAssigned", "HTTP trigger responses include the assigned worker id when a worker executes the run", TriggerIncludesWorkerHeaderWhenRunAssignedAsync),
                     new TestCaseDescriptor("DistributedExecution", "RemoteWorkerExecutesPersistedRestFlow", "A remote worker can execute a persisted REST flow end to end", RemoteWorkerExecutesPersistedRestFlowAsync),
                     new TestCaseDescriptor("DistributedExecution", "WorkerMaxTaskTimeoutIsPersistedAndEnforced", "Worker max task timeout is persisted and cancels slow assignments", WorkerMaxTaskTimeoutIsPersistedAndEnforcedAsync),
@@ -274,6 +276,125 @@ namespace Test.Shared.Suites
                 Assert2.NotNull(stored, "stored run");
                 Assert2.Equal(FlowRunStateEnum.Queued, stored!.State, "queued in database");
                 Assert2.Equal(trigger.Id, stored.TriggerId!, "trigger id persisted");
+            }
+            finally
+            {
+                try { server?.Stop(); } catch { /* ignore */ }
+                try { server?.Dispose(); } catch { /* ignore */ }
+                await TempTestStore.DisposeAsync(driver);
+                DeleteDirectory(root);
+            }
+        }
+
+        private static async Task ApiAuthenticatedTriggerAcceptsCredentialAccessKeyBearerAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct);
+            TempoServer? server = null;
+            string root = NewTempRoot("tempo-trigger-access-key-bearer");
+            try
+            {
+                int port = FreePort();
+                Settings settings = CreateServerSettings(root, port, serverCanExecuteWorkload: false);
+
+                CoreTenant tenant = await driver.Tenants.CreateAsync(new CoreTenant { Name = "Credential Bearer Trigger" }, ct);
+                User user = await driver.Users.CreateAsync(new User
+                {
+                    TenantId = tenant.Id,
+                    Email = "credential-bearer@tempo.local",
+                    PasswordSha256 = "x",
+                    IsTenantAdmin = true
+                }, ct).ConfigureAwait(false);
+                Credential credential = await driver.Credentials.CreateAsync(new Credential
+                {
+                    TenantId = tenant.Id,
+                    UserId = user.Id,
+                    Name = "trigger-caller"
+                }, ct).ConfigureAwait(false);
+
+                DataFlowRecord flow = await CreateRestFlowAsync(driver, tenant.Id, "https://example.com/not-called", null, ct).ConfigureAwait(false);
+                flow.MaxRuntimeMs = 1;
+                flow.InvocationAuthMode = DataFlowInvocationAuthModeEnum.ApiAuthenticated;
+                flow = await driver.DataFlows.UpdateAsync(flow, ct).ConfigureAwait(false);
+                TriggerRecord trigger = await driver.Triggers.CreateAsync(new TriggerRecord
+                {
+                    TenantId = tenant.Id,
+                    Name = "http-auth-bearer",
+                    TriggerType = TriggerTypeEnum.Http,
+                    DataFlowId = flow.Id,
+                    Configuration = "{\"allowedMethods\":[\"GET\"]}"
+                }, ct).ConfigureAwait(false);
+
+                server = new TempoServer(settings, SilentLogger(), driver, new StepManager());
+                await server.StartAsync().ConfigureAwait(false);
+
+                using HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1:" + port + "/v1.0/triggers/http/" + trigger.Id);
+                request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + credential.AccessKey);
+                using HttpResponseMessage response = await client.SendAsync(request, ct).ConfigureAwait(false);
+                string body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+                Assert2.Equal(HttpStatusCode.Accepted, response.StatusCode, "credential access key bearer accepted");
+                Assert2.True(response.Headers.TryGetValues(Constants.HeaderRunId, out IEnumerable<string>? runIds), "run id header");
+                string runId = runIds!.First();
+                Assert2.Equal("null", body, "pending trigger body");
+
+                FlowRun? stored = await driver.FlowRuns.ReadAsync(tenant.Id, runId, ct).ConfigureAwait(false);
+                Assert2.NotNull(stored, "stored run");
+                Assert2.Equal(FlowRunStateEnum.Queued, stored!.State, "queued in database");
+                Assert2.Equal(user.Id, stored.TriggeredByUserId!, "credential-authenticated user persisted");
+                Assert2.Equal(trigger.Id, stored.TriggerId!, "trigger id persisted");
+            }
+            finally
+            {
+                try { server?.Stop(); } catch { /* ignore */ }
+                try { server?.Dispose(); } catch { /* ignore */ }
+                await TempTestStore.DisposeAsync(driver);
+                DeleteDirectory(root);
+            }
+        }
+
+        private static async Task SecretKeyHeaderRejectedEvenWhenCredentialWouldAuthenticateAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct);
+            TempoServer? server = null;
+            string root = NewTempRoot("tempo-secret-header-rejected");
+            try
+            {
+                int port = FreePort();
+                server = new TempoServer(CreateServerSettings(root, port, serverCanExecuteWorkload: false), SilentLogger(), driver, new StepManager());
+
+                CoreTenant tenant = await driver.Tenants.CreateAsync(new CoreTenant { Name = "Credential Secret Header" }, ct);
+                User user = await driver.Users.CreateAsync(new User
+                {
+                    TenantId = tenant.Id,
+                    Email = "secret-header@tempo.local",
+                    PasswordSha256 = "x",
+                    IsTenantAdmin = true
+                }, ct).ConfigureAwait(false);
+                Credential credential = await driver.Credentials.CreateAsync(new Credential
+                {
+                    TenantId = tenant.Id,
+                    UserId = user.Id,
+                    Name = "me-route"
+                }, ct).ConfigureAwait(false);
+
+                await server.StartAsync().ConfigureAwait(false);
+
+                using HttpClient client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+
+                using HttpRequestMessage validRequest = new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1:" + port + "/v1.0/me");
+                validRequest.Headers.TryAddWithoutValidation(Constants.HeaderAccessKey, credential.AccessKey);
+                using HttpResponseMessage validResponse = await client.SendAsync(validRequest, ct).ConfigureAwait(false);
+                Assert2.Equal(HttpStatusCode.OK, validResponse.StatusCode, "access key auth succeeds without secret header");
+
+                using HttpRequestMessage invalidRequest = new HttpRequestMessage(HttpMethod.Get, "http://127.0.0.1:" + port + "/v1.0/me");
+                invalidRequest.Headers.TryAddWithoutValidation(Constants.HeaderAccessKey, credential.AccessKey);
+                invalidRequest.Headers.TryAddWithoutValidation(Constants.HeaderSecretKey, credential.SecretKey);
+                using HttpResponseMessage invalidResponse = await client.SendAsync(invalidRequest, ct).ConfigureAwait(false);
+                string invalidBody = await invalidResponse.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+                Assert2.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode, "secret header rejected");
+                Assert2.True(invalidBody.Contains("UnsupportedAuthHeader", StringComparison.Ordinal), "unsupported header code returned");
             }
             finally
             {

@@ -189,10 +189,12 @@ namespace Tempo.McpServer.Services
                 request.Headers.TryAddWithoutValidation(Tempo.Core.Constants.HeaderToken, _Settings.Token);
             if (!string.IsNullOrWhiteSpace(_Settings.ApiKey))
                 request.Headers.TryAddWithoutValidation(Tempo.Core.Constants.HeaderApiKey, _Settings.ApiKey);
-            if (!string.IsNullOrWhiteSpace(_Settings.AccessKey))
+            if (string.IsNullOrWhiteSpace(_Settings.Token)
+                && string.IsNullOrWhiteSpace(_Settings.ApiKey)
+                && !string.IsNullOrWhiteSpace(_Settings.AccessKey))
+                request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + _Settings.AccessKey);
+            else if (!string.IsNullOrWhiteSpace(_Settings.AccessKey))
                 request.Headers.TryAddWithoutValidation(Tempo.Core.Constants.HeaderAccessKey, _Settings.AccessKey);
-            if (!string.IsNullOrWhiteSpace(_Settings.SecretKey))
-                request.Headers.TryAddWithoutValidation(Tempo.Core.Constants.HeaderSecretKey, _Settings.SecretKey);
             if (!string.IsNullOrWhiteSpace(_Settings.DefaultTenantId))
                 request.Headers.TryAddWithoutValidation(Tempo.Core.Constants.HeaderTenantId, _Settings.DefaultTenantId);
         }

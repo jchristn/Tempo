@@ -2,6 +2,21 @@
 
 All notable changes to Tempo are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Dashboard internationalization across login, navigation, workspace titles/subtitles, tables, filters, buttons, modal labels, hover/help text, shared chrome, and status/enum surfaces for the supported ship locales (`en`, `es`, `zh-Hans`, `yue-Hant-HK`, `ja`, `de`, `fr`, `it`, `zh-Hant-TW`)
+- Dashboard i18n audit enforcement so extracted UI strings must be present for supported non-English locales and new raw localizable JSX text fails test coverage
+- Explicit flow-level HTTP trigger invocation modes for public versus API-authenticated data flows, centered on the `invocationAuthMode` contract (`Public` and `ApiAuthenticated`)
+
+### Documentation
+
+- README coverage for dashboard internationalization, including supported ship locales, operator-facing scope, and audit enforcement
+- README coverage for authenticated versus public data flows, including trigger invocation behavior and generated `curl` expectations
+- Changelog coverage for the `invocationAuthMode` model so public and API-authenticated flow behavior is called out alongside other platform capabilities
+- Archived the working `I18N.md` and `SCALE.md` planning documents under `archive/`
+
 ## [0.3.0] - 2026-04-21
 
 ### Added

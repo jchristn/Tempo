@@ -2,7 +2,7 @@
     "info":  {
                  "_postman_id":  "c58ca1ec-0bdc-4f1a-9a2b-0a1b2c3d4e5f",
                  "name":  "Tempo API 0.3.0",
-                 "description":  "REST API for Tempo Server 0.3.0. Uses {{serverUrl}} + {{token}} + {{tenantId}} variables. Includes current coverage for runtimes, source steps, artifacts, data flows, triggers, runs, run activity, run logs, workers, logs, request history, settings, and migrations.",
+                 "description":  "REST API for Tempo Server 0.3.0. Uses {{serverUrl}} + {{token}} + {{tenantId}} variables. Set {{token}} to either a Tempo bearer token from /v1.0/token or a credential access key. x-secret-key is intentionally unsupported. Includes current coverage for runtimes, source steps, artifacts, data flows, triggers, runs, run activity, run logs, workers, logs, request history, settings, and migrations.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "variable":  [

@@ -1,18 +1,22 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RefreshIcon } from './Icons';
+import { formatNumber } from '../utils/formatters';
 
 export const TIME_RANGES = [
-  { label: 'Last Hour', value: 'hour', hours: 1, stepMs: 60_000, bucketMinutes: 1 },
-  { label: 'Last Day', value: 'day', hours: 24, stepMs: 900_000, bucketMinutes: 15 },
-  { label: 'Last Week', value: 'week', hours: 168, stepMs: 3_600_000, bucketMinutes: 60 },
-  { label: 'Last Month', value: 'month', hours: 720, stepMs: 21_600_000, bucketMinutes: 360 }
+  { labelKey: 'components.chart.lastHour', value: 'hour', hours: 1, stepMs: 60_000, bucketMinutes: 1 },
+  { labelKey: 'components.chart.lastDay', value: 'day', hours: 24, stepMs: 900_000, bucketMinutes: 15 },
+  { labelKey: 'components.chart.lastWeek', value: 'week', hours: 168, stepMs: 3_600_000, bucketMinutes: 60 },
+  { labelKey: 'components.chart.lastMonth', value: 'month', hours: 720, stepMs: 21_600_000, bucketMinutes: 360 }
 ];
 
 export function getTimeRange(value) {
   return TIME_RANGES.find((r) => r.value === value) || TIME_RANGES[1];
 }
 
-function floorToStep(ts, stepMs) { return Math.floor(ts / stepMs) * stepMs; }
+function floorToStep(ts, stepMs) {
+  return Math.floor(ts / stepMs) * stepMs;
+}
 
 function generateAllBuckets(startMs, endMs, stepMs) {
   const buckets = [];
@@ -36,15 +40,47 @@ function mergeBuckets(allBuckets, apiBuckets, stepMs) {
     map.set(floorToStep(new Date(b.bucketStartUtc).getTime(), stepMs), b);
   }
   return allBuckets.map((b) => {
-    const m = map.get(b._key);
-    if (!m) return b;
+    const match = map.get(b._key);
+    if (!match) return b;
     return {
       ...b,
-      successCount: m.successCount || 0,
-      failureCount: m.failureCount || 0,
-      averageDurationMs: m.averageDurationMs || 0
+      successCount: match.successCount || 0,
+      failureCount: match.failureCount || 0,
+      averageDurationMs: match.averageDurationMs || 0
     };
   });
+}
+
+function computeYCeiling(max) {
+  if (max <= 0) return 1;
+  const step = Math.max(1, Math.ceil(max / 4));
+  let value = 0;
+  while (value < max) value += step;
+  return value || max;
+}
+
+function computeYTicks(max) {
+  if (max <= 0) return [0];
+  const step = Math.max(1, Math.ceil(max / 4));
+  const ticks = [];
+  for (let i = 0; i <= max; i += step) ticks.push(i);
+  return ticks;
+}
+
+function formatBucketLabel(ts, range, locale) {
+  const date = new Date(ts);
+  if (range.bucketMinutes <= 15) return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  if (range.bucketMinutes >= 60 && range.hours > 48) {
+    return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' }) + ' ' +
+      date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  }
+  return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatTooltipTime(ts, range, locale) {
+  const date = new Date(ts);
+  if (range.bucketMinutes >= 1440) return date.toLocaleDateString(locale, { weekday: 'short', month: 'short', day: 'numeric' });
+  return date.toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 /**
@@ -59,30 +95,44 @@ function ActivityChart({
   onBucketClick,
   onRefresh,
   loading = false,
-  title = 'Activity',
-  totalLabel = 'Total',
-  successLabel = 'Success',
-  failureLabel = 'Failed',
-  successLegend = 'Success',
-  failureLegend = 'Failed',
-  emptyMessage = 'No activity data for this time range',
+  title,
+  totalLabel,
+  successLabel,
+  failureLabel,
+  successLegend,
+  failureLegend,
+  emptyMessage,
   successColor = 'var(--color-success)',
   failureColor = 'var(--color-danger)'
 }) {
+  const { t, i18n } = useTranslation();
   const [hovered, setHovered] = useState(null);
   const range = getTimeRange(rangeId);
+  const locale = i18n.resolvedLanguage;
+  const resolvedTitle = title || t('components.chart.activity');
+  const resolvedTotalLabel = totalLabel || t('components.chart.total');
+  const resolvedSuccessLabel = successLabel || t('components.chart.success');
+  const resolvedFailureLabel = failureLabel || t('components.chart.failed');
+  const resolvedSuccessLegend = successLegend || t('components.chart.successSeries');
+  const resolvedFailureLegend = failureLegend || t('components.chart.failureSeries');
+  const resolvedEmptyMessage = emptyMessage || t('components.chart.noActivity');
 
   const buckets = useMemo(() => {
     const endMs = Date.now();
     const startMs = endMs - range.hours * 3_600_000;
     return mergeBuckets(generateAllBuckets(startMs, endMs, range.stepMs), summary?.buckets || [], range.stepMs);
-  }, [summary, rangeId, range.hours, range.stepMs]);
+  }, [summary, range.hours, range.stepMs]);
 
   const maxCount = Math.max(1, ...buckets.map((b) => (b.successCount || 0) + (b.failureCount || 0)));
   const yMax = computeYCeiling(maxCount);
   const yTicks = computeYTicks(yMax);
 
-  const width = 1000, height = 220, padTop = 14, padBottom = 26, padLeft = 44, padRight = 14;
+  const width = 1000;
+  const height = 220;
+  const padTop = 14;
+  const padBottom = 26;
+  const padLeft = 44;
+  const padRight = 14;
   const plotH = height - padTop - padBottom;
   const plotW = width - padLeft - padRight;
   const barGroupW = plotW / Math.max(1, buckets.length);
@@ -95,17 +145,17 @@ function ActivityChart({
   return (
     <div className="rh-chart">
       <div className="rh-chart-header">
-        <h2>{title}</h2>
+        <h2>{resolvedTitle}</h2>
         <div className="rh-chart-controls">
           <div className="rh-time-tabs">
-            {TIME_RANGES.map((r) => (
-              <button key={r.value} className={'rh-time-tab' + (rangeId === r.value ? ' active' : '')} onClick={() => onRangeChange?.(r.value)}>
-                {r.label}
+            {TIME_RANGES.map((item) => (
+              <button key={item.value} className={'rh-time-tab' + (rangeId === item.value ? ' active' : '')} onClick={() => onRangeChange?.(item.value)}>
+                {t(item.labelKey)}
               </button>
             ))}
           </div>
           {onRefresh && (
-            <button className="rh-refresh-btn" onClick={onRefresh} disabled={loading} title="Refresh" aria-label="Refresh">
+            <button className="rh-refresh-btn" onClick={onRefresh} disabled={loading} title={t('components.chart.refresh')} aria-label={t('components.chart.refresh')}>
               <RefreshIcon size={16} />
             </button>
           )}
@@ -113,13 +163,13 @@ function ActivityChart({
       </div>
 
       <div className="rh-stats">
-        <div className="rh-stat"><span className="rh-stat-value">{totalCount.toLocaleString()}</span><span className="rh-stat-label">{totalLabel}</span></div>
-        <div className="rh-stat"><span className="rh-stat-value" style={{ color: successColor }}>{totalSuccess.toLocaleString()}</span><span className="rh-stat-label">{successLabel}</span></div>
-        <div className="rh-stat"><span className="rh-stat-value" style={{ color: failureColor }}>{totalFailure.toLocaleString()}</span><span className="rh-stat-label">{failureLabel}</span></div>
+        <div className="rh-stat"><span className="rh-stat-value">{formatNumber(totalCount, undefined, locale)}</span><span className="rh-stat-label">{resolvedTotalLabel}</span></div>
+        <div className="rh-stat"><span className="rh-stat-value" style={{ color: successColor }}>{formatNumber(totalSuccess, undefined, locale)}</span><span className="rh-stat-label">{resolvedSuccessLabel}</span></div>
+        <div className="rh-stat"><span className="rh-stat-value" style={{ color: failureColor }}>{formatNumber(totalFailure, undefined, locale)}</span><span className="rh-stat-label">{resolvedFailureLabel}</span></div>
       </div>
 
       {buckets.length === 0 ? (
-        <div className="rh-chart-empty">{emptyMessage}</div>
+        <div className="rh-chart-empty">{resolvedEmptyMessage}</div>
       ) : (
         <div className="rh-chart-canvas">
           <svg width="100%" viewBox={'0 0 ' + width + ' ' + height} preserveAspectRatio="xMidYMid meet" style={{ display: 'block' }}>
@@ -133,32 +183,34 @@ function ActivityChart({
               );
             })}
 
-            {buckets.map((b, i) => {
-              const success = b.successCount || 0;
-              const failure = b.failureCount || 0;
+            {buckets.map((bucket, index) => {
+              const success = bucket.successCount || 0;
+              const failure = bucket.failureCount || 0;
               const successH = (success / yMax) * plotH;
               const failureH = (failure / yMax) * plotH;
-              const x = padLeft + i * barGroupW + (barGroupW - barW) / 2;
+              const x = padLeft + index * barGroupW + (barGroupW - barW) / 2;
               const successY = padTop + plotH - successH - failureH;
               const failureY = padTop + plotH - failureH;
               const isCompound = range.bucketMinutes >= 60 && range.hours > 48;
               const estChars = isCompound ? 14 : 6;
               const estPx = estChars * 6 + 10;
               const labelInterval = Math.max(1, Math.ceil(buckets.length / Math.max(1, Math.floor(plotW / estPx))));
-              const showLabel = i % labelInterval === 0;
+              const showLabel = index % labelInterval === 0;
 
               return (
-                <g key={i}
-                   onMouseEnter={() => setHovered(i)}
-                   onMouseLeave={() => setHovered(null)}
-                   onClick={() => onBucketClick?.(b)}
-                   style={{ cursor: onBucketClick ? 'pointer' : 'default' }}>
-                  <rect x={padLeft + i * barGroupW} y={padTop} width={barGroupW} height={plotH + padBottom} fill="transparent" />
-                  {success > 0 && <rect x={x} y={successY} width={barW} height={successH} rx="2" fill={successColor} opacity={hovered === i ? 1 : 0.85} />}
-                  {failure > 0 && <rect x={x} y={failureY} width={barW} height={failureH} rx="2" fill={failureColor} opacity={hovered === i ? 1 : 0.85} />}
+                <g
+                  key={index}
+                  onMouseEnter={() => setHovered(index)}
+                  onMouseLeave={() => setHovered(null)}
+                  onClick={() => onBucketClick?.(bucket)}
+                  style={{ cursor: onBucketClick ? 'pointer' : 'default' }}
+                >
+                  <rect x={padLeft + index * barGroupW} y={padTop} width={barGroupW} height={plotH + padBottom} fill="transparent" />
+                  {success > 0 && <rect x={x} y={successY} width={barW} height={successH} rx="2" fill={successColor} opacity={hovered === index ? 1 : 0.85} />}
+                  {failure > 0 && <rect x={x} y={failureY} width={barW} height={failureH} rx="2" fill={failureColor} opacity={hovered === index ? 1 : 0.85} />}
                   {showLabel && (
-                    <text x={padLeft + i * barGroupW + barGroupW / 2} y={height - 6} textAnchor="middle" fontSize="10" fill="var(--color-text-muted)">
-                      {formatBucketLabel(b.bucketStartUtc, range)}
+                    <text x={padLeft + index * barGroupW + barGroupW / 2} y={height - 6} textAnchor="middle" fontSize="10" fill="var(--color-text-muted)">
+                      {formatBucketLabel(bucket.bucketStartUtc, range, locale)}
                     </text>
                   )}
                 </g>
@@ -168,53 +220,21 @@ function ActivityChart({
 
           {hovered !== null && buckets[hovered] && (
             <div className="rh-chart-tooltip" style={{ left: ((hovered + 0.5) / buckets.length) * 100 + '%' }}>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>{formatTooltipTime(buckets[hovered].bucketStartUtc, range)}</div>
-              <div><span style={{ color: successColor }}>{successLabel}:</span> {(buckets[hovered].successCount || 0).toLocaleString()}</div>
-              <div><span style={{ color: failureColor }}>{failureLabel}:</span> {(buckets[hovered].failureCount || 0).toLocaleString()}</div>
-              <div>Total: {((buckets[hovered].successCount || 0) + (buckets[hovered].failureCount || 0)).toLocaleString()}</div>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{formatTooltipTime(buckets[hovered].bucketStartUtc, range, locale)}</div>
+              <div><span style={{ color: successColor }}>{resolvedSuccessLabel}:</span> {formatNumber(buckets[hovered].successCount || 0, undefined, locale)}</div>
+              <div><span style={{ color: failureColor }}>{resolvedFailureLabel}:</span> {formatNumber(buckets[hovered].failureCount || 0, undefined, locale)}</div>
+              <div>{t('components.chart.totalSeries')}: {formatNumber((buckets[hovered].successCount || 0) + (buckets[hovered].failureCount || 0), undefined, locale)}</div>
             </div>
           )}
         </div>
       )}
 
       <div className="rh-chart-legend">
-        <span className="rh-legend-item"><span className="rh-legend-color" style={{ background: successColor }} /> {successLegend}</span>
-        <span className="rh-legend-item"><span className="rh-legend-color" style={{ background: failureColor }} /> {failureLegend}</span>
+        <span className="rh-legend-item"><span className="rh-legend-color" style={{ background: successColor }} /> {resolvedSuccessLegend}</span>
+        <span className="rh-legend-item"><span className="rh-legend-color" style={{ background: failureColor }} /> {resolvedFailureLegend}</span>
       </div>
     </div>
   );
-}
-
-function computeYCeiling(max) {
-  if (max <= 0) return 1;
-  const step = Math.max(1, Math.ceil(max / 4));
-  let v = 0;
-  while (v < max) v += step;
-  return v || max;
-}
-
-function computeYTicks(max) {
-  if (max <= 0) return [0];
-  const step = Math.max(1, Math.ceil(max / 4));
-  const ticks = [];
-  for (let i = 0; i <= max; i += step) ticks.push(i);
-  return ticks;
-}
-
-function formatBucketLabel(ts, range) {
-  const d = new Date(ts);
-  if (range.bucketMinutes <= 15) return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  if (range.bucketMinutes >= 60 && range.hours > 48) {
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' +
-      d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-
-function formatTooltipTime(ts, range) {
-  const d = new Date(ts);
-  if (range.bucketMinutes >= 1440) return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export default ActivityChart;

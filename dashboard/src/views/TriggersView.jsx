@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import PageHeader from '../components/PageHeader';
 import TableFrame from '../components/TableFrame';
@@ -12,6 +13,7 @@ import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
 import { formatTime } from '../utils/formatters';
 import { HTTP_METHODS } from '../utils/constants';
+import { translateLiteral } from '../utils/i18n';
 
 function parseHttpConfig(s) {
   if (!s) return { allowedMethods: ['POST'], headers: {}, bodySchema: null };
@@ -28,6 +30,8 @@ function parseHttpConfig(s) {
 }
 
 function TriggersView({ apiClient, principal }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const { serverUrl } = useAuth();
   const [tenantId, setTenantId] = useState(principal?.tenantId || '');
   const [data, setData] = useState(null);
@@ -104,22 +108,22 @@ function TriggersView({ apiClient, principal }) {
   };
 
   const columns = [
-    { key: 'name', label: 'Name', tip: 'Trigger name; appears in run history when this trigger fires a flow' },
-    { key: 'triggerType', label: 'Type', tip: 'How the trigger fires: Http (public POST URL), Native (in-process API call), or RabbitMq (queue subscription)', render: (t) => <span className="pill pill-info">{t.triggerType}</span> },
-    { key: 'dataFlowId', label: 'Data Flow', tip: 'The data flow that runs when this trigger fires', render: (t) => {
-      if (!t.dataFlowId) return <span style={{ color: 'var(--color-text-muted)' }}>(none)</span>;
-      const flow = flows.find((f) => f.id === t.dataFlowId);
-      return <span title={t.dataFlowId}>{flow ? flow.name : t.dataFlowId}</span>;
+    { key: 'name', label: tl('Name'), tip: tl('Trigger name; appears in run history when this trigger fires a flow') },
+    { key: 'triggerType', label: tl('Type'), tip: tl('How the trigger fires: Http (public POST URL), Native (in-process API call), or RabbitMq (queue subscription)'), render: (trigger) => <span className="pill pill-info">{tl(trigger.triggerType || '-')}</span> },
+    { key: 'dataFlowId', label: tl('Data Flow'), tip: tl('The data flow that runs when this trigger fires'), render: (trigger) => {
+      if (!trigger.dataFlowId) return <span style={{ color: 'var(--color-text-muted)' }}>{t('common.generic.none')}</span>;
+      const flow = flows.find((f) => f.id === trigger.dataFlowId);
+      return <span title={trigger.dataFlowId}>{flow ? flow.name : trigger.dataFlowId}</span>;
     } },
-    { key: 'url', label: 'Public URL', tip: 'POST to this URL to fire an HTTP trigger; body is passed as the StepRequest data', render: (t) => (
-      t.triggerType === 'Http' ? (
+    { key: 'url', label: tl('Public URL'), tip: tl('POST to this URL to fire an HTTP trigger; body is passed as the StepRequest data'), render: (trigger) => (
+      trigger.triggerType === 'Http' ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          <code className="monospace" title={triggerPublicUrl(t)}>{'/v1.0/triggers/http/' + t.id.slice(0, 12) + '…'}</code>
-          <CopyButton value={triggerPublicUrl(t)} />
+          <code className="monospace" title={triggerPublicUrl(trigger)}>{'/v1.0/triggers/http/' + trigger.id.slice(0, 12) + '…'}</code>
+          <CopyButton value={triggerPublicUrl(trigger)} />
         </span>
       ) : '-'
     )},
-    { key: 'createdUtc', label: 'Created', tip: 'When the trigger was created', render: (t) => formatTime(t.createdUtc) },
+    { key: 'createdUtc', label: tl('Created'), tip: tl('When the trigger was created'), render: (trigger) => formatTime(trigger.createdUtc) },
     { key: 'actions', label: '', style: { width: 48 }, render: (t) => (
       <RowActions
         onEdit={() => startEdit(t)}
@@ -133,12 +137,12 @@ function TriggersView({ apiClient, principal }) {
   return (
     <div>
       <PageHeader
-        title="Triggers"
-        subtitle={'Create inbound entry points that start a data flow. ' + (data?.totalCount ?? '-') + ' triggers in selected tenant.'}
+        title={tl('Triggers')}
+        subtitle={tl('Create inbound entry points that start a data flow. {{count}} triggers in selected tenant.', { count: data?.totalCount ?? '-' })}
         actions={
           <>
             <TenantPicker apiClient={apiClient} value={tenantId} onChange={setTenantId} />
-            <button className="button-primary" onClick={() => startEdit(null)}>+ New trigger</button>
+            <button className="button-primary" onClick={() => startEdit(null)}>{tl('+ New trigger')}</button>
           </>
         }
       />
@@ -162,38 +166,38 @@ function TriggersView({ apiClient, principal }) {
         <Modal
           open
           onClose={() => setEditing(null)}
-          title={editing.id ? 'Edit trigger' : 'Create trigger'}
-          headerMeta={<ModalRecordId label="Trigger ID" value={editing.id} />}
+          title={editing.id ? tl('Edit trigger') : tl('Create trigger')}
+          headerMeta={<ModalRecordId label={tl('Trigger ID')} value={editing.id} />}
           footer={<>
-            <button className="button-secondary" onClick={() => setEditing(null)}>Cancel</button>
-            <button className="button-primary" onClick={save}>Save</button>
+            <button className="button-secondary" onClick={() => setEditing(null)}>{t('common.actions.cancel')}</button>
+            <button className="button-primary" onClick={save}>{t('common.actions.save')}</button>
           </>}
         >
           <div className="grid-2">
-            <div className="form-row"><label title="Trigger name; visible on run records">Name</label><input value={editing.name || ''} placeholder="Order webhook" onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
+            <div className="form-row"><label title={tl('Trigger name; visible on run records')}>{tl('Name')}</label><input value={editing.name || ''} placeholder={tl('Order webhook')} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></div>
             <div className="form-row">
-              <label title="Http: exposes a POST URL. Native: invoked from in-process code. RabbitMq: subscribes to a queue">Type</label>
+              <label title={tl('Http: exposes a POST URL. Native: invoked from in-process code. RabbitMq: subscribes to a queue')}>{tl('Type')}</label>
               <select value={editing.triggerType} onChange={(e) => setEditing({ ...editing, triggerType: e.target.value })}>
-                <option value="Http">Http</option>
-                <option value="Native">Native</option>
-                <option value="RabbitMq">RabbitMq</option>
+                <option value="Http">{tl('Http')}</option>
+                <option value="Native">{tl('Native')}</option>
+                <option value="RabbitMq">{tl('RabbitMq')}</option>
               </select>
             </div>
           </div>
           <div className="form-row">
-            <label title="The flow that runs when this trigger fires. Each fire creates one Run">Associated flow</label>
+            <label title={tl('The flow that runs when this trigger fires. Each fire creates one Run')}>{tl('Associated flow')}</label>
             <select value={editing.dataFlowId || ''} onChange={(e) => setEditing({ ...editing, dataFlowId: e.target.value || null })}>
-              <option value="">(none)</option>
+              <option value="">{t('common.generic.none')}</option>
               {flows.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </div>
 
           {editing.triggerType === 'Http' && (
             <div className="card" style={{ marginBottom: 'var(--spacing-sm)' }}>
-              <div className="card-title" style={{ marginBottom: 'var(--spacing-sm)' }}>HTTP request configuration</div>
+              <div className="card-title" style={{ marginBottom: 'var(--spacing-sm)' }}>{tl('HTTP request configuration')}</div>
 
               <div className="form-row">
-                <label title="Public URL clients POST to in order to fire the trigger. Generated from the trigger id and not editable">Public URL (inbound, read-only)</label>
+                <label title={tl('Public URL clients POST to in order to fire the trigger. Generated from the trigger id and not editable')}>{tl('Public URL (inbound, read-only)')}</label>
                 {editing.id ? (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <code className="monospace" style={{ flex: 1, padding: '0.5rem 0.625rem', background: 'var(--color-surface-alt)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)' }}>{serverUrl + '/v1.0/triggers/http/' + editing.id}</code>
@@ -201,22 +205,18 @@ function TriggersView({ apiClient, principal }) {
                   </div>
                 ) : (
                   <div className="form-help" style={{ padding: '0.5rem 0.625rem', background: 'var(--color-surface-alt)', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-sm)' }}>
-                    Will be assigned after save. Pattern: <code className="monospace">{serverUrl}/v1.0/triggers/http/&lt;trigger-id&gt;</code>
+                    {tl('Will be assigned after save. Pattern:')} <code className="monospace">{serverUrl}/v1.0/triggers/http/&lt;trigger-id&gt;</code>
                   </div>
                 )}
                 <div className="form-help">
-                  This is the <strong>inbound</strong> URL — external clients (webhooks, your own apps, partners) POST
-                  here to <em>start</em> the associated data flow. The request body becomes the initial
-                  <code> StepRequest.Data</code> the flow receives. The URL is generated from the trigger's id and is
-                  not editable.
+                  {tl("This is the inbound URL external clients post to in order to start the associated data flow. The request body becomes the initial StepRequest.Data and the URL is generated from the trigger's id.")}
                   <br /><br />
-                  Don't confuse this with a step's <em>outbound</em> URL template (on the Steps page) — that's where the
-                  flow's REST steps fire requests <em>out</em> to other services as part of doing their work.
+                  {tl("Don't confuse this with a step's outbound URL template on the Steps page. That is where REST steps call other services as part of the workflow.")}
                 </div>
               </div>
 
               <div className="form-row">
-                <label title="HTTP methods accepted on the public URL. Other methods are rejected with 405">Allowed HTTP methods</label>
+                <label title={tl('HTTP methods accepted on the public URL. Other methods are rejected with 405')}>{tl('Allowed HTTP methods')}</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {HTTP_METHODS.map((m) => (
                     <label key={m} title={m} style={{ display: 'inline-flex', gap: 4, alignItems: 'center', padding: '0.25rem 0.5rem', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}>
@@ -228,43 +228,43 @@ function TriggersView({ apiClient, principal }) {
               </div>
 
               <div className="form-row">
-                <label title="Headers required on incoming requests. Empty value = require header presence only; non-empty value = require an exact match">Required headers</label>
+                <label title={tl('Headers required on incoming requests. Empty value = require header presence only; non-empty value = require an exact match')}>{tl('Required headers')}</label>
                 {Object.entries(httpConfig.headers || {}).map(([k, v], i) => (
                   <div key={i} style={{ display: 'grid', gridTemplateColumns: '200px 1fr auto', gap: 'var(--spacing-sm)', marginBottom: 'var(--spacing-sm)' }}>
                     <input value={k} placeholder="x-api-key" onChange={(e) => updateHeader(i, e.target.value, v)} />
-                    <input value={v} placeholder="(empty = presence only)" onChange={(e) => updateHeader(i, k, e.target.value)} />
-                    <button type="button" className="button-ghost" onClick={() => removeHeader(i)} aria-label="Remove" title="Remove this header requirement">×</button>
+                    <input value={v} placeholder={tl('(empty = presence only)')} onChange={(e) => updateHeader(i, k, e.target.value)} />
+                    <button type="button" className="button-ghost" onClick={() => removeHeader(i)} aria-label={t('common.actions.remove')} title={tl('Remove this header requirement')}>×</button>
                   </div>
                 ))}
-                <button type="button" className="button-secondary" onClick={addHeader} title="Add a new required-header rule">+ Add header</button>
+                <button type="button" className="button-secondary" onClick={addHeader} title={tl('Add a new required-header rule')}>{t('common.actions.addHeader')}</button>
               </div>
 
               <div className="form-row">
-                <label title="Optional JSON Schema; if set, request bodies are validated against it before the flow fires">Body JSON schema (optional)</label>
+                <label title={tl('Optional JSON Schema; if set, request bodies are validated against it before the flow fires')}>{tl('Body JSON schema (optional)')}</label>
                 <textarea rows={6} placeholder='{"type":"object","required":["orderId"],"properties":{"orderId":{"type":"string"}}}' value={httpConfig.bodySchema ? JSON.stringify(httpConfig.bodySchema, null, 2) : ''} onChange={(e) => {
                   if (!e.target.value.trim()) { setHttpConfig((c) => ({ ...c, bodySchema: null })); return; }
                   try { setHttpConfig((c) => ({ ...c, bodySchema: JSON.parse(e.target.value) })); }
                   catch { /* leave as-is; user will fix */ }
                 }} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }} />
-                <div className="form-help">Parsed and saved into the trigger's <code>configuration</code> JSON blob. Enforcement happens in your flow/step logic.</div>
+                <div className="form-help">{tl("Parsed and saved into the trigger's configuration JSON blob. Enforcement happens in your flow or step logic.")}</div>
               </div>
             </div>
           )}
 
           {editing.triggerType !== 'Http' && (
-            <div className="form-row"><label title="Free-form JSON configuration consumed by the trigger implementation">Configuration (JSON, optional)</label><textarea rows={4} value={editing.configuration || ''} placeholder='{"queueName": "orders", "exchange": "events"}' onChange={(e) => setEditing({ ...editing, configuration: e.target.value })} style={{ fontFamily: 'var(--font-mono)' }} /></div>
+            <div className="form-row"><label title={tl('Free-form JSON configuration consumed by the trigger implementation')}>{tl('Configuration (JSON, optional)')}</label><textarea rows={4} value={editing.configuration || ''} placeholder='{"queueName": "orders", "exchange": "events"}' onChange={(e) => setEditing({ ...editing, configuration: e.target.value })} style={{ fontFamily: 'var(--font-mono)' }} /></div>
           )}
 
-          <div className="form-row"><label title="Inactive triggers reject all firings"><input type="checkbox" checked={!!editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} style={{ width: 'auto' }} /> Active</label></div>
+          <div className="form-row"><label title={tl('Inactive triggers reject all firings')}><input type="checkbox" checked={!!editing.active} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} style={{ width: 'auto' }} /> {t('common.generic.active')}</label></div>
         </Modal>
       )}
 
-      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Trigger JSON" />
-      <ConfirmModal open={!!confirmDelete} danger title="Delete trigger"
+      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title={tl('Trigger JSON')} />
+      <ConfirmModal open={!!confirmDelete} danger title={tl('Delete trigger')}
         recordId={confirmDelete?.id || ''}
-        recordIdLabel="Trigger ID"
-        message={'Delete trigger "' + (confirmDelete?.name || '') + '"?'}
-        confirmLabel="Delete"
+        recordIdLabel={tl('Trigger ID')}
+        message={tl('Delete trigger "{{name}}"?', { name: confirmDelete?.name || '' })}
+        confirmLabel={t('common.actions.delete')}
         onConfirm={async () => { await apiClient.deleteTrigger(tenantId, confirmDelete.id); setConfirmDelete(null); refresh(); }}
         onCancel={() => setConfirmDelete(null)} />
     </div>

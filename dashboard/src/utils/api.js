@@ -1,6 +1,8 @@
 /**
  * API client for communicating with the Tempo Server.
  */
+import i18n from '../i18n';
+
 class ApiError extends Error {
   constructor(status, body) {
     super('HTTP ' + status + ': ' + body);
@@ -16,13 +18,13 @@ class ApiClient {
   }
 
   _headers(extra = {}) {
-    const headers = { 'Content-Type': 'application/json', ...extra };
+    const headers = { 'Content-Type': 'application/json', 'Accept-Language': i18n.resolvedLanguage || i18n.language || 'en', ...extra };
     if (this.token) headers['Authorization'] = 'Bearer ' + this.token;
     return headers;
   }
 
   _authHeaders(extra = {}) {
-    const headers = { ...extra };
+    const headers = { 'Accept-Language': i18n.resolvedLanguage || i18n.language || 'en', ...extra };
     if (this.token) headers['Authorization'] = 'Bearer ' + this.token;
     return headers;
   }

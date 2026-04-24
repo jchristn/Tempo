@@ -52,12 +52,14 @@ Supported authentication inputs:
 
 | Header | Purpose |
 | --- | --- |
-| `Authorization: Bearer {token}` | Bearer token issued by `/v1.0/token` |
+| `Authorization: Bearer {value}` | Tempo bearer authentication. `{value}` can be a token issued by `/v1.0/token` or a credential access key |
 | `x-token: {token}` | Token header alternative |
 | `x-api-key: {key}` | System admin API key |
-| `x-access-key: {key}` and `x-secret-key: {secret}` | Credential pair authentication |
+| `x-access-key: {key}` | Credential access key header alternative |
 | `x-tenant-id: {tenantId}` | Optional tenant hint for credential authentication |
 | `x-email` and `x-password` | Password-auth header flow |
+
+`x-secret-key` is not accepted on API requests.
 
 Issue a token:
 
@@ -797,7 +799,7 @@ HTTP trigger routes are not tenant-scoped in the URL, but the referenced flow co
 | `Public` | Anyone with the trigger ID can invoke the flow |
 | `ApiAuthenticated` | The request must include standard Tempo API credentials, and the authenticated principal must be allowed to act on the flow's tenant |
 
-Supported authentication headers are the same as management API requests, including `Authorization: Bearer {token}`, `x-token`, `x-api-key`, or credential pair headers.
+Supported authentication headers are the same as management API requests, including `Authorization: Bearer {token-or-access-key}`, `x-token`, `x-api-key`, or `x-access-key`.
 
 Create a POST trigger:
 
@@ -850,7 +852,7 @@ API-authenticated flow trigger:
 
 ```http
 POST /v1.0/triggers/http/{triggerId}
-Authorization: Bearer {token}
+Authorization: Bearer {token-or-access-key}
 Content-Type: application/json
 
 {
@@ -894,6 +896,7 @@ Status behavior:
 | `200` | Run completed successfully; response body is flow output |
 | `202` | Run did not reach a terminal state before the wait budget; response body is current output if any |
 | `401` | Flow requires API-authenticated invocation and no valid credentials were supplied |
+| `400` | Request supplied unsupported auth input such as `x-secret-key` |
 | `403` | Authenticated principal cannot act on the flow's tenant |
 | `404` | Trigger or associated flow was not found |
 | `405` | HTTP method is not allowed by trigger configuration |
