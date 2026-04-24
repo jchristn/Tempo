@@ -67,7 +67,6 @@ namespace Tempo.McpServer.Services
             ApplyString(Constants.TempoTokenEnvironmentVariable, value => settings.Tempo.Token = value);
             ApplyString(Constants.TempoApiKeyEnvironmentVariable, value => settings.Tempo.ApiKey = value);
             ApplyString(Constants.TempoAccessKeyEnvironmentVariable, value => settings.Tempo.AccessKey = value);
-            ApplyString(Constants.TempoSecretKeyEnvironmentVariable, value => settings.Tempo.SecretKey = value);
             ApplyString(Constants.TempoTenantIdEnvironmentVariable, value => settings.Tempo.DefaultTenantId = value);
             ApplyString(Constants.McpHttpHostnameEnvironmentVariable, value => settings.Http.Hostname = value);
             ApplyInt(Constants.McpHttpPortEnvironmentVariable, value => settings.Http.Port = value);

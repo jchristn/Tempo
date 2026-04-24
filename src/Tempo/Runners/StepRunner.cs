@@ -43,7 +43,7 @@
             // Log step start
             if (Logger != null && !String.IsNullOrEmpty(req.RequestId))
             {
-                await Logger.Info(req.RequestId, $"Starting step '{stepId}'").ConfigureAwait(false);
+                await Logger.Info(req.RequestId, $"Starting step {stepId}").ConfigureAwait(false);
             }
 
             StepResult result;
@@ -84,7 +84,7 @@
             if (Logger != null && !String.IsNullOrEmpty(req.RequestId))
             {
                 string resultStr = result?.Result.ToString() ?? "Unknown";
-                await Logger.Info(req.RequestId, $"Step '{stepId}' completed (Result: {resultStr}, Runtime: {runtimeMs}ms)").ConfigureAwait(false);
+                await Logger.Info(req.RequestId, $"Step {stepId} completed (Result: {resultStr}, Runtime: {runtimeMs}ms)").ConfigureAwait(false);
             }
 
             return result ?? throw new InvalidOperationException($"Step '{stepId}' execution failed to produce a result.");

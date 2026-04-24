@@ -44,6 +44,7 @@ namespace Tempo.Server.Routes
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.POST, "/v1.0/tenants/{tenantId}/artifacts/{id}/versions", UploadVersionAsync, null, openApiMetadata: UploadVersionOpenApi());
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/artifacts/{id}/versions", EnumerateVersionsAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("List artifact versions", "Artifacts").WithResponse(200, OpenApiResponseMetadata.Ok(OpenApiSchemaCatalog.Enumeration(OpenApiSchemaCatalog.ArtifactVersionRecord()))));
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/artifacts/{id}/versions/{version}/download", DownloadVersionAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Download artifact version", "Artifacts").WithResponse(200, OpenApiResponseMetadata.Binary("Artifact package bytes.", "application/octet-stream")).WithResponse(404, OpenApiResponseMetadata.NotFound()));
+            server.Routes.PreAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/workers/artifacts/{tenantId}/blobs/{sha256}/download", WorkerDownloadVersionAsync, null, openApiMetadata: WorkerDownloadOpenApi());
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/artifacts/{id}/versions/{version}", ReadVersionAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Read artifact version", "Artifacts").WithResponse(200, OpenApiResponseMetadata.Ok(OpenApiSchemaCatalog.ArtifactVersionRecord())).WithResponse(404, OpenApiResponseMetadata.NotFound()));
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.DELETE, "/v1.0/tenants/{tenantId}/artifacts/{id}/versions/{version}", DeleteVersionAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Delete artifact version", "Artifacts").WithResponse(204, OpenApiResponseMetadata.NoContent()).WithResponse(403, OpenApiResponseMetadata.Forbidden()).WithResponse(404, OpenApiResponseMetadata.NotFound()));
         }
@@ -100,6 +101,17 @@ namespace Tempo.Server.Routes
             if (includeBody)
                 metadata.WithRequestBody(OpenApiRequestBodyMetadata.Json(OpenApiSchemaCatalog.ArtifactFileWriteRequest(), "Editable artifact file body.", true));
             return metadata;
+        }
+
+        private static OpenApiRouteMetadata WorkerDownloadOpenApi()
+        {
+            return OpenApiRouteMetadata.Create("Download artifact version for a worker assignment", "Workers")
+                .WithParameter(OpenApiParameterMetadata.Query("runAssignmentId", "Run-assignment identifier for the active worker lease.", true, OpenApiSchemaMetadata.String(null)))
+                .WithParameter(OpenApiParameterMetadata.Query("leaseToken", "Lease token for the active worker assignment.", true, OpenApiSchemaMetadata.String(null)))
+                .WithResponse(200, OpenApiResponseMetadata.Binary("Artifact package bytes.", "application/octet-stream"))
+                .WithResponse(401, OpenApiResponseMetadata.Unauthorized())
+                .WithResponse(403, OpenApiResponseMetadata.Forbidden())
+                .WithResponse(404, OpenApiResponseMetadata.NotFound());
         }
 
         private async Task<(RequestContext?, string?)> TenantAuthAsync(HttpContextBase ctx, OperationTypeEnum operation)
@@ -412,6 +424,66 @@ namespace Tempo.Server.Routes
                 ctx.Response.ContentType = string.IsNullOrWhiteSpace(version.ContentType) ? "application/octet-stream" : version.ContentType;
                 if (!string.IsNullOrWhiteSpace(version.OriginalFileName))
                     ctx.Response.Headers.Add("Content-Disposition", "attachment; filename=\"" + SafeFileName(version.OriginalFileName) + "\"");
+                await ctx.Response.Send(ms.ToArray()).ConfigureAwait(false);
+            }
+            catch (FileNotFoundException)
+            {
+                await RouteHelpers.NotFoundAsync(ctx, "Artifact blob not found.").ConfigureAwait(false);
+            }
+        }
+
+        private async Task WorkerDownloadVersionAsync(HttpContextBase ctx)
+        {
+            string? workerId = ctx.Request.Headers[Constants.HeaderWorkerId];
+            string? workerToken = ctx.Request.Headers[Constants.HeaderWorkerToken];
+            string? tenantId = RouteHelpers.Path(ctx, "tenantId");
+            string? sha256 = RouteHelpers.Path(ctx, "sha256");
+            string? runAssignmentId = RouteHelpers.Query(ctx, "runAssignmentId");
+            string? leaseToken = RouteHelpers.Query(ctx, "leaseToken");
+
+            if (string.IsNullOrWhiteSpace(workerId) || string.IsNullOrWhiteSpace(workerToken))
+            {
+                await RouteHelpers.UnauthorizedAsync(ctx).ConfigureAwait(false);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(tenantId) || string.IsNullOrWhiteSpace(sha256))
+            {
+                await RouteHelpers.BadRequestAsync(ctx, "tenantId and sha256 are required.").ConfigureAwait(false);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(runAssignmentId) || string.IsNullOrWhiteSpace(leaseToken))
+            {
+                await RouteHelpers.BadRequestAsync(ctx, "runAssignmentId and leaseToken are required.").ConfigureAwait(false);
+                return;
+            }
+
+            WorkerRecord? worker = await _Host.DispatchCoordinator.AuthenticateWorkerAsync(workerId, workerToken).ConfigureAwait(false);
+            if (worker == null)
+            {
+                await RouteHelpers.UnauthorizedAsync(ctx).ConfigureAwait(false);
+                return;
+            }
+
+            bool authorized = await _Host.DispatchCoordinator.ValidateWorkerArtifactAccessAsync(
+                workerId,
+                runAssignmentId,
+                leaseToken,
+                tenantId,
+                sha256).ConfigureAwait(false);
+
+            if (!authorized)
+            {
+                await RouteHelpers.ForbiddenAsync(ctx).ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                using Stream stream = await _Host.ArtifactBlobStore.OpenReadAsync(tenantId, sha256).ConfigureAwait(false);
+                using MemoryStream ms = new MemoryStream();
+                await stream.CopyToAsync(ms).ConfigureAwait(false);
+                ctx.Response.StatusCode = 200;
+                ctx.Response.ContentType = "application/octet-stream";
                 await ctx.Response.Send(ms.ToArray()).ConfigureAwait(false);
             }
             catch (FileNotFoundException)

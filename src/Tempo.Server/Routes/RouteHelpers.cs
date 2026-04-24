@@ -3,6 +3,7 @@ namespace Tempo.Server.Routes
     using System;
     using System.Text;
     using System.Threading.Tasks;
+    using Tempo.Core;
     using Tempo.Core.Responses;
     using Tempo.Core.Security;
     using Tempo.Server.Serialization;
@@ -32,8 +33,16 @@ namespace Tempo.Server.Routes
         }
 
         /// <summary>Write a 401.</summary>
-        public static Task UnauthorizedAsync(HttpContextBase ctx) =>
-            ErrorAsync(ctx, 401, "Unauthorized", "Authentication is required.");
+        public static Task UnauthorizedAsync(HttpContextBase ctx)
+        {
+            if (HasUnsupportedSecretKeyHeader(ctx))
+                return UnsupportedSecretKeyAsync(ctx);
+            return ErrorAsync(ctx, 401, "Unauthorized", "Authentication is required.");
+        }
+
+        /// <summary>Write a 400 when callers attempt to use the unsupported <c>x-secret-key</c> header.</summary>
+        public static Task UnsupportedSecretKeyAsync(HttpContextBase ctx) =>
+            ErrorAsync(ctx, 400, "UnsupportedAuthHeader", "x-secret-key is not supported for API authentication. Use Authorization: Bearer {token-or-access-key}, x-token, x-api-key, or x-access-key.");
 
         /// <summary>Write a 403.</summary>
         public static Task ForbiddenAsync(HttpContextBase ctx) =>
@@ -52,6 +61,14 @@ namespace Tempo.Server.Routes
         {
             if (ctx.Metadata is RequestContext rc) return rc;
             return null;
+        }
+
+        /// <summary>Whether the request supplied the unsupported <c>x-secret-key</c> header.</summary>
+        public static bool HasUnsupportedSecretKeyHeader(HttpContextBase ctx)
+        {
+            if (ctx == null) throw new ArgumentNullException(nameof(ctx));
+            if (ctx.Metadata is RequestContext rc && rc.ContainsUnsupportedSecretKeyHeader) return true;
+            return !string.IsNullOrWhiteSpace(ctx.Request.Headers[Constants.HeaderSecretKey]);
         }
 
         /// <summary>Read a path parameter by key.</summary>

@@ -129,7 +129,7 @@ namespace Tempo.McpServer.Tools
                 type = "object",
                 properties = new
                 {
-                    triggerId = new { type = "string", description = "HTTP trigger identifier." },
+                    triggerId = new { type = "string", description = "HTTP trigger identifier. If the flow requires API-authenticated invocation, the MCP server's configured Tempo credentials are forwarded." },
                     body = new { description = "JSON request body to send to the trigger." }
                 },
                 required = new[] { "triggerId" }
@@ -150,7 +150,7 @@ namespace Tempo.McpServer.Tools
                     language = new { type = "string", description = "Python, JavaScript, or CSharp." },
                     code = new { type = "string", description = "Source code." },
                     function = new { type = "string", description = "Python or JavaScript function name." },
-                    handlerType = new { type = "string", description = "C# handler type." },
+                    handlerType = new { type = "string", description = "C# handler type implementing ITempoStepHandler or inheriting TempoStepHandlerBase." },
                     entrypoint = new { type = "string", description = "Entrypoint file or assembly name." },
                     fileName = new { type = "string", description = "Optional source file name." }
                 },
@@ -172,6 +172,76 @@ namespace Tempo.McpServer.Tools
                     body = new { description = "Optional JSON request body for POST and PUT." }
                 },
                 required = new[] { "method", "path" }
+            };
+        }
+
+        /// <summary>Log source list schema.</summary>
+        /// <returns>Schema.</returns>
+        public static object LogFiles()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    sourceKind = new { type = "string", description = "Log source kind: server or worker." },
+                    sourceId = new { type = "string", description = "Log source identifier." }
+                },
+                required = new[] { "sourceKind", "sourceId" }
+            };
+        }
+
+        /// <summary>Bounded log file read schema.</summary>
+        /// <returns>Schema.</returns>
+        public static object LogFileRead()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    sourceKind = new { type = "string", description = "Log source kind: server or worker." },
+                    sourceId = new { type = "string", description = "Log source identifier." },
+                    path = new { type = "string", description = "Log file path relative to the source root." },
+                    tailLines = new { type = "integer", description = "Optional tail line count for bounded reads." },
+                    maxBytes = new { type = "integer", description = "Optional maximum UTF-8 bytes returned for bounded reads." }
+                },
+                required = new[] { "sourceKind", "sourceId", "path" }
+            };
+        }
+
+        /// <summary>Run log list schema.</summary>
+        /// <returns>Schema.</returns>
+        public static object RunLogList()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    tenantId = new { type = "string", description = "Tenant identifier. Uses settings.tempo.defaultTenantId when omitted." },
+                    id = new { type = "string", description = "Flow run identifier." }
+                },
+                required = new[] { "id" }
+            };
+        }
+
+        /// <summary>Run log read schema.</summary>
+        /// <returns>Schema.</returns>
+        public static object RunLogRead()
+        {
+            return new
+            {
+                type = "object",
+                properties = new
+                {
+                    tenantId = new { type = "string", description = "Tenant identifier. Uses settings.tempo.defaultTenantId when omitted." },
+                    id = new { type = "string", description = "Flow run identifier." },
+                    path = new { type = "string", description = "Run-log path relative to the run directory." },
+                    tailLines = new { type = "integer", description = "Optional tail line count for bounded reads." },
+                    maxBytes = new { type = "integer", description = "Optional maximum UTF-8 bytes returned for bounded reads." }
+                },
+                required = new[] { "id", "path" }
             };
         }
     }

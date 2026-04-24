@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Modal from './Modal';
 import TenantPicker from './TenantPicker';
 import CopyableId from './CopyableId';
 import CopyButton from './CopyButton';
 import { formatTime } from '../utils/formatters';
+import { buildCurlCommand } from '../utils/curl';
+import { normalizeApiError, translateLiteral } from '../utils/i18n';
 
-function codeTemplate(language, kind = 'echo') {
+export function codeTemplate(language, kind = 'echo') {
   if (language === 'CSharp') {
     if (kind === 'random') {
       return {
         fileName: 'RandomNumberHandler.cs',
         function: 'run',
         handlerType: 'Tempo.UserSteps.RandomNumberHandler',
-        code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class RandomNumberHandler : ITempoStepHandler\n{\n    private static readonly Random Random = new Random();\n\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        int value = Random.Next(1, 11);\n        return Task.FromResult(TempoStepHost.Success(request, new { value, min = 1, max = 10 }));\n    }\n}\n'
+        code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class RandomNumberHandler : TempoStepHandlerBase\n{\n    private static readonly Random Random = new Random();\n\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        int value = Random.Next(1, 11);\n        LogInfo("Random number step generated value: " + value);\n        return Task.FromResult(Success(request, new { value, min = 1, max = 10 }));\n    }\n}\n'
       };
     }
     if (kind === 'double') {
@@ -20,14 +23,14 @@ function codeTemplate(language, kind = 'echo') {
         fileName: 'DoubleNumberHandler.cs',
         function: 'run',
         handlerType: 'Tempo.UserSteps.DoubleNumberHandler',
-        code: 'using System.Text.Json;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class DoubleNumberHandler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        double input = ReadNumber(request.Data);\n        return Task.FromResult(TempoStepHost.Success(request, new { input, value = input * 2 }));\n    }\n\n    private static double ReadNumber(object? data)\n    {\n        if (data is JsonElement element)\n        {\n            if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out double number)) return number;\n            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("value", out JsonElement value) && value.TryGetDouble(out double nested)) return nested;\n        }\n        return 0;\n    }\n}\n'
+        code: 'using System;\nusing System.Text.Json;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class DoubleNumberHandler : TempoStepHandlerBase\n{\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        double input = ReadNumber(request.Data);\n        LogInfo("Double number step received value: " + input);\n        return Task.FromResult(Success(request, new { input, value = input * 2 }));\n    }\n\n    private static double ReadNumber(object? data)\n    {\n        if (data is JsonElement element)\n        {\n            if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out double number)) return number;\n            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("value", out JsonElement value) && value.TryGetDouble(out double nested)) return nested;\n        }\n        return 0;\n    }\n}\n'
       };
     }
     return {
       fileName: 'Handler.cs',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'using System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        return Task.FromResult(TempoStepHost.Success(request, new { ok = true, input = request.Data }));\n    }\n}\n'
+      code: 'using System;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\n\nnamespace Tempo.UserSteps;\n\npublic sealed class Handler : TempoStepHandlerBase\n{\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        LogInfo("Echo step received input: " + request.Data);\n        return Task.FromResult(Success(request, new { ok = true, input = request.Data }));\n    }\n}\n'
     };
   }
   if (language === 'Python') {
@@ -36,7 +39,7 @@ function codeTemplate(language, kind = 'echo') {
         fileName: 'random_number_handler.py',
         function: 'run',
         handlerType: 'Tempo.UserSteps.Handler',
-        code: 'import random\n\n\ndef run(req):\n    value = random.randint(1, 10)\n    return {\"value\": value, \"min\": 1, \"max\": 10}\n'
+        code: 'import random\n\n\ndef run(req):\n    value = random.randint(1, 10)\n    print(f"Random number step generated value: {value}")\n    return {\"value\": value, \"min\": 1, \"max\": 10}\n'
       };
     }
     if (kind === 'double') {
@@ -44,14 +47,14 @@ function codeTemplate(language, kind = 'echo') {
         fileName: 'double_number_handler.py',
         function: 'run',
         handlerType: 'Tempo.UserSteps.Handler',
-        code: 'def run(req):\n    data = req.get(\"data\") or {}\n    value = data if isinstance(data, (int, float)) else data.get(\"value\", 0)\n    return {\"input\": value, \"value\": value * 2}\n'
+        code: 'def run(req):\n    data = req.get(\"data\") or {}\n    value = data if isinstance(data, (int, float)) else data.get(\"value\", 0)\n    print(f"Double number step received value: {value}")\n    return {\"input\": value, \"value\": value * 2}\n'
       };
     }
     return {
       fileName: 'handler.py',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'def run(req):\n    return {\"ok\": True, \"input\": req.get(\"data\")}\n'
+      code: 'def run(req):\n    print("Echo step received input:", req.get("data"))\n    return {\"ok\": True, \"input\": req.get(\"data\")}\n'
     };
   }
   if (kind === 'random') {
@@ -59,7 +62,7 @@ function codeTemplate(language, kind = 'echo') {
       fileName: 'random-number-handler.js',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'exports.run = async function(req) {\n  const value = Math.floor(Math.random() * 10) + 1;\n  return { value, min: 1, max: 10 };\n};\n'
+      code: 'exports.run = async function(req) {\n  const value = Math.floor(Math.random() * 10) + 1;\n  console.log("Random number step generated value:", value);\n  return { value, min: 1, max: 10 };\n};\n'
     };
   }
   if (kind === 'double') {
@@ -67,72 +70,27 @@ function codeTemplate(language, kind = 'echo') {
       fileName: 'double-number-handler.js',
       function: 'run',
       handlerType: 'Tempo.UserSteps.Handler',
-      code: 'exports.run = async function(req) {\n  const data = req.data || {};\n  const value = typeof data === "number" ? data : Number(data.value || 0);\n  return { input: value, value: value * 2 };\n};\n'
+      code: 'exports.run = async function(req) {\n  const data = req.data || {};\n  const value = typeof data === "number" ? data : Number(data.value || 0);\n  console.log("Double number step received value:", value);\n  return { input: value, value: value * 2 };\n};\n'
     };
   }
   return {
     fileName: 'handler.js',
     function: 'run',
     handlerType: 'Tempo.UserSteps.Handler',
-    code: 'exports.run = async function(req) {\n  return { ok: true, input: req.data };\n};\n'
+    code: 'exports.run = async function(req) {\n  console.log("Echo step received input:", req.data);\n  return { ok: true, input: req.data };\n};\n'
   };
-}
-
-function normalizeError(err) {
-  if (!err) return 'Request failed.';
-  if (err.body) {
-    try {
-      const parsed = JSON.parse(err.body);
-      return parsed.message || parsed.details || err.message;
-    } catch { return err.body; }
-  }
-  return err.message || String(err);
-}
-
-function compactJson(text) {
-  const trimmed = (text || '').trim();
-  if (!trimmed) return '{}';
-  try {
-    return JSON.stringify(JSON.parse(trimmed));
-  } catch {
-    return trimmed;
-  }
-}
-
-function shellSingleQuote(value) {
-  return "'" + String(value).replace(/'/g, "'\\''") + "'";
-}
-
-function windowsCmdDoubleQuote(value) {
-  return '"' + String(value).replace(/"/g, '\\\"') + '"';
-}
-
-function clientPlatform() {
-  if (typeof navigator === 'undefined') return '';
-  return navigator.userAgentData?.platform || navigator.platform || '';
 }
 
 function runItYourselfCommand(triggerUrl, inputJson, method = 'POST') {
   const normalizedMethod = (method || 'POST').toUpperCase();
-  const hasBody = normalizedMethod !== 'GET' && (typeof inputJson === 'string' ? inputJson.trim().length > 0 : inputJson !== null && inputJson !== undefined);
-  const payload = hasBody ? compactJson(inputJson) : '';
-  const platform = clientPlatform();
-  if (/win/i.test(platform)) {
-    const base = normalizedMethod === 'GET'
-      ? 'curl.exe ' + windowsCmdDoubleQuote(triggerUrl)
-      : 'curl.exe -X ' + normalizedMethod + ' ' + windowsCmdDoubleQuote(triggerUrl);
-    return {
-      label: 'Windows cmd.exe',
-      command: hasBody ? base + ' -H "Content-Type: application/json" -d ' + windowsCmdDoubleQuote(payload) : base
-    };
-  }
-  const base = normalizedMethod === 'GET'
-    ? 'curl ' + shellSingleQuote(triggerUrl)
-    : 'curl -X ' + normalizedMethod + ' ' + shellSingleQuote(triggerUrl);
-  return {
-    label: /mac/i.test(platform) ? 'macOS/Linux shell' : 'Shell',
-    command: hasBody ? base + " -H 'Content-Type: application/json' --data-raw " + shellSingleQuote(payload) : base
-  };
+  const hasBody = normalizedMethod !== 'GET'
+    && (typeof inputJson === 'string' ? inputJson.trim().length > 0 : inputJson !== null && inputJson !== undefined);
+  return buildCurlCommand({
+    url: triggerUrl,
+    method: normalizedMethod,
+    headers: hasBody ? { 'Content-Type': 'application/json' } : {},
+    body: hasBody ? inputJson : null
+  });
 }
 
 const SOURCE_RUNTIME_BY_LANGUAGE = {
@@ -142,30 +100,35 @@ const SOURCE_RUNTIME_BY_LANGUAGE = {
 };
 const SOURCE_LANGUAGE_ORDER = ['JavaScript', 'Python', 'CSharp'];
 const FULL_ID_MAX = 128;
-const RANDOM_STEP_DEFAULTS = {
-  executionKey: 'random_number_step',
-  name: 'Random number step',
-  description: 'Generates a random integer between 1 and 10.',
-  entrypoint: 'main',
-  artifactName: 'Random number step source package'
-};
-const DOUBLE_STEP_DEFAULTS = {
-  executionKey: 'double_number_step',
-  name: 'Double number step',
-  description: 'Multiplies the previous step output by 2.',
-  entrypoint: 'main',
-  artifactName: 'Double number step source package'
-};
+function randomStepDefaults(t) {
+  return {
+    executionKey: 'random_number_step',
+    name: translateLiteral(t, 'Random number step'),
+    description: translateLiteral(t, 'Generates a random integer between 1 and 10.'),
+    entrypoint: 'main',
+    artifactName: translateLiteral(t, 'Random number step source package')
+  };
+}
 
-function stepDefaults(language, kind) {
-  if (kind === 'random') return { ...RANDOM_STEP_DEFAULTS, ...codeTemplate(language, 'random') };
-  if (kind === 'double') return { ...DOUBLE_STEP_DEFAULTS, ...codeTemplate(language, 'double') };
+function doubleStepDefaults(t) {
+  return {
+    executionKey: 'double_number_step',
+    name: translateLiteral(t, 'Double number step'),
+    description: translateLiteral(t, 'Multiplies the previous step output by 2.'),
+    entrypoint: 'main',
+    artifactName: translateLiteral(t, 'Double number step source package')
+  };
+}
+
+function stepDefaults(language, t, kind) {
+  if (kind === 'random') return { ...randomStepDefaults(t), ...codeTemplate(language, 'random') };
+  if (kind === 'double') return { ...doubleStepDefaults(t), ...codeTemplate(language, 'double') };
   return {
     executionKey: 'echo_step',
-    name: 'Echo step',
-    description: 'Echoes the input payload.',
+    name: translateLiteral(t, 'Echo step'),
+    description: translateLiteral(t, 'Echoes the input payload.'),
     entrypoint: 'main',
-    artifactName: 'Echo step source package',
+    artifactName: translateLiteral(t, 'Echo step source package'),
     ...codeTemplate(language)
   };
 }
@@ -181,18 +144,20 @@ function sourceLanguageAvailability(runtimes) {
 }
 
 function SetupWizard({ open, apiClient, principal, onClose }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const [stepIndex, setStepIndex] = useState(0);
   const [tenantId, setTenantId] = useState(principal?.tenantId || '');
   const [language, setLanguage] = useState('JavaScript');
-  const [stepForm, setStepForm] = useState(() => stepDefaults('JavaScript', 'echo'));
-  const [randomStepForm, setRandomStepForm] = useState(() => stepDefaults('JavaScript', 'random'));
-  const [doubleStepForm, setDoubleStepForm] = useState(() => stepDefaults('JavaScript', 'double'));
-  const [flowName, setFlowName] = useState('Echo data flow');
-  const [flowDescription, setFlowDescription] = useState('Runs the echo step and returns the input payload.');
-  const [chainFlowName, setChainFlowName] = useState('Random doubled data flow');
-  const [chainFlowDescription, setChainFlowDescription] = useState('Generates a random number, passes it into a second step, and returns the doubled value.');
-  const [triggerName, setTriggerName] = useState('Echo HTTP trigger');
-  const [chainTriggerName, setChainTriggerName] = useState('Random doubled HTTP trigger');
+  const [stepForm, setStepForm] = useState(() => stepDefaults('JavaScript', t, 'echo'));
+  const [randomStepForm, setRandomStepForm] = useState(() => stepDefaults('JavaScript', t, 'random'));
+  const [doubleStepForm, setDoubleStepForm] = useState(() => stepDefaults('JavaScript', t, 'double'));
+  const [flowName, setFlowName] = useState(() => tl('Echo data flow'));
+  const [flowDescription, setFlowDescription] = useState(() => tl('Runs the echo step and returns the input payload.'));
+  const [chainFlowName, setChainFlowName] = useState(() => tl('Random doubled data flow'));
+  const [chainFlowDescription, setChainFlowDescription] = useState(() => tl('Generates a random number, passes it into a second step, and returns the doubled value.'));
+  const [triggerName, setTriggerName] = useState(() => tl('Echo HTTP trigger'));
+  const [chainTriggerName, setChainTriggerName] = useState(() => tl('Random doubled HTTP trigger'));
   const [runInput, setRunInput] = useState('{\n  "value": 123\n}');
   const [createdStep, setCreatedStep] = useState(null);
   const [createdArtifact, setCreatedArtifact] = useState(null);
@@ -271,9 +236,11 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
     return entries.map(([key, value]) => key + ': ' + value).join('\n');
   }, [chainTriggerResponseHeaders]);
 
+  const chainedRequestBodyHelp = tl('No request body.\n\nThe random-number step generates the first value, then the double-number step returns the final output.');
+
   const createStep = async () => {
     if (!selectedRuntimeAvailable) {
-      setError('The selected source runtime is not available. Configure the runtime command in Tempo.Server settings or choose another language.');
+      setError(tl('The selected source runtime is not available. Configure the runtime command in Tempo.Server settings or choose another language.'));
       return;
     }
     setBusy(true);
@@ -327,7 +294,7 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
       setCreatedChainArtifacts({ random: randomResponse.artifact, double: doubleResponse.artifact });
       setStepIndex(2);
     } catch (err) {
-      setError(normalizeError(err));
+      setError(normalizeApiError(err, t));
     } finally {
       setBusy(false);
     }
@@ -339,33 +306,35 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
     try {
       const executionKey = createdStep.executionKey;
       const flow = await apiClient.createFlow(tenantId, {
-        name: flowName || 'First data flow',
+        name: flowName || tl('First data flow'),
         description: flowDescription || null,
         startStepId: executionKey,
         transitions: {
           [executionKey]: { OnSuccess: null, OnFailure: null, OnException: null }
         },
         maxRuntimeMs: 0,
+        invocationAuthMode: 'Public',
         active: true
       });
       const randomKey = createdChainSteps.random.executionKey;
       const doubleKey = createdChainSteps.double.executionKey;
       const chainFlow = await apiClient.createFlow(tenantId, {
-        name: chainFlowName || 'Random doubled data flow',
+        name: chainFlowName || tl('Random doubled data flow'),
         description: chainFlowDescription || null,
         startStepId: randomKey,
         transitions: {
-          [randomKey]: { Name: 'Generate random number', OnSuccess: doubleKey, OnFailure: null, OnException: null },
-          [doubleKey]: { Name: 'Double number', OnSuccess: null, OnFailure: null, OnException: null }
+          [randomKey]: { Name: tl('Generate random number'), OnSuccess: doubleKey, OnFailure: null, OnException: null },
+          [doubleKey]: { Name: tl('Double number'), OnSuccess: null, OnFailure: null, OnException: null }
         },
         maxRuntimeMs: 0,
+        invocationAuthMode: 'Public',
         active: true
       });
       setCreatedFlow(flow);
       setCreatedChainFlow(chainFlow);
       setStepIndex(3);
     } catch (err) {
-      setError(normalizeError(err));
+      setError(normalizeApiError(err, t));
     } finally {
       setBusy(false);
     }
@@ -376,14 +345,14 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
     setError('');
     try {
       const trigger = await apiClient.createTrigger(tenantId, {
-        name: triggerName || 'Echo HTTP trigger',
+        name: triggerName || tl('Echo HTTP trigger'),
         triggerType: 'Http',
         dataFlowId: createdFlow.id,
         configuration: JSON.stringify({ allowedMethods: ['POST'], headers: {}, bodySchema: null }, null, 2),
         active: true
       });
       const chainTrigger = await apiClient.createTrigger(tenantId, {
-        name: chainTriggerName || 'Random doubled HTTP trigger',
+        name: chainTriggerName || tl('Random doubled HTTP trigger'),
         triggerType: 'Http',
         dataFlowId: createdChainFlow.id,
         configuration: JSON.stringify({ allowedMethods: ['GET'], headers: {}, bodySchema: null }, null, 2),
@@ -393,7 +362,7 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
       setCreatedChainTrigger(chainTrigger);
       setStepIndex(4);
     } catch (err) {
-      setError(normalizeError(err));
+      setError(normalizeApiError(err, t));
     } finally {
       setBusy(false);
     }
@@ -435,7 +404,7 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
       setChainRunDetails(chainedDetails);
       setStepIndex(5);
     } catch (err) {
-      setError(normalizeError(err));
+      setError(normalizeApiError(err, t));
     } finally {
       setBusy(false);
     }
@@ -448,13 +417,13 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
   if (!open) return null;
 
   return (
-    <Modal open={open} onClose={close} title="Setup wizard" size="large"
+    <Modal open={open} onClose={close} title={tl('Setup wizard')} size="large"
       footer={<WizardFooter stepIndex={stepIndex} busy={busy} canCreateStep={selectedRuntimeAvailable} onClose={close} onStart={() => setStepIndex(1)} onStep={createStep} onFlow={createFlow} onTrigger={createTrigger} onRun={runFlow} />}>
       <div className="wizard-steps">
         {steps.map((label, index) => (
           <div key={label} className={'wizard-step' + (index === stepIndex ? ' active' : index < stepIndex ? ' done' : '')}>
             <span>{index + 1}</span>
-            {label}
+            {tl(label)}
           </div>
         ))}
       </div>
@@ -464,35 +433,35 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
       {stepIndex === 0 && (
         <div>
           <WizardExplanation
-            title="Build and run your first data flows"
-            what="Tempo runs work as steps connected together in a data flow. This setup creates an echo flow and a second flow that chains a random-number step into a multiply-by-2 step."
-            why="A working one-step flow and a working chained flow give you the core model before you add more steps, artifacts, runtime options, and external integrations."
-            how="Tempo packages small source files as artifact-backed steps, connects those steps into flows, creates reusable trigger URLs, then POSTs sample JSON through both flows."
+            title={tl('Build and run your first data flows')}
+            what={tl('Tempo runs work as steps connected together in a data flow. This setup creates an echo flow and a second flow that chains a random-number step into a multiply-by-2 step.')}
+            why={tl('A working one-step flow and a working chained flow give you the core model before you add more steps, artifacts, runtime options, and external integrations.')}
+            how={tl('Tempo packages small source files as artifact-backed steps, connects those steps into flows, creates reusable trigger URLs, then POSTs sample JSON through both flows.')}
           />
           <div className="wizard-start-list">
             <div>
-              <strong>Welcome</strong>
-              <span>Review exactly what setup will create.</span>
+              <strong>{tl('Welcome')}</strong>
+              <span>{tl('Review exactly what setup will create.')}</span>
             </div>
             <div>
-              <strong>Steps</strong>
-              <span>Create one echo step and two chained math steps.</span>
+              <strong>{tl('Steps')}</strong>
+              <span>{tl('Create one echo step and two chained math steps.')}</span>
             </div>
             <div>
-              <strong>Flows</strong>
-              <span>Create one echo flow and one random-to-double flow.</span>
+              <strong>{tl('Flows')}</strong>
+              <span>{tl('Create one echo flow and one random-to-double flow.')}</span>
             </div>
             <div>
-              <strong>Triggers</strong>
-              <span>Create one HTTP trigger for each flow.</span>
+              <strong>{tl('Triggers')}</strong>
+              <span>{tl('Create one HTTP trigger for each flow.')}</span>
             </div>
             <div>
-              <strong>Runs</strong>
-              <span>POST sample JSON through both triggers.</span>
+              <strong>{tl('Runs')}</strong>
+              <span>{tl('POST sample JSON through both triggers.')}</span>
             </div>
             <div>
-              <strong>Done</strong>
-              <span>Review IDs, response bodies, headers, and copyable commands.</span>
+              <strong>{tl('Done')}</strong>
+              <span>{tl('Review IDs, response bodies, headers, and copyable commands.')}</span>
             </div>
           </div>
         </div>
@@ -501,124 +470,124 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
       {stepIndex === 1 && (
         <div>
           <WizardExplanation
-            title="Create the first steps"
-            what="Tempo creates one echo step plus a random-number step and a double-number step in the same language."
-            why="Flows reference steps by execution key. The chained sample uses the random step output as the double step input, so you can see how data moves through a flow."
-            how="Choose an available language and edit any of the three starter definitions. Tempo packages all three source files as artifact-backed steps for the selected runtime."
+            title={tl('Create the first steps')}
+            what={tl('Tempo creates one echo step plus a random-number step and a double-number step in the same language.')}
+            why={tl('Flows reference steps by execution key. The chained sample uses the random step output as the double step input, so you can see how data moves through a flow.')}
+            how={tl('Choose an available language and edit any of the three starter definitions. Tempo packages all three source files as artifact-backed steps for the selected runtime.')}
           />
           {runtimeOptionsLoaded && availableSourceLanguages.length === 0 && (
-            <div className="callout callout-warning">No source-code runtime is available. Configure Node.js, Python, or .NET in Tempo.Server settings before creating source-backed setup steps.</div>
+            <div className="callout callout-warning">{tl('No source-code runtime is available. Configure Node.js, Python, or .NET in Tempo.Server settings before creating source-backed setup steps.')}</div>
           )}
           <div className="grid-2">
             <div className="form-row">
-              <label title="Tenant that owns the generated steps, artifacts, flows, triggers, and runs">Tenant</label>
+              <label title={tl('Tenant that owns the generated steps, artifacts, flows, triggers, and runs')}>{tl('Tenant')}</label>
               <TenantPicker apiClient={apiClient} value={tenantId} onChange={setTenantId} />
             </div>
             <div className="form-row">
-              <label title="Source language for the generated artifact-backed steps">Language</label>
+              <label title={tl('Source language for the generated artifact-backed steps')}>{tl('Language')}</label>
               <select value={language} onChange={(e) => changeLanguage(e.target.value)}>
                 {SOURCE_LANGUAGE_ORDER.map((item) => {
                   const disabled = runtimeOptionsLoaded && !availableSourceLanguages.includes(item);
                   const label = item === 'CSharp' ? 'C#' : item;
-                  return <option key={item} value={item} disabled={disabled}>{label}{disabled ? ' (unavailable)' : ''}</option>;
+                  return <option key={item} value={item} disabled={disabled}>{label}{disabled ? ` ${tl('(unavailable)')}` : ''}</option>;
                 })}
               </select>
             </div>
           </div>
           <div className="form-row">
-            <label>Steps this phase creates</label>
+            <label>{tl('Steps this phase creates')}</label>
             <div className="data-table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Flow</th>
-                    <th>Step</th>
-                    <th>Execution key</th>
-                    <th>Artifact package</th>
-                    <th>Source</th>
+                     <th>{tl('Flow')}</th>
+                     <th>{tl('Step')}</th>
+                     <th>{tl('Execution key')}</th>
+                     <th>{tl('Artifact package')}</th>
+                     <th>{tl('Source')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td>Echo data flow</td>
-                    <td>{stepForm.name || 'Echo step'}</td>
+                    <td>{tl('Echo data flow')}</td>
+                    <td>{stepForm.name || tl('Echo step')}</td>
                     <td className="monospace">{stepForm.executionKey || 'echo_step'}</td>
-                    <td>{stepForm.artifactName || 'Echo step source package'}</td>
-                    <td>Editable below</td>
+                    <td>{stepForm.artifactName || tl('Echo step source package')}</td>
+                     <td>{tl('Editable below')}</td>
                   </tr>
                   <tr>
-                    <td>Random doubled data flow</td>
-                    <td>{randomStepForm.name || 'Random number step'}</td>
+                    <td>{tl('Random doubled data flow')}</td>
+                    <td>{randomStepForm.name || tl('Random number step')}</td>
                     <td className="monospace">{randomStepForm.executionKey || 'random_number_step'}</td>
-                    <td>{randomStepForm.artifactName || 'Random number step source package'}</td>
-                    <td>Editable below</td>
+                    <td>{randomStepForm.artifactName || tl('Random number step source package')}</td>
+                     <td>{tl('Editable below')}</td>
                   </tr>
                   <tr>
-                    <td>Random doubled data flow</td>
-                    <td>{doubleStepForm.name || 'Double number step'}</td>
+                    <td>{tl('Random doubled data flow')}</td>
+                    <td>{doubleStepForm.name || tl('Double number step')}</td>
                     <td className="monospace">{doubleStepForm.executionKey || 'double_number_step'}</td>
-                    <td>{doubleStepForm.artifactName || 'Double number step source package'}</td>
-                    <td>Editable below</td>
+                    <td>{doubleStepForm.artifactName || tl('Double number step source package')}</td>
+                     <td>{tl('Editable below')}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
-          <SourceStepEditor title="Echo step" language={language} form={stepForm} setForm={setStepForm} />
-          <SourceStepEditor title="Random number step" language={language} form={randomStepForm} setForm={setRandomStepForm} />
-          <SourceStepEditor title="Double number step" language={language} form={doubleStepForm} setForm={setDoubleStepForm} />
+          <SourceStepEditor title={tl('Echo step')} language={language} form={stepForm} setForm={setStepForm} />
+          <SourceStepEditor title={tl('Random number step')} language={language} form={randomStepForm} setForm={setRandomStepForm} />
+          <SourceStepEditor title={tl('Double number step')} language={language} form={doubleStepForm} setForm={setDoubleStepForm} />
         </div>
       )}
 
       {stepIndex === 2 && (
         <div>
           <WizardExplanation
-            title="Connect steps in data flows"
-            what="Tempo creates one echo flow and one chained flow that starts with the random-number step and continues into the double-number step."
-            why="The second flow demonstrates orchestration: each successful step writes output, and Tempo passes that output as the next step input."
-            how="The echo flow stops after one step. The chained flow routes OnSuccess from the random step to the double step, then returns the double step output."
+            title={tl('Connect steps in data flows')}
+            what={tl('Tempo creates one echo flow and one chained flow that starts with the random-number step and continues into the double-number step.')}
+            why={tl('The second flow demonstrates orchestration: each successful step writes output, and Tempo passes that output as the next step input.')}
+            how={tl('The echo flow stops after one step. The chained flow routes OnSuccess from the random step to the double step, then returns the double step output.')}
           />
-          <div className="callout callout-success">Created steps <strong>{createdStep.name}</strong>, <strong>{createdChainSteps.random?.name}</strong>, and <strong>{createdChainSteps.double?.name}</strong>.</div>
+          <div className="callout callout-success">{tl('Created steps {{first}}, {{second}}, and {{third}}.', { first: createdStep.name, second: createdChainSteps.random?.name, third: createdChainSteps.double?.name })}</div>
           <div className="form-row">
-            <label>Flows this phase creates</label>
+            <label>{tl('Flows this phase creates')}</label>
             <div className="data-table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Flow</th>
-                    <th>Start step</th>
-                    <th>Success path</th>
-                    <th>Returned output</th>
+                     <th>{tl('Flow')}</th>
+                     <th>{tl('Start step')}</th>
+                     <th>{tl('Success path')}</th>
+                     <th>{tl('Returned output')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td>{flowName || 'Echo data flow'}</td>
+                    <td>{flowName || tl('Echo data flow')}</td>
                     <td className="monospace">{createdStep.executionKey}</td>
                     <td className="monospace">{createdStep.executionKey}{' -> '}stop</td>
-                    <td>Echo step output</td>
+                     <td>{tl('Echo step output')}</td>
                   </tr>
                   <tr>
-                    <td>{chainFlowName || 'Random doubled data flow'}</td>
+                    <td>{chainFlowName || tl('Random doubled data flow')}</td>
                     <td className="monospace">{createdChainSteps.random?.executionKey}</td>
                     <td className="monospace">{createdChainSteps.random?.executionKey}{' -> '}{createdChainSteps.double?.executionKey}{' -> '}stop</td>
-                    <td>Double number step output</td>
+                     <td>{tl('Double number step output')}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
           <div className="grid-2">
-            <div className="form-row"><label title="Data flow display name">Flow name</label><input value={flowName} onChange={(e) => setFlowName(e.target.value)} /></div>
-            <div className="form-row"><label title="First step executed by the flow">Start step</label><input value={createdStep.executionKey} readOnly /></div>
+            <div className="form-row"><label title={tl('Data flow display name')}>{tl('Flow name')}</label><input value={flowName} onChange={(e) => setFlowName(e.target.value)} /></div>
+            <div className="form-row"><label title={tl('First step executed by the flow')}>{tl('Start step')}</label><input value={createdStep.executionKey} readOnly /></div>
           </div>
-          <div className="form-row"><label title="Optional flow description">Flow description</label><input value={flowDescription} onChange={(e) => setFlowDescription(e.target.value)} /></div>
+          <div className="form-row"><label title={tl('Optional flow description')}>{tl('Flow description')}</label><input value={flowDescription} onChange={(e) => setFlowDescription(e.target.value)} /></div>
           <pre className="code-block">{JSON.stringify({ [createdStep.executionKey]: { OnSuccess: null, OnFailure: null, OnException: null } }, null, 2)}</pre>
           <div className="grid-2" style={{ marginTop: 'var(--spacing-md)' }}>
-            <div className="form-row"><label title="Chained data flow display name">Chained flow name</label><input value={chainFlowName} onChange={(e) => setChainFlowName(e.target.value)} /></div>
-            <div className="form-row"><label title="First step executed by the chained flow">Chained start step</label><input value={createdChainSteps.random?.executionKey || ''} readOnly /></div>
+            <div className="form-row"><label title={tl('Chained data flow display name')}>{tl('Chained flow name')}</label><input value={chainFlowName} onChange={(e) => setChainFlowName(e.target.value)} /></div>
+            <div className="form-row"><label title={tl('First step executed by the chained flow')}>{tl('Chained start step')}</label><input value={createdChainSteps.random?.executionKey || ''} readOnly /></div>
           </div>
-          <div className="form-row"><label title="Optional chained flow description">Chained flow description</label><input value={chainFlowDescription} onChange={(e) => setChainFlowDescription(e.target.value)} /></div>
+          <div className="form-row"><label title={tl('Optional chained flow description')}>{tl('Chained flow description')}</label><input value={chainFlowDescription} onChange={(e) => setChainFlowDescription(e.target.value)} /></div>
           <pre className="code-block">{JSON.stringify({
             [createdChainSteps.random?.executionKey || 'random_number_step']: { OnSuccess: createdChainSteps.double?.executionKey || 'double_number_step', OnFailure: null, OnException: null },
             [createdChainSteps.double?.executionKey || 'double_number_step']: { OnSuccess: null, OnFailure: null, OnException: null }
@@ -629,61 +598,61 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
       {stepIndex === 3 && (
         <div>
           <WizardExplanation
-            title="Create HTTP triggers"
-            what="Tempo creates one trigger for the echo flow and one trigger for the random doubled flow."
-            why="Triggers are how outside callers start a data flow without opening the dashboard. Each trigger URL is a reusable entry point for webhooks, scripts, and applications."
-            how="The echo trigger accepts POST with JSON. The chained trigger accepts GET because the random-number step generates its own starting value."
+            title={tl('Create HTTP triggers')}
+            what={tl('Tempo creates one trigger for the echo flow and one trigger for the random doubled flow.')}
+            why={tl('Triggers are how outside callers start a data flow without opening the dashboard. Each trigger URL is a reusable entry point for webhooks, scripts, and applications.')}
+            how={tl('The echo trigger accepts POST with JSON. The chained trigger accepts GET because the random-number step generates its own starting value.')}
           />
-          <div className="callout callout-success">Created flows <strong>{createdFlow.name}</strong> and <strong>{createdChainFlow.name}</strong>.</div>
+          <div className="callout callout-success">{tl('Created flows {{first}} and {{second}}.', { first: createdFlow.name, second: createdChainFlow.name })}</div>
           <div className="form-row">
-            <label>Triggers this phase creates</label>
+            <label>{tl('Triggers this phase creates')}</label>
             <div className="data-table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Trigger</th>
-                    <th>Connected flow</th>
-                    <th>Trigger type</th>
-                    <th>Method</th>
-                    <th>What the caller receives</th>
+                     <th>{tl('Trigger')}</th>
+                     <th>{tl('Connected flow')}</th>
+                     <th>{tl('Trigger type')}</th>
+                     <th>{tl('Method')}</th>
+                     <th>{tl('What the caller receives')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td>{triggerName || 'Echo HTTP trigger'}</td>
+                    <td>{triggerName || tl('Echo HTTP trigger')}</td>
                     <td>{createdFlow.name}</td>
-                    <td>Http</td>
+                     <td>{tl('Http')}</td>
                     <td>POST</td>
-                    <td>Echo step output</td>
+                     <td>{tl('Echo step output')}</td>
                   </tr>
                   <tr>
-                    <td>{chainTriggerName || 'Random doubled HTTP trigger'}</td>
+                    <td>{chainTriggerName || tl('Random doubled HTTP trigger')}</td>
                     <td>{createdChainFlow.name}</td>
-                    <td>Http</td>
+                     <td>{tl('Http')}</td>
                     <td>GET</td>
-                    <td>Double number step output</td>
+                     <td>{tl('Double number step output')}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
           <div className="details-kv" style={{ marginBottom: 'var(--spacing-md)' }}>
-            <dt>Echo flow</dt><dd><CopyableId value={createdFlow.id} max={FULL_ID_MAX} /></dd>
-            <dt>Echo start step</dt><dd className="monospace">{createdFlow.startStepId}</dd>
-            <dt>Chained flow</dt><dd><CopyableId value={createdChainFlow.id} max={FULL_ID_MAX} /></dd>
-            <dt>Chained start step</dt><dd className="monospace">{createdChainFlow.startStepId}</dd>
+            <dt>{tl('Echo flow')}</dt><dd><CopyableId value={createdFlow.id} max={FULL_ID_MAX} /></dd>
+            <dt>{tl('Echo start step')}</dt><dd className="monospace">{createdFlow.startStepId}</dd>
+            <dt>{tl('Chained flow')}</dt><dd><CopyableId value={createdChainFlow.id} max={FULL_ID_MAX} /></dd>
+            <dt>{tl('Chained start step')}</dt><dd className="monospace">{createdChainFlow.startStepId}</dd>
           </div>
           <div className="grid-2">
-            <div className="form-row"><label title="Trigger display name">Trigger name</label><input value={triggerName} onChange={(e) => setTriggerName(e.target.value)} /></div>
-            <div className="form-row"><label title="Chained trigger display name">Chained trigger name</label><input value={chainTriggerName} onChange={(e) => setChainTriggerName(e.target.value)} /></div>
+            <div className="form-row"><label title={tl('Trigger display name')}>{tl('Trigger name')}</label><input value={triggerName} onChange={(e) => setTriggerName(e.target.value)} /></div>
+            <div className="form-row"><label title={tl('Chained trigger display name')}>{tl('Chained trigger name')}</label><input value={chainTriggerName} onChange={(e) => setChainTriggerName(e.target.value)} /></div>
           </div>
           <div className="grid-2">
             <div className="form-row">
-              <label title="HTTP trigger configuration saved with the echo trigger">Echo trigger configuration</label>
+              <label title={tl('HTTP trigger configuration saved with the echo trigger')}>{tl('Echo trigger configuration')}</label>
               <pre className="code-block">{JSON.stringify({ allowedMethods: ['POST'], headers: {}, bodySchema: null }, null, 2)}</pre>
             </div>
             <div className="form-row">
-              <label title="HTTP trigger configuration saved with the chained trigger">Chained trigger configuration</label>
+              <label title={tl('HTTP trigger configuration saved with the chained trigger')}>{tl('Chained trigger configuration')}</label>
               <pre className="code-block">{JSON.stringify({ allowedMethods: ['GET'], headers: {}, bodySchema: null }, null, 2)}</pre>
             </div>
           </div>
@@ -693,52 +662,52 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
       {stepIndex === 4 && (
         <div>
           <WizardExplanation
-            title="Run through the triggers"
-            what="Tempo sends JSON to the echo trigger and calls the chained trigger with GET, then records both executions."
-            why="This is the same path you will use later from curl, webhooks, scheduled jobs, or applications. The trigger makes each flow runnable from outside the dashboard."
-            how="The echo flow returns the input. The chained flow generates a number from 1 to 10, passes it to the double step, and returns the doubled value."
+            title={tl('Run through the triggers')}
+            what={tl('Tempo sends JSON to the echo trigger and calls the chained trigger with GET, then records both executions.')}
+            why={tl('This is the same path you will use later from curl, webhooks, scheduled jobs, or applications. The trigger makes each flow runnable from outside the dashboard.')}
+            how={tl('The echo flow returns the input. The chained flow generates a number from 1 to 10, passes it to the double step, and returns the doubled value.')}
           />
-          <div className="callout callout-success">Created triggers <strong>{createdTrigger.name}</strong> and <strong>{createdChainTrigger.name}</strong>.</div>
+          <div className="callout callout-success">{tl('Created triggers {{first}} and {{second}}.', { first: createdTrigger.name, second: createdChainTrigger.name })}</div>
           <div className="form-row">
-            <label>Runs this phase submits</label>
+            <label>{tl('Runs this phase submits')}</label>
             <div className="data-table-wrapper">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Run</th>
-                    <th>Trigger</th>
-                    <th>Flow path</th>
-                    <th>Response body source</th>
+                     <th>{tl('Run')}</th>
+                     <th>{tl('Trigger')}</th>
+                     <th>{tl('Flow path')}</th>
+                     <th>{tl('Response body source')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td>Echo run</td>
+                     <td>{tl('Echo run')}</td>
                     <td>{createdTrigger.name}</td>
                     <td className="monospace">{createdStep.executionKey}</td>
-                    <td>Echo step output</td>
+                     <td>{tl('Echo step output')}</td>
                   </tr>
                   <tr>
-                    <td>Chained run</td>
+                     <td>{tl('Chained run')}</td>
                     <td>{createdChainTrigger.name}</td>
                     <td className="monospace">{createdChainSteps.random?.executionKey}{' -> '}{createdChainSteps.double?.executionKey}</td>
-                    <td>Double number step output</td>
+                     <td>{tl('Double number step output')}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
           <div className="details-kv" style={{ marginBottom: 'var(--spacing-md)' }}>
-            <dt>Echo flow</dt><dd><CopyableId value={createdFlow.id} max={FULL_ID_MAX} /></dd>
-            <dt>Echo trigger</dt><dd><CopyableId value={createdTrigger.id} max={FULL_ID_MAX} /></dd>
-            <dt>Echo trigger URL</dt>
+            <dt>{tl('Echo flow')}</dt><dd><CopyableId value={createdFlow.id} max={FULL_ID_MAX} /></dd>
+            <dt>{tl('Echo trigger')}</dt><dd><CopyableId value={createdTrigger.id} max={FULL_ID_MAX} /></dd>
+            <dt>{tl('Echo trigger URL')}</dt>
             <dd style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <code className="monospace">{triggerUrl}</code>
               <CopyButton value={triggerUrl} />
             </dd>
-            <dt>Chained flow</dt><dd><CopyableId value={createdChainFlow.id} max={FULL_ID_MAX} /></dd>
-            <dt>Chained trigger</dt><dd><CopyableId value={createdChainTrigger.id} max={FULL_ID_MAX} /></dd>
-            <dt>Chained trigger URL</dt>
+            <dt>{tl('Chained flow')}</dt><dd><CopyableId value={createdChainFlow.id} max={FULL_ID_MAX} /></dd>
+            <dt>{tl('Chained trigger')}</dt><dd><CopyableId value={createdChainTrigger.id} max={FULL_ID_MAX} /></dd>
+            <dt>{tl('Chained trigger URL')}</dt>
             <dd style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <code className="monospace">{chainTriggerUrl}</code>
               <CopyButton value={chainTriggerUrl} />
@@ -746,12 +715,12 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
           </div>
           <div className="grid-2">
             <div className="form-row">
-            <label title="JSON body posted to the echo data flow trigger">Echo data flow input</label>
+            <label title={tl('JSON body posted to the echo data flow trigger')}>{tl('Echo data flow input')}</label>
             <textarea rows={8} value={runInput} onChange={(e) => setRunInput(e.target.value)} style={{ fontFamily: 'var(--font-mono)' }} />
             </div>
             <div className="form-row">
-              <label title="The chained data flow trigger uses GET and does not need request JSON">Chained data flow request body</label>
-              <textarea rows={8} readOnly value={'No request body.\n\nThe random-number step generates the first value, then the double-number step returns the final output.'} style={{ fontFamily: 'var(--font-mono)' }} />
+              <label title={tl('The chained data flow trigger uses GET and does not need request JSON')}>{tl('Chained data flow request body')}</label>
+              <textarea rows={8} readOnly value={chainedRequestBodyHelp} style={{ fontFamily: 'var(--font-mono)' }} />
             </div>
           </div>
         </div>
@@ -760,91 +729,91 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
       {stepIndex === 5 && (
         <div>
           <WizardExplanation
-            title="First flows are ready"
-            what="Tempo created an echo flow and a chained random doubled flow, then ran both through HTTP triggers."
-            why="These are the same objects you will use for real automation: steps do work, flows orchestrate steps, artifacts version external code, triggers start flows, and runs show what happened."
-            how="POST JSON to the echo trigger or GET the chained trigger whenever you want to run them again. The chained trigger response body is the output from the double-number step."
+            title={tl('First flows are ready')}
+            what={tl('Tempo created an echo flow and a chained random doubled flow, then ran both through HTTP triggers.')}
+            why={tl('These are the same objects you will use for real automation: steps do work, flows orchestrate steps, artifacts version external code, triggers start flows, and runs show what happened.')}
+            how={tl('POST JSON to the echo trigger or GET the chained trigger whenever you want to run them again. The chained trigger response body is the output from the double-number step.')}
           />
           <div className="summary-tiles">
-            <div className="summary-tile"><div className="label">Steps</div><div className="value">3</div></div>
-            <div className="summary-tile"><div className="label">Flows</div><div className="value">2</div></div>
-            <div className="summary-tile"><div className="label">Triggers</div><div className="value">2</div></div>
-            <div className="summary-tile"><div className="label">Echo run</div><div className="value">{runDetails?.state || createdRun?.state || triggerResponseHeaders?.['x-run-state'] || '-'}</div></div>
-            <div className="summary-tile"><div className="label">Chained run</div><div className="value">{chainRunDetails?.state || createdChainRun?.state || chainTriggerResponseHeaders?.['x-run-state'] || '-'}</div></div>
+            <div className="summary-tile"><div className="label">{tl('Steps')}</div><div className="value">3</div></div>
+            <div className="summary-tile"><div className="label">{tl('Flows')}</div><div className="value">2</div></div>
+            <div className="summary-tile"><div className="label">{tl('Triggers')}</div><div className="value">2</div></div>
+            <div className="summary-tile"><div className="label">{tl('Echo run')}</div><div className="value">{runDetails?.state ? tl(runDetails.state) : createdRun?.state ? tl(createdRun.state) : triggerResponseHeaders?.['x-run-state'] ? tl(triggerResponseHeaders['x-run-state']) : '-'}</div></div>
+            <div className="summary-tile"><div className="label">{tl('Chained run')}</div><div className="value">{chainRunDetails?.state ? tl(chainRunDetails.state) : createdChainRun?.state ? tl(createdChainRun.state) : chainTriggerResponseHeaders?.['x-run-state'] ? tl(chainTriggerResponseHeaders['x-run-state']) : '-'}</div></div>
           </div>
           <section className="details-section">
-            <div className="details-section-header" style={{ cursor: 'default' }}>Echo data flow invocation</div>
+            <div className="details-section-header" style={{ cursor: 'default' }}>{tl('Echo data flow invocation')}</div>
             <div className="details-section-body">
               <dl className="details-kv">
-                <dt>Step ID</dt><dd><CopyableId value={createdStep?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Artifact ID</dt><dd><CopyableId value={createdArtifact?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Flow ID</dt><dd><CopyableId value={createdFlow?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Trigger ID</dt><dd><CopyableId value={createdTrigger?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Run ID</dt><dd><CopyableId value={createdRun?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Run state</dt><dd>{runDetails?.state || createdRun?.state || triggerResponseHeaders?.['x-run-state'] || '-'}</dd>
-                <dt>Queued</dt><dd>{formatTime(runDetails?.createdUtc || createdRun?.createdUtc || triggerResponseHeaders?.['x-run-created-utc'])}</dd>
-                <dt>Started</dt><dd>{formatTime(runDetails?.startedUtc || createdRun?.startedUtc || triggerResponseHeaders?.['x-run-started-utc'])}</dd>
-                <dt>Completed</dt><dd>{formatTime(runDetails?.completedUtc || createdRun?.completedUtc || triggerResponseHeaders?.['x-run-completed-utc'])}</dd>
-                <dt>Runtime</dt><dd>{triggerResponseHeaders?.['x-runtime-ms'] ? triggerResponseHeaders['x-runtime-ms'] + ' ms' : '-'}</dd>
-                <dt>Trigger URL</dt>
+                <dt>{tl('Step ID')}</dt><dd><CopyableId value={createdStep?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Artifact ID')}</dt><dd><CopyableId value={createdArtifact?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Flow ID')}</dt><dd><CopyableId value={createdFlow?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Trigger ID')}</dt><dd><CopyableId value={createdTrigger?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Run ID')}</dt><dd><CopyableId value={createdRun?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Run state')}</dt><dd>{runDetails?.state ? tl(runDetails.state) : createdRun?.state ? tl(createdRun.state) : triggerResponseHeaders?.['x-run-state'] ? tl(triggerResponseHeaders['x-run-state']) : '-'}</dd>
+                <dt>{tl('Queued')}</dt><dd>{formatTime(runDetails?.createdUtc || createdRun?.createdUtc || triggerResponseHeaders?.['x-run-created-utc'])}</dd>
+                <dt>{tl('Started')}</dt><dd>{formatTime(runDetails?.startedUtc || createdRun?.startedUtc || triggerResponseHeaders?.['x-run-started-utc'])}</dd>
+                <dt>{tl('Completed')}</dt><dd>{formatTime(runDetails?.completedUtc || createdRun?.completedUtc || triggerResponseHeaders?.['x-run-completed-utc'])}</dd>
+                <dt>{tl('Runtime')}</dt><dd>{triggerResponseHeaders?.['x-runtime-ms'] ? triggerResponseHeaders['x-runtime-ms'] + ' ms' : '-'}</dd>
+                <dt>{tl('Trigger URL')}</dt>
                 <dd style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <code className="monospace">{triggerUrl}</code>
                   <CopyButton value={triggerUrl} />
                 </dd>
               </dl>
               <div className="form-row" style={{ marginTop: 'var(--spacing-md)' }}>
-                <label>Run echo flow yourself ({runCommand.label})</label>
+                <label>{tl('Run echo flow yourself')} ({tl(runCommand.label)})</label>
                 <div className="command-copy-row">
                   <pre className="code-block">{runCommand.command}</pre>
-                  <CopyButton value={runCommand.command} title="Copy command" />
+                  <CopyButton value={runCommand.command} title={tl('Copy command')} />
                 </div>
               </div>
               <div className="form-row" style={{ marginTop: 'var(--spacing-md)' }}>
-                <label>Echo response body</label>
+                <label>{tl('Echo response body')}</label>
                 <pre className="code-block">{triggerResponseBody || runDetails?.outputData || 'null'}</pre>
               </div>
               <div className="form-row" style={{ marginTop: 'var(--spacing-md)' }}>
-                <label>Echo response headers</label>
-                <pre className="code-block">{responseHeaderText || '(none)'}</pre>
+                <label>{tl('Echo response headers')}</label>
+                <pre className="code-block">{responseHeaderText || t('common.generic.none')}</pre>
               </div>
             </div>
           </section>
           <section className="details-section">
-            <div className="details-section-header" style={{ cursor: 'default' }}>Chained data flow invocation</div>
+            <div className="details-section-header" style={{ cursor: 'default' }}>{tl('Chained data flow invocation')}</div>
             <div className="details-section-body">
               <dl className="details-kv">
-                <dt>Random step ID</dt><dd><CopyableId value={createdChainSteps.random?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Double step ID</dt><dd><CopyableId value={createdChainSteps.double?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Random artifact ID</dt><dd><CopyableId value={createdChainArtifacts.random?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Double artifact ID</dt><dd><CopyableId value={createdChainArtifacts.double?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Flow ID</dt><dd><CopyableId value={createdChainFlow?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Trigger ID</dt><dd><CopyableId value={createdChainTrigger?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Run ID</dt><dd><CopyableId value={createdChainRun?.id} max={FULL_ID_MAX} /></dd>
-                <dt>Run state</dt><dd>{chainRunDetails?.state || createdChainRun?.state || chainTriggerResponseHeaders?.['x-run-state'] || '-'}</dd>
-                <dt>Queued</dt><dd>{formatTime(chainRunDetails?.createdUtc || createdChainRun?.createdUtc || chainTriggerResponseHeaders?.['x-run-created-utc'])}</dd>
-                <dt>Started</dt><dd>{formatTime(chainRunDetails?.startedUtc || createdChainRun?.startedUtc || chainTriggerResponseHeaders?.['x-run-started-utc'])}</dd>
-                <dt>Completed</dt><dd>{formatTime(chainRunDetails?.completedUtc || createdChainRun?.completedUtc || chainTriggerResponseHeaders?.['x-run-completed-utc'])}</dd>
-                <dt>Runtime</dt><dd>{chainTriggerResponseHeaders?.['x-runtime-ms'] ? chainTriggerResponseHeaders['x-runtime-ms'] + ' ms' : '-'}</dd>
-                <dt>Trigger URL</dt>
+                <dt>{tl('Random step ID')}</dt><dd><CopyableId value={createdChainSteps.random?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Double step ID')}</dt><dd><CopyableId value={createdChainSteps.double?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Random artifact ID')}</dt><dd><CopyableId value={createdChainArtifacts.random?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Double artifact ID')}</dt><dd><CopyableId value={createdChainArtifacts.double?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Flow ID')}</dt><dd><CopyableId value={createdChainFlow?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Trigger ID')}</dt><dd><CopyableId value={createdChainTrigger?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Run ID')}</dt><dd><CopyableId value={createdChainRun?.id} max={FULL_ID_MAX} /></dd>
+                <dt>{tl('Run state')}</dt><dd>{chainRunDetails?.state ? tl(chainRunDetails.state) : createdChainRun?.state ? tl(createdChainRun.state) : chainTriggerResponseHeaders?.['x-run-state'] ? tl(chainTriggerResponseHeaders['x-run-state']) : '-'}</dd>
+                <dt>{tl('Queued')}</dt><dd>{formatTime(chainRunDetails?.createdUtc || createdChainRun?.createdUtc || chainTriggerResponseHeaders?.['x-run-created-utc'])}</dd>
+                <dt>{tl('Started')}</dt><dd>{formatTime(chainRunDetails?.startedUtc || createdChainRun?.startedUtc || chainTriggerResponseHeaders?.['x-run-started-utc'])}</dd>
+                <dt>{tl('Completed')}</dt><dd>{formatTime(chainRunDetails?.completedUtc || createdChainRun?.completedUtc || chainTriggerResponseHeaders?.['x-run-completed-utc'])}</dd>
+                <dt>{tl('Runtime')}</dt><dd>{chainTriggerResponseHeaders?.['x-runtime-ms'] ? chainTriggerResponseHeaders['x-runtime-ms'] + ' ms' : '-'}</dd>
+                <dt>{tl('Trigger URL')}</dt>
                 <dd style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <code className="monospace">{chainTriggerUrl}</code>
                   <CopyButton value={chainTriggerUrl} />
                 </dd>
               </dl>
               <div className="form-row" style={{ marginTop: 'var(--spacing-md)' }}>
-                <label>Run chained flow yourself ({chainRunCommand.label})</label>
+                <label>{tl('Run chained flow yourself')} ({tl(chainRunCommand.label)})</label>
                 <div className="command-copy-row">
                   <pre className="code-block">{chainRunCommand.command}</pre>
-                  <CopyButton value={chainRunCommand.command} title="Copy command" />
+                  <CopyButton value={chainRunCommand.command} title={tl('Copy command')} />
                 </div>
               </div>
               <div className="form-row" style={{ marginTop: 'var(--spacing-md)' }}>
-                <label>Chained response body</label>
+                <label>{tl('Chained response body')}</label>
                 <pre className="code-block">{chainTriggerResponseBody || chainRunDetails?.outputData || 'null'}</pre>
               </div>
               <div className="form-row" style={{ marginTop: 'var(--spacing-md)' }}>
-                <label>Chained response headers</label>
-                <pre className="code-block">{chainResponseHeaderText || '(none)'}</pre>
+                <label>{tl('Chained response headers')}</label>
+                <pre className="code-block">{chainResponseHeaderText || t('common.generic.none')}</pre>
               </div>
             </div>
           </section>
@@ -855,65 +824,69 @@ function SetupWizard({ open, apiClient, principal, onClose }) {
 }
 
 function WizardExplanation({ title, what, why, how }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   return (
     <section className="wizard-explanation">
-      <h3>{title}</h3>
+      <h3>{tl(title)}</h3>
       <div className="wizard-explanation-grid">
-        <div><strong>What</strong><span>{what}</span></div>
-        <div><strong>Why</strong><span>{why}</span></div>
-        <div><strong>How</strong><span>{how}</span></div>
+        <div><strong>{tl('What')}</strong><span>{tl(what)}</span></div>
+        <div><strong>{tl('Why')}</strong><span>{tl(why)}</span></div>
+        <div><strong>{tl('How')}</strong><span>{tl(how)}</span></div>
       </div>
     </section>
   );
 }
 
 function SourceStepEditor({ title, language, form, setForm }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   return (
     <section className="wizard-explanation" style={{ marginTop: 'var(--spacing-md)' }}>
-      <h3>{title}</h3>
+      <h3>{tl(title)}</h3>
       <div className="grid-2">
         <div className="form-row">
-          <label title="Stable key referenced by the flow transition graph">Execution key</label>
+          <label title={tl('Stable key referenced by the flow transition graph')}>{tl('Execution key')}</label>
           <input value={form.executionKey} onChange={(e) => setForm({ ...form, executionKey: e.target.value })} />
         </div>
         <div className="form-row">
-          <label title="Display name for the generated step">Step name</label>
+          <label title={tl('Display name for the generated step')}>{tl('Step name')}</label>
           <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
       </div>
       <div className="form-row">
-        <label title="Description shown in the dashboard">Description</label>
+        <label title={tl('Description shown in the dashboard')}>{tl('Description')}</label>
         <input value={form.description || ''} onChange={(e) => setForm({ ...form, description: e.target.value })} />
       </div>
       <div className="grid-2">
         <div className="form-row">
-          <label title="Source file name stored in the generated artifact">File name</label>
+          <label title={tl('Source file name stored in the generated artifact')}>{tl('File name')}</label>
           <input value={form.fileName} onChange={(e) => setForm({ ...form, fileName: e.target.value })} />
         </div>
         <div className="form-row">
-          <label title="Generated artifact display name">Artifact name</label>
+          <label title={tl('Generated artifact display name')}>{tl('Artifact name')}</label>
           <input value={form.artifactName} onChange={(e) => setForm({ ...form, artifactName: e.target.value })} />
         </div>
       </div>
       <div className="grid-2">
         <div className="form-row">
-          <label title="Artifact entrypoint name">Entrypoint</label>
+          <label title={tl('Artifact entrypoint name')}>{tl('Entrypoint')}</label>
           <input value={form.entrypoint} onChange={(e) => setForm({ ...form, entrypoint: e.target.value })} />
         </div>
         {language === 'CSharp' ? (
           <div className="form-row">
-            <label title="C# handler type implementing Tempo.Protocol.ITempoStepHandler">Handler type</label>
+            <label title={tl('C# handler type implementing Tempo.Protocol.ITempoStepHandler or inheriting Tempo.Protocol.TempoStepHandlerBase')}>{tl('Handler type')}</label>
             <input value={form.handlerType} onChange={(e) => setForm({ ...form, handlerType: e.target.value })} />
           </div>
         ) : (
           <div className="form-row">
-            <label title="Function/export called when the step runs">Function</label>
+            <label title={tl('Function or export called when the step runs')}>{tl('Function')}</label>
             <input value={form.function} onChange={(e) => setForm({ ...form, function: e.target.value })} />
           </div>
         )}
       </div>
       <div className="form-row">
-        <label title="Complete source file contents for this step">Source code</label>
+        <label title={tl('Complete source file contents for this step')}>{tl('Source code')}</label>
         <textarea rows={12} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} spellCheck={false} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }} />
       </div>
     </section>
@@ -921,47 +894,49 @@ function SourceStepEditor({ title, language, form, setForm }) {
 }
 
 function WizardFooter({ stepIndex, busy, canCreateStep, onClose, onStart, onStep, onFlow, onTrigger, onRun }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   if (stepIndex === 0) {
     return (
       <>
-        <button className="button-secondary" onClick={onClose}>Skip setup</button>
-        <button className="button-primary" onClick={onStart}>Start setup</button>
+        <button className="button-secondary" onClick={onClose}>{t('common.actions.skipSetup')}</button>
+        <button className="button-primary" onClick={onStart}>{t('common.actions.startSetup')}</button>
       </>
     );
   }
   if (stepIndex === 1) {
     return (
       <>
-        <button className="button-secondary" onClick={onClose}>Skip setup</button>
-        <button className="button-primary" onClick={onStep} disabled={busy || !canCreateStep}>{busy ? 'Creating...' : 'Create steps'}</button>
+        <button className="button-secondary" onClick={onClose}>{t('common.actions.skipSetup')}</button>
+        <button className="button-primary" onClick={onStep} disabled={busy || !canCreateStep}>{busy ? tl('Creating...') : tl('Create steps')}</button>
       </>
     );
   }
   if (stepIndex === 2) {
     return (
       <>
-        <button className="button-secondary" onClick={onClose}>Close</button>
-        <button className="button-primary" onClick={onFlow} disabled={busy}>{busy ? 'Creating...' : 'Create flows'}</button>
+        <button className="button-secondary" onClick={onClose}>{t('common.actions.close')}</button>
+        <button className="button-primary" onClick={onFlow} disabled={busy}>{busy ? tl('Creating...') : tl('Create flows')}</button>
       </>
     );
   }
   if (stepIndex === 3) {
     return (
       <>
-        <button className="button-secondary" onClick={onClose}>Close</button>
-        <button className="button-primary" onClick={onTrigger} disabled={busy}>{busy ? 'Creating...' : 'Create triggers'}</button>
+        <button className="button-secondary" onClick={onClose}>{t('common.actions.close')}</button>
+        <button className="button-primary" onClick={onTrigger} disabled={busy}>{busy ? tl('Creating...') : tl('Create triggers')}</button>
       </>
     );
   }
   if (stepIndex === 4) {
     return (
       <>
-        <button className="button-secondary" onClick={onClose}>Close</button>
-        <button className="button-primary" onClick={onRun} disabled={busy}>{busy ? 'Running...' : 'Run triggers'}</button>
+        <button className="button-secondary" onClick={onClose}>{t('common.actions.close')}</button>
+        <button className="button-primary" onClick={onRun} disabled={busy}>{busy ? tl('Running...') : tl('Run triggers')}</button>
       </>
     );
   }
-  return <button className="button-primary" onClick={onClose}>Done</button>;
+  return <button className="button-primary" onClick={onClose}>{t('common.actions.done')}</button>;
 }
 
 export default SetupWizard;

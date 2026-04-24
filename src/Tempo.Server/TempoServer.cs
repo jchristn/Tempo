@@ -1,6 +1,7 @@
 namespace Tempo.Server
 {
     using System;
+    using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
     using SyslogLogging;
@@ -14,6 +15,7 @@ namespace Tempo.Server
     using Tempo.Core.Services;
     using Tempo.Core.Settings;
     using Tempo.Core.Runtime;
+    using Tempo.Server.Helpers;
     using Tempo.Server.Routes;
     using WatsonWebserver;
     using WatsonWebserver.Core;
@@ -22,7 +24,7 @@ namespace Tempo.Server
     using TempoStepManager = Tempo.StepManager;
 
     /// <summary>
-    /// Tempo server host. Owns the Watson webserver, service stack, and flow queue worker.
+    /// Tempo server host. Owns the Watson webserver, service stack, and run dispatch coordinator.
     /// </summary>
     public class TempoServer : IDisposable
     {
@@ -33,20 +35,22 @@ namespace Tempo.Server
         private readonly AuthenticationService _Auth;
         private readonly AuthorizationService _Authz;
         private readonly RequestHistoryCaptureService _Capture;
-        private readonly FlowDispatchService _Dispatch;
+        private readonly IRunDispatchCoordinator _Dispatch;
         private readonly DeletionDependencyService _DeleteGuard;
         private readonly StepRuntimeRegistry _RuntimeRegistry;
         private readonly ExternalRuntimeCapacityManager _ExternalCapacity;
         private readonly IArtifactBlobStore _ArtifactBlobStore;
         private readonly ArtifactRetentionService _ArtifactRetention;
         private readonly TempoStepManager _StepManager;
-        private readonly FlowQueueWorker _Worker;
+        private readonly Tempo.Server.Services.LogFileService _LogFiles;
+        private readonly RunLogService _RunLogs;
         private readonly CancellationTokenSource _Cts = new CancellationTokenSource();
         private readonly string _Header = "[TempoServer] ";
         private readonly Tempo.Server.Services.SettingsStore _SettingsStore;
         private Webserver? _Server = null;
         private Task? _PruneTask = null;
         private Task? _ArtifactGcTask = null;
+        private Task? _RunLogPruneTask = null;
         private bool _Disposed = false;
 
         /// <summary>Instantiate.</summary>
@@ -67,13 +71,14 @@ namespace Tempo.Server
             _Auth = new AuthenticationService(_Database, _Tokens, _Settings.Auth);
             _Authz = new AuthorizationService(_Database);
             _Capture = new RequestHistoryCaptureService(_Database, _Settings.RequestHistory, _Logging);
-            _Dispatch = new FlowDispatchService(_Database);
             _DeleteGuard = new DeletionDependencyService(_Database);
             _ExternalCapacity = new ExternalRuntimeCapacityManager(_Settings.Runtimes.ExternalExecution);
             _ArtifactBlobStore = new LocalFilesystemArtifactBlobStore(_Settings.Artifacts);
             _RuntimeRegistry = StepRuntimeRegistry.CreateDefault(_StepManager, runtimes: _Settings.Runtimes, database: _Database, artifactBlobStore: _ArtifactBlobStore, externalCapacity: _ExternalCapacity);
             _ArtifactRetention = new ArtifactRetentionService(_Database, _ArtifactBlobStore, _Settings.Artifacts, _Settings.Runtimes.ExternalExecution);
-            _Worker = new FlowQueueWorker(_Database, _StepManager, _Settings.Engine, _Logging, _RuntimeRegistry);
+            _RunLogs = new RunLogService(_Settings.RunLogs);
+            _Dispatch = new Tempo.Server.Services.RunDispatchCoordinator(_Database, _StepManager, _Settings.Engine, _Logging, _RuntimeRegistry, runLogSettings: _Settings.RunLogs);
+            _LogFiles = new Tempo.Server.Services.LogFileService(_SettingsStore, (Tempo.Server.Services.RunDispatchCoordinator)_Dispatch);
         }
 
         /// <summary>Settings store for live edit.</summary>
@@ -88,8 +93,11 @@ namespace Tempo.Server
         /// <summary>Expose the token service for route registrars.</summary>
         public TokenService Tokens => _Tokens;
 
-        /// <summary>Expose the dispatch service for route registrars.</summary>
-        public FlowDispatchService Dispatch => _Dispatch;
+        /// <summary>Expose the run dispatch coordinator for route registrars.</summary>
+        public IRunDispatchCoordinator Dispatch => _Dispatch;
+
+        /// <summary>Expose the concrete dispatch coordinator for worker-management routes.</summary>
+        public Tempo.Server.Services.RunDispatchCoordinator DispatchCoordinator => (Tempo.Server.Services.RunDispatchCoordinator)_Dispatch;
 
         /// <summary>Expose delete dependency checks for route registrars.</summary>
         public DeletionDependencyService DeleteGuard => _DeleteGuard;
@@ -118,6 +126,12 @@ namespace Tempo.Server
         /// <summary>Expose the settings.</summary>
         public Settings Settings => _Settings;
 
+        /// <summary>Expose the log catalog service.</summary>
+        public Tempo.Server.Services.LogFileService LogFiles => _LogFiles;
+
+        /// <summary>Expose the tenant-scoped run-log service.</summary>
+        public RunLogService RunLogs => _RunLogs;
+
         /// <summary>Start the server.</summary>
         public Task StartAsync()
         {
@@ -125,6 +139,7 @@ namespace Tempo.Server
             ws.Hostname = _Settings.Rest.Hostname;
             ws.Port = _Settings.Rest.Port;
             ws.Ssl.Enable = _Settings.Rest.Ssl;
+            ws.WebSockets.Enable = true;
 
             _Server = new Webserver(ws, DefaultRouteAsync);
 
@@ -147,9 +162,10 @@ namespace Tempo.Server
             _Logging.Info(_Header + "listening on http" + (_Settings.Rest.Ssl ? "s" : "") + "://" + _Settings.Rest.Hostname + ":" + _Settings.Rest.Port);
             _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "process-backed artifact execution is available; enforce tenant isolation, quotas, and runtime allowlists before accepting untrusted code"));
 
-            _Worker.Start();
+            _Dispatch.Start();
             _PruneTask = Task.Run(() => PruneLoopAsync(_Cts.Token));
             _ArtifactGcTask = Task.Run(() => ArtifactGcLoopAsync(_Cts.Token));
+            _RunLogPruneTask = Task.Run(() => RunLogPruneLoopAsync(_Cts.Token));
 
             return Task.CompletedTask;
         }
@@ -159,7 +175,7 @@ namespace Tempo.Server
         {
             try { _Cts.Cancel(); } catch { /* ignore */ }
             try { _Server?.Stop(); } catch { /* ignore */ }
-            _Worker.Stop();
+            _Dispatch.Stop();
         }
 
         /// <inheritdoc/>
@@ -169,7 +185,8 @@ namespace Tempo.Server
             Stop();
             try { _PruneTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* ignore */ }
             try { _ArtifactGcTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* ignore */ }
-            _Worker.Dispose();
+            try { _RunLogPruneTask?.Wait(TimeSpan.FromSeconds(5)); } catch { /* ignore */ }
+            _Dispatch.Dispose();
             try { _Server?.Dispose(); } catch { /* ignore */ }
             _Cts.Dispose();
             _Disposed = true;
@@ -194,11 +211,13 @@ namespace Tempo.Server
             new StepRoutes(this).Register(_Server);
             new RuntimeRoutes(this).Register(_Server);
             new ArtifactRoutes(this).Register(_Server);
+            new WorkerRoutes(this).Register(_Server);
             new TriggerRoutes(this).Register(_Server);
             new FlowRunRoutes(this).Register(_Server);
             new RequestHistoryRoutes(this).Register(_Server);
             new MigrationRoutes(this).Register(_Server);
             new SettingsRoutes(this).Register(_Server);
+            new LogRoutes(this).Register(_Server);
         }
 
         private async Task AuthenticateRequestAsync(HttpContextBase ctx)
@@ -211,15 +230,18 @@ namespace Tempo.Server
             string? email = ctx.Request.Headers[Constants.HeaderEmail];
             string? password = ctx.Request.Headers[Constants.HeaderPassword];
             string? authz = ctx.Request.Headers["Authorization"];
-
-            string? bearerToken = null;
-            if (!string.IsNullOrEmpty(authz) && authz.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                bearerToken = authz.Substring(7).Trim();
-            }
+            bool containsUnsupportedSecretKeyHeader = !string.IsNullOrWhiteSpace(secretKey);
+            string? bearerToken = ReadBearerToken(authz);
 
             RequestContext rc = await _Auth.AuthenticateAsync(
-                tokenHeader, bearerToken, apiKey, accessKey, secretKey, tenantIdHeader, email, password).ConfigureAwait(false);
+                tokenHeader,
+                bearerToken,
+                apiKey,
+                accessKey,
+                tenantIdHeader,
+                email,
+                password,
+                containsUnsupportedSecretKeyHeader: containsUnsupportedSecretKeyHeader).ConfigureAwait(false);
 
             ctx.Metadata = rc;
         }
@@ -267,7 +289,7 @@ namespace Tempo.Server
         {
             SetHeaderIfMissing(ctx, "Access-Control-Allow-Origin", "*");
             SetHeaderIfMissing(ctx, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD");
-            SetHeaderIfMissing(ctx, "Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Token, X-Tenant-Id, X-Access-Key, X-Secret-Key, X-Email, X-Password, X-Request");
+            SetHeaderIfMissing(ctx, "Access-Control-Allow-Headers", "Content-Type, Authorization, X-Api-Key, X-Token, X-Tenant-Id, X-Worker-Id, X-Worker-Token, X-Access-Key, X-Email, X-Password, X-Request");
             SetHeaderIfMissing(ctx, "Access-Control-Expose-Headers", Constants.HeaderRunMetadataExposeList);
         }
 
@@ -279,6 +301,13 @@ namespace Tempo.Server
                 if (string.Equals(existing, key, System.StringComparison.OrdinalIgnoreCase)) return;
             }
             headers.Add(key, value);
+        }
+
+        private static string? ReadBearerToken(string? authorizationHeader)
+        {
+            if (string.IsNullOrEmpty(authorizationHeader)) return null;
+            if (!authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return null;
+            return authorizationHeader.Substring(7).Trim();
         }
 
         private RequestHistoryEntry BuildHistoryEntry(HttpContextBase ctx)
@@ -295,7 +324,7 @@ namespace Tempo.Server
                 Url = ctx.Request.Url.RawWithQuery,
                 StatusCode = ctx.Response.StatusCode,
                 DurationMs = ctx.Timestamp.TotalMs ?? 0,
-                SourceIp = ctx.Request.Source?.IpAddress,
+                SourceIp = ClientIpResolver.Resolve(ctx),
                 CreatedUtc = ctx.Timestamp.Start,
                 CompletedUtc = ctx.Timestamp.End
             };
@@ -414,6 +443,57 @@ namespace Tempo.Server
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "artifact GC loop error: " + ex.Message)); }
             }
+        }
+
+        private async Task RunLogPruneLoopAsync(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromMinutes(_Settings.RunLogs.PruneIntervalMinutes), token).ConfigureAwait(false);
+                    int deleted = await PruneRunLogsOnceAsync(token).ConfigureAwait(false);
+                    if (deleted > 0)
+                    {
+                        DateTime cutoff = DateTime.UtcNow.AddDays(-_Settings.RunLogs.RetentionDays);
+                        _Logging.Debug(_Header + "pruned " + deleted + " run-log director" + (deleted == 1 ? "y" : "ies") + " older than " + cutoff.ToString("o"));
+                    }
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex) { _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "run-log prune loop error: " + ex.Message)); }
+            }
+        }
+
+        /// <summary>Prune completed run-log directories older than the configured retention window.</summary>
+        public async Task<int> PruneRunLogsOnceAsync(CancellationToken token = default)
+        {
+            if (!_Settings.RunLogs.Enabled) return 0;
+
+            DateTime cutoff = DateTime.UtcNow.AddDays(-_Settings.RunLogs.RetentionDays);
+            int deleted = 0;
+
+            foreach (string runId in _RunLogs.EnumerateRunIds())
+            {
+                token.ThrowIfCancellationRequested();
+
+                FlowRun? run = await _Database.FlowRuns.ReadGlobalAsync(runId, token).ConfigureAwait(false);
+                if (run != null)
+                {
+                    if (!run.CompletedUtc.HasValue) continue;
+                    if (run.State == FlowRunStateEnum.Queued || run.State == FlowRunStateEnum.Running) continue;
+                    if (run.CompletedUtc.Value > cutoff) continue;
+                }
+                else
+                {
+                    string runRoot = _RunLogs.ResolveRunRoot(runId);
+                    if (Directory.Exists(runRoot) && Directory.GetLastWriteTimeUtc(runRoot) > cutoff) continue;
+                }
+
+                await _RunLogs.DeleteRunDirectoryAsync(runId, token).ConfigureAwait(false);
+                deleted++;
+            }
+
+            return deleted;
         }
     }
 }

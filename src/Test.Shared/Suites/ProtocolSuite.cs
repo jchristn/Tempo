@@ -4,6 +4,7 @@ namespace Test.Shared.Suites
     using System.Collections.Generic;
     using System.Data;
     using System.IO;
+    using System.Linq;
     using System.Text.Json;
     using System.Threading;
     using System.Threading.Tasks;
@@ -142,6 +143,67 @@ namespace Test.Shared.Suites
                         AssertInvalid(runner.ValidateStepResultJson("{\"protocolVersion\":\"1.0\",\"requestId\":\"req\"}"), "missing fields");
                         AssertInvalid(runner.ValidateStepResultJson("{\"protocolVersion\":\"2.0\",\"dataFlowId\":\"flow\",\"requestId\":\"req\",\"result\":\"Success\"}"), "unsupported version");
                         AssertInvalid(runner.ValidateStepResultJson("{\"protocolVersion\":\"1.0\",\"dataFlowId\":\"flow\",\"requestId\":\"req\",\"result\":\"Exception\"}"), "exception missing message");
+                    }),
+                    new TestCaseDescriptor("Protocol", "DotnetProcessBaseHandlerLogging", "TempoStepHandlerBase writes through the host run logger without polluting protocol stdout", async _ =>
+                    {
+                        string logPath = Path.Combine(Path.GetTempPath(), "tempo-protocol-log-" + Guid.NewGuid().ToString("N") + ".log");
+                        TextReader originalIn = Console.In;
+                        TextWriter originalOut = Console.Out;
+                        TextWriter originalErr = Console.Error;
+                        string? previousRunLog = Environment.GetEnvironmentVariable("TEMPO_RUN_LOG_FILE");
+                        string? previousAssignment = Environment.GetEnvironmentVariable("TEMPO_RUN_ASSIGNMENT_ID");
+                        string? previousStep = Environment.GetEnvironmentVariable("TEMPO_STEP_ID");
+                        string? previousWorker = Environment.GetEnvironmentVariable("TEMPO_WORKER_ID");
+
+                        try
+                        {
+                            Environment.SetEnvironmentVariable("TEMPO_RUN_LOG_FILE", logPath);
+                            Environment.SetEnvironmentVariable("TEMPO_RUN_ASSIGNMENT_ID", "ras_protocol");
+                            Environment.SetEnvironmentVariable("TEMPO_STEP_ID", "step_protocol");
+                            Environment.SetEnvironmentVariable("TEMPO_WORKER_ID", "wrk_protocol");
+
+                            StepRequest request = new StepRequest
+                            {
+                                TenantId = "ten_protocol",
+                                DataFlowId = "flow_protocol",
+                                FlowRunId = "fru_protocol",
+                                StepRunId = "sru_protocol",
+                                RequestId = "req_protocol",
+                                Data = new { value = 7 }
+                            };
+                            using StringReader input = new StringReader(JsonSerializer.Serialize(request));
+                            using StringWriter output = new StringWriter();
+                            using StringWriter stderr = new StringWriter();
+                            Console.SetIn(input);
+                            Console.SetOut(output);
+                            Console.SetError(stderr);
+
+                            int code = await TempoStepHost.RunAsync(new LoggingProtocolHandler()).ConfigureAwait(false);
+                            Assert2.Equal(0, code, "host exit code");
+
+                            StepResult result = JsonSerializer.Deserialize<StepResult>(output.ToString())!;
+                            Assert2.Equal(StepResultTypeEnum.Success, result.Result, "handler result");
+                            Assert2.Equal("flow_protocol", result.DataFlowId, "correlated flow");
+                            Assert2.False(output.ToString().Contains("console-info", StringComparison.Ordinal), "console stdout excluded from protocol output");
+
+                            string logText = await File.ReadAllTextAsync(logPath).ConfigureAwait(false);
+                            Assert2.True(logText.Contains("base-info", StringComparison.Ordinal), "base info log captured");
+                            Assert2.True(logText.Contains("parallel-0", StringComparison.Ordinal), "parallel log captured");
+                            Assert2.True(logText.Contains("console-info", StringComparison.Ordinal), "console out log captured");
+                            Assert2.True(logText.Contains("console-error", StringComparison.Ordinal), "console error log captured");
+                            Assert2.True(Enumerable.Range(0, 4).All(i => logText.Contains("parallel-" + i, StringComparison.Ordinal)), "all parallel logs captured");
+                        }
+                        finally
+                        {
+                            Console.SetIn(originalIn);
+                            Console.SetOut(originalOut);
+                            Console.SetError(originalErr);
+                            Environment.SetEnvironmentVariable("TEMPO_RUN_LOG_FILE", previousRunLog);
+                            Environment.SetEnvironmentVariable("TEMPO_RUN_ASSIGNMENT_ID", previousAssignment);
+                            Environment.SetEnvironmentVariable("TEMPO_STEP_ID", previousStep);
+                            Environment.SetEnvironmentVariable("TEMPO_WORKER_ID", previousWorker);
+                            try { if (File.Exists(logPath)) File.Delete(logPath); } catch { /* ignore */ }
+                        }
                     })
                 });
         }
@@ -176,6 +238,25 @@ namespace Test.Shared.Suites
                     RequestId = "wrong_request",
                     Result = StepResultTypeEnum.Success,
                     Data = "ok"
+                });
+            }
+        }
+
+        private sealed class LoggingProtocolHandler : TempoStepHandlerBase
+        {
+            public override async Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+            {
+                LogInfo("base-info");
+                await Task.WhenAll(Enumerable.Range(0, 4).Select(i => Task.Run(() => LogInfo("parallel-" + i), token))).ConfigureAwait(false);
+                Console.WriteLine("console-info");
+                Console.Error.WriteLine("console-error");
+                return Success(request, new
+                {
+                    hasContext = ExecutionContext != null,
+                    runAssignmentId = ExecutionContext?.RunAssignmentId,
+                    stepId = ExecutionContext?.StepId,
+                    requestId = ExecutionContext?.RequestId,
+                    workerId = ExecutionContext?.WorkerId
                 });
             }
         }

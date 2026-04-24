@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import i18n from '../i18n';
 import ApiClient from '../utils/api';
 
 const AuthContext = createContext(null);
@@ -6,6 +7,15 @@ const AuthContext = createContext(null);
 const KEY_URL = 'tempo.server.url';
 const KEY_TOKEN = 'tempo.auth.token';
 const KEY_THEME = 'tempo.theme';
+
+function translateLiteral(value, options = {}) {
+  const text = String(value || '');
+  return i18n.t(text, {
+    defaultValue: text,
+    keySeparator: false,
+    ...options
+  });
+}
 
 export function AuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -54,7 +64,7 @@ export function AuthProvider({ children }) {
     const tempClient = new ApiClient(url, null);
     const payload = await tempClient.login(credentials.email, credentials.password, credentials.tenantId || null);
     const newToken = payload && payload.token;
-    if (!newToken) throw new Error('Login did not return a token.');
+    if (!newToken) throw new Error(translateLiteral('Login did not return a token.'));
     const client = new ApiClient(url, newToken);
     const who = await client.me().catch(() => null);
     localStorage.setItem(KEY_URL, url);
@@ -93,7 +103,7 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
+  if (!ctx) throw new Error(translateLiteral('useAuth must be used inside AuthProvider'));
   return ctx;
 }
 

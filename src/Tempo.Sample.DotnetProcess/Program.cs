@@ -14,10 +14,11 @@ namespace Tempo.Sample.DotnetProcess
             return TempoStepHost.RunAsync(new SampleHandler()).GetAwaiter().GetResult();
         }
 
-        public sealed class SampleHandler : ITempoStepHandler
+        public sealed class SampleHandler : TempoStepHandlerBase
         {
-            public Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+            public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
             {
+                LogInfo("Sample .NET process step received request " + request.RequestId);
                 Dictionary<string, object?> data = new Dictionary<string, object?>
                 {
                     ["sample"] = "artifact-dotnet-process",
@@ -34,7 +35,7 @@ namespace Tempo.Sample.DotnetProcess
                     ["sdk"] = "dotnet"
                 };
 
-                return Task.FromResult(TempoStepHost.Success(request, data, metadata));
+                return Task.FromResult(Success(request, data, metadata));
             }
         }
     }

@@ -12,6 +12,8 @@ Protocol v1 SDK for Python artifact step handlers.
 - Result helpers: `success`, `error`, `exception_result`,
   `correlate_result`
 - Handler marker: `@step`
+- Logging helpers: `TempoStepLogger`, `create_logger_from_environment`
+- Ambient context: `TempoExecutionContext`, `get_current_execution_context()`
 - Runner: `TempoStepHost.run()` and `TempoStepHost.run_async()`
 
 ## Handler
@@ -30,6 +32,30 @@ if __name__ == "__main__":
 Returning plain JSON-serializable data creates a `Success` result. Returning a
 `StepResult` preserves the explicit result state. Exceptions are mapped to
 `Exception` result envelopes with request correlation preserved when possible.
+
+## Logging
+
+Tempo reserves stdout for protocol JSON. Use the ambient execution context and
+logger instead of printing directly to protocol stdout.
+
+```python
+from tempo_sdk import TempoStepHost, get_current_execution_context, step
+
+@step
+def handler(request):
+    ctx = get_current_execution_context()
+    if ctx and ctx.logger:
+        ctx.logger.info("processing order")
+    print("this is redirected into the run log")
+    return {"ok": True, "input": request.data}
+
+if __name__ == "__main__":
+    raise SystemExit(TempoStepHost.run(handler))
+```
+
+When `TEMPO_RUN_LOG_FILE` is present, `TempoStepHost` redirects `print`,
+root `logging`, and stderr into the file-backed run log so the only stdout
+bytes emitted are the final `StepResult` JSON payload.
 
 ## Examples
 

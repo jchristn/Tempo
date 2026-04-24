@@ -12,6 +12,7 @@ namespace Tempo.Server.Routes
     using Tempo.Core.Requests;
     using Tempo.Core.Security;
     using Tempo.Core.Services;
+    using Tempo.Server.Helpers;
     using WatsonWebserver;
     using WatsonWebserver.Core;
     using WatsonWebserver.Core.OpenApi;
@@ -141,6 +142,12 @@ namespace Tempo.Server.Routes
 
         private async Task FireHttpTriggerAsync(HttpContextBase ctx)
         {
+            if (RouteHelpers.HasUnsupportedSecretKeyHeader(ctx))
+            {
+                await RouteHelpers.UnsupportedSecretKeyAsync(ctx).ConfigureAwait(false);
+                return;
+            }
+
             string? id = RouteHelpers.Path(ctx, "id");
             if (string.IsNullOrEmpty(id)) { await RouteHelpers.BadRequestAsync(ctx, "id required."); return; }
 
@@ -156,11 +163,18 @@ namespace Tempo.Server.Routes
                 return;
             }
 
+            DataFlowRecord? flow = await _Host.Database.DataFlows.ReadAsync(trigger.TenantId, trigger.DataFlowId!).ConfigureAwait(false);
+            if (flow == null) { await RouteHelpers.NotFoundAsync(ctx, "Associated flow not found."); return; }
+
+            RequestContext? invocationContext = await AuthorizeTriggerInvocationAsync(ctx, flow).ConfigureAwait(false);
+            if (flow.InvocationAuthMode == DataFlowInvocationAuthModeEnum.ApiAuthenticated && invocationContext == null) return;
+
             string body = method == "GET" ? string.Empty : ctx.Request.DataAsString ?? string.Empty;
             try
             {
-                var run = await _Host.Dispatch.EnqueueAsync(trigger.TenantId, trigger.DataFlowId!, string.IsNullOrEmpty(body) ? null : body, null, trigger.Id);
-                DataFlowRecord? flow = await _Host.Database.DataFlows.ReadAsync(trigger.TenantId, trigger.DataFlowId!).ConfigureAwait(false);
+                string? sourceIp = ClientIpResolver.Resolve(ctx);
+                string? triggeredByUserId = flow.InvocationAuthMode == DataFlowInvocationAuthModeEnum.ApiAuthenticated ? invocationContext?.UserId : null;
+                var run = await _Host.Dispatch.EnqueueAsync(trigger.TenantId, trigger.DataFlowId!, string.IsNullOrEmpty(body) ? null : body, triggeredByUserId, trigger.Id, sourceIp);
                 run = await WaitForRunCompletionAsync(run, CalculateWaitMs(flow)).ConfigureAwait(false);
 
                 ApplyRunHeaders(ctx, run);
@@ -170,6 +184,52 @@ namespace Tempo.Server.Routes
             {
                 await RouteHelpers.ErrorAsync(ctx, 400, "CannotEnqueue", ex.Message);
             }
+        }
+
+        private async Task<RequestContext?> AuthorizeTriggerInvocationAsync(HttpContextBase ctx, DataFlowRecord flow)
+        {
+            if (flow.InvocationAuthMode != DataFlowInvocationAuthModeEnum.ApiAuthenticated) return RouteHelpers.Context(ctx);
+
+            RequestContext? rc = await ResolveRequestContextAsync(ctx).ConfigureAwait(false);
+
+            if (rc == null || !rc.IsAuthenticated)
+            {
+                await RouteHelpers.UnauthorizedAsync(ctx).ConfigureAwait(false);
+                return null;
+            }
+
+            if (!_Host.Authorization.CanActOnTenant(rc, flow.TenantId))
+            {
+                await RouteHelpers.ForbiddenAsync(ctx).ConfigureAwait(false);
+                return null;
+            }
+
+            return rc;
+        }
+
+        private async Task<RequestContext?> ResolveRequestContextAsync(HttpContextBase ctx)
+        {
+            RequestContext? rc = RouteHelpers.Context(ctx);
+            if (rc != null) return rc;
+
+            string? authz = ctx.Request.Headers["Authorization"];
+            string? bearerToken = null;
+            if (!string.IsNullOrEmpty(authz) && authz.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                bearerToken = authz.Substring(7).Trim();
+            }
+
+            rc = await _Host.Authentication.AuthenticateAsync(
+                ctx.Request.Headers[Constants.HeaderToken],
+                bearerToken,
+                ctx.Request.Headers[Constants.HeaderApiKey],
+                ctx.Request.Headers[Constants.HeaderAccessKey],
+                ctx.Request.Headers[Constants.HeaderTenantId],
+                ctx.Request.Headers[Constants.HeaderEmail],
+                ctx.Request.Headers[Constants.HeaderPassword],
+                containsUnsupportedSecretKeyHeader: !string.IsNullOrWhiteSpace(ctx.Request.Headers[Constants.HeaderSecretKey])).ConfigureAwait(false);
+            ctx.Metadata = rc;
+            return rc;
         }
 
         private async Task<FlowRun> WaitForRunCompletionAsync(FlowRun run, int maxWaitMs)
@@ -244,6 +304,7 @@ namespace Tempo.Server.Routes
             SetHeader(ctx, Constants.HeaderRunState, run.State.ToString());
             SetHeader(ctx, Constants.HeaderRunCreatedUtc, run.CreatedUtc.ToString("o"));
             SetHeader(ctx, Constants.HeaderRunLastUpdateUtc, run.LastUpdateUtc.ToString("o"));
+            if (!string.IsNullOrWhiteSpace(run.AssignedWorkerId)) SetHeader(ctx, Constants.HeaderWorkerId, run.AssignedWorkerId);
             if (!string.IsNullOrWhiteSpace(run.TriggerId)) SetHeader(ctx, Constants.HeaderTriggerId, run.TriggerId);
             if (run.StartedUtc.HasValue) SetHeader(ctx, Constants.HeaderRunStartedUtc, run.StartedUtc.Value.ToString("o"));
             if (run.CompletedUtc.HasValue) SetHeader(ctx, Constants.HeaderRunCompletedUtc, run.CompletedUtc.Value.ToString("o"));

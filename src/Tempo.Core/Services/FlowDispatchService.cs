@@ -29,6 +29,7 @@ namespace Tempo.Core.Services
         /// <param name="inputData">Optional JSON input data.</param>
         /// <param name="triggeredByUserId">User that initiated the run.</param>
         /// <param name="triggerId">Trigger identifier, if any.</param>
+        /// <param name="sourceIp">Observed client source IP, if available.</param>
         /// <param name="token">Cancellation token.</param>
         public async Task<FlowRun> EnqueueAsync(
             string tenantId,
@@ -36,6 +37,7 @@ namespace Tempo.Core.Services
             string? inputData = null,
             string? triggeredByUserId = null,
             string? triggerId = null,
+            string? sourceIp = null,
             CancellationToken token = default)
         {
             if (string.IsNullOrWhiteSpace(tenantId)) throw new ArgumentNullException(nameof(tenantId));
@@ -51,6 +53,7 @@ namespace Tempo.Core.Services
                 DataFlowId = flow.Id,
                 TriggeredByUserId = triggeredByUserId,
                 TriggerId = triggerId,
+                SourceIp = sourceIp,
                 State = FlowRunStateEnum.Queued,
                 InputData = inputData
             };

@@ -1,3 +1,6 @@
+import { useTranslation } from 'react-i18next';
+import { translateLiteral } from '../utils/i18n';
+
 /**
  * DataTable is the presentation-only render of rows/columns. Pagination is a
  * separate component (TablePagination) rendered ABOVE the table; the parent
@@ -10,7 +13,7 @@ function DataTable({
   columns,
   items = [],
   loading = false,
-  emptyMessage = 'No items found',
+  emptyMessage,
   onRowClick = null,
   selectable = false,
   rowId = (item) => item.id,
@@ -18,6 +21,8 @@ function DataTable({
   onSelectedChange = null,
   withPagination = true
 }) {
+  const { t } = useTranslation();
+
   if (loading) {
     return (
       <div className={'data-table-wrapper' + (withPagination ? ' with-pagination' : '')}>
@@ -29,6 +34,7 @@ function DataTable({
   const ids = items.map((x) => rowId(x));
   const allSelected = selectable && ids.length > 0 && ids.every((id) => selected?.has(id));
   const someSelected = selectable && ids.some((id) => selected?.has(id));
+  const resolvedEmptyMessage = emptyMessage || t('components.table.empty');
 
   const toggleAll = () => {
     if (!onSelectedChange) return;
@@ -58,12 +64,18 @@ function DataTable({
                   checked={allSelected}
                   ref={(el) => { if (el) el.indeterminate = !allSelected && someSelected; }}
                   onChange={toggleAll}
-                  aria-label="Select all rows"
+                  aria-label={t('components.table.selectAllRows')}
                   style={{ width: 'auto' }} />
               </th>
             )}
             {columns.map((col) => (
-              <th key={col.key} style={col.style} title={col.tip || undefined}>{col.label}</th>
+              <th
+                key={col.key}
+                style={col.style}
+                title={typeof col.tip === 'string' ? translateLiteral(t, col.tip) : (col.tip || undefined)}
+              >
+                {typeof col.label === 'string' ? translateLiteral(t, col.label) : col.label}
+              </th>
             ))}
           </tr>
         </thead>
@@ -77,7 +89,7 @@ function DataTable({
                     <input type="checkbox"
                       checked={selected?.has(id) || false}
                       onChange={(e) => toggleRow(id, e)}
-                      aria-label="Select row"
+                      aria-label={t('components.table.selectRow')}
                       style={{ width: 'auto' }} />
                   </td>
                 )}
@@ -90,7 +102,7 @@ function DataTable({
             );
           }) : (
             <tr>
-              <td colSpan={(selectable ? 1 : 0) + columns.length} className="empty-state">{emptyMessage}</td>
+              <td colSpan={(selectable ? 1 : 0) + columns.length} className="empty-state">{resolvedEmptyMessage}</td>
             </tr>
           )}
         </tbody>

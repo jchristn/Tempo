@@ -1,16 +1,46 @@
+x-tempo-worker-env: &tempo-worker-env
+  TEMPO_WORKER_SETTINGS_FILE: /var/lib/tempo-worker/config/tempo.worker.json
+  TEMPO_WORKER_SERVER_ENDPOINT: ${TEMPO_WORKER_SERVER_ENDPOINT:-http://tempo-server:8901}
+  TEMPO_WORKER_BOOTSTRAP_ADMIN_API_KEY: ${TEMPO_WORKER_BOOTSTRAP_ADMIN_API_KEY:-tempo-local-admin-api-key}
+
+x-tempo-server-env: &tempo-server-env
+  TEMPO_AUTH_ADMIN_API_KEY: ${TEMPO_WORKER_BOOTSTRAP_ADMIN_API_KEY:-tempo-local-admin-api-key}
+  TEMPO_LOG_VIEWER_WORKER_ROOT: /var/lib/tempo-server/worker-logs
+
+x-tempo-mcp-env: &tempo-mcp-env
+  TEMPO_ENDPOINT: http://tempo-server:8901
+  TEMPO_MCP_HTTP_HOSTNAME: "*"
+  TEMPO_MCP_TCP_ADDRESS: 0.0.0.0
+  TEMPO_MCP_WS_HOSTNAME: "*"
+
+x-tempo-worker: &tempo-worker
+  image: jchristn77/tempo-worker:v0.3.0
+  restart: unless-stopped
+  depends_on:
+    tempo-server:
+      condition: service_healthy
+  volumes:
+    - ./tempo.worker.json:/var/lib/tempo-worker/config/tempo.worker.json:ro
+    - tempo_worker_logs:/var/lib/tempo-worker/logs
+    - tempo_run_logs:/var/lib/tempo/run-logs
+    - /var/lib/tempo-worker/runtime-cache
+    - /var/lib/tempo-worker/scratch
+
 services:
   tempo-server:
-    build:
-      context: ..
-      dockerfile: src/Tempo.Server/Dockerfile
-    image: jchristn77/tempo-server:v0.2.0
+    image: jchristn77/tempo-server:v0.3.0
     restart: unless-stopped
+    environment:
+      <<: *tempo-server-env
     ports:
       - "8901:8901"
     volumes:
-      - tempo_server_config:/var/lib/tempo-server/config
+      - ./tempo.server.json:/var/lib/tempo-server/config/tempo.json:ro
       - tempo_server_db:/var/lib/tempo-server/db
+      - tempo_server_artifacts:/var/lib/tempo-server/artifacts
       - tempo_server_logs:/var/lib/tempo-server/logs
+      - tempo_worker_logs:/var/lib/tempo-server/worker-logs:ro
+      - tempo_run_logs:/var/lib/tempo/run-logs
       - tempo_server_runtime_cache:/var/lib/tempo-server/runtime-cache
       - tempo_server_scratch:/var/lib/tempo-server/scratch
     healthcheck:
@@ -19,11 +49,32 @@ services:
       timeout: 5s
       retries: 2
 
+  tempo-worker-1:
+    <<: *tempo-worker
+    environment:
+      <<: *tempo-worker-env
+      TEMPO_WORKER_ID: wrk_docker_1
+      TEMPO_WORKER_NAME: tempo-worker-1
+      TEMPO_WORKER_LOG_DIRECTORY: /var/lib/tempo-worker/logs/wrk_docker_1
+
+  tempo-worker-2:
+    <<: *tempo-worker
+    environment:
+      <<: *tempo-worker-env
+      TEMPO_WORKER_ID: wrk_docker_2
+      TEMPO_WORKER_NAME: tempo-worker-2
+      TEMPO_WORKER_LOG_DIRECTORY: /var/lib/tempo-worker/logs/wrk_docker_2
+
+  tempo-worker-3:
+    <<: *tempo-worker
+    environment:
+      <<: *tempo-worker-env
+      TEMPO_WORKER_ID: wrk_docker_3
+      TEMPO_WORKER_NAME: tempo-worker-3
+      TEMPO_WORKER_LOG_DIRECTORY: /var/lib/tempo-worker/logs/wrk_docker_3
+
   dashboard:
-    build:
-      context: ../dashboard
-      dockerfile: Dockerfile
-    image: jchristn77/tempo-ui:v0.2.0
+    image: jchristn77/tempo-ui:v0.3.0
     restart: unless-stopped
     depends_on:
       tempo-server:
@@ -39,14 +90,13 @@ services:
       retries: 2
 
   tempo-mcp:
-    build:
-      context: ..
-      dockerfile: src/Tempo.McpServer/Dockerfile
-    image: jchristn77/tempo-mcp:v0.2.0
+    image: jchristn77/tempo-mcp:v0.3.0
     restart: unless-stopped
     depends_on:
       tempo-server:
         condition: service_healthy
+    environment:
+      <<: *tempo-mcp-env
     ports:
       - "8910:8910"
       - "8911:8911"
@@ -60,9 +110,11 @@ services:
       retries: 2
 
 volumes:
-  tempo_server_config:
   tempo_server_db:
+  tempo_server_artifacts:
   tempo_server_logs:
+  tempo_worker_logs:
+  tempo_run_logs:
   tempo_server_runtime_cache:
   tempo_server_scratch:
   dashboard_logs:

@@ -62,7 +62,7 @@ namespace Tempo.Server.Services
         }
 
         /// <summary>Sections whose changes do not take effect until the server is restarted.</summary>
-        public static string[] RebootRequiredSections => new[] { "rest", "database", "runtimes" };
+        public static string[] RebootRequiredSections => new[] { "rest", "database", "engine", "runtimes" };
 
         private static string[] ComputeRebootRequired(Settings oldS, Settings newS)
         {
@@ -77,10 +77,19 @@ namespace Tempo.Server.Services
                 oldS.Database.Username != newS.Database.Username ||
                 oldS.Database.Password != newS.Database.Password)
                 changes.Add("database");
+            if (EngineChanged(oldS.Engine, newS.Engine))
+                changes.Add("engine");
             if (ExternalExecutionChanged(oldS.Runtimes.ExternalExecution, newS.Runtimes.ExternalExecution) ||
                 HostExecutablesChanged(oldS.Runtimes.HostExecutables, newS.Runtimes.HostExecutables))
                 changes.Add("runtimes");
             return changes.ToArray();
+        }
+
+        private static bool EngineChanged(EngineSettings oldSettings, EngineSettings newSettings)
+        {
+            string oldJson = JsonSerializer.Serialize(oldSettings);
+            string newJson = JsonSerializer.Serialize(newSettings);
+            return !string.Equals(oldJson, newJson, StringComparison.Ordinal);
         }
 
         private static bool ExternalExecutionChanged(ExternalExecutionSettings oldSettings, ExternalExecutionSettings newSettings)

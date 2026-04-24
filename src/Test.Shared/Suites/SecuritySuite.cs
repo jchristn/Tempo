@@ -2,7 +2,12 @@ namespace Test.Shared.Suites
 {
     using System;
     using System.Collections.Generic;
+    using System.Threading;
     using System.Threading.Tasks;
+    using Tempo.Core.Database;
+    using Tempo.Core.Database.Sqlite;
+    using Tempo.Core.Enums;
+    using Tempo.Core.Models;
     using Tempo.Core.Security;
     using Tempo.Core.Services;
     using Tempo.Core.Settings;
@@ -115,8 +120,198 @@ namespace Test.Shared.Suites
                         Assert2.IsNull(svc.Validate(""), "empty");
                         Assert2.IsNull(svc.Validate("@@not-base64@@"), "not base64");
                         Assert2.IsNull(svc.Validate("abc"), "too short");
-                    })
+                    }),
+                    new TestCaseDescriptor("Security", "CredentialAccessKeyMissingUserReturnsNotFound", "Credential access-key auth returns NotFound when the backing user no longer exists", CredentialAccessKeyMissingUserReturnsNotFoundAsync),
+                    new TestCaseDescriptor("Security", "CredentialBearerMissingTenantReturnsNotFound", "Bearer fallback to credential access key returns NotFound when the backing tenant no longer exists", CredentialBearerMissingTenantReturnsNotFoundAsync),
+                    new TestCaseDescriptor("Security", "CredentialBearerInactiveUserReturnsInactive", "Bearer fallback preserves Inactive when the credential's user is disabled", CredentialBearerInactiveUserReturnsInactiveAsync),
+                    new TestCaseDescriptor("Security", "TokenUserMissingTenantReturnsNotFound", "User token auth returns NotFound when the referenced tenant no longer exists", TokenUserMissingTenantReturnsNotFoundAsync),
+                    new TestCaseDescriptor("Security", "EmailPasswordMissingTenantReturnsNotFound", "Email/password auth returns NotFound when the tenant record no longer exists", EmailPasswordMissingTenantReturnsNotFoundAsync)
                 });
+        }
+
+        private static async Task CredentialAccessKeyMissingUserReturnsNotFoundAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct).ConfigureAwait(false);
+            try
+            {
+                (AuthenticationService auth, _) = CreateAuthenticationServices(driver);
+                Tenant tenant = await driver.Tenants.CreateAsync(new Tenant { Name = "T" }, ct).ConfigureAwait(false);
+                User user = await driver.Users.CreateAsync(new User { TenantId = tenant.Id, Email = "user-missing@tempo.local", PasswordSha256 = PasswordHasher.Hash("pw") }, ct).ConfigureAwait(false);
+                Credential credential = await driver.Credentials.CreateAsync(new Credential { TenantId = tenant.Id, UserId = user.Id, Name = "credential" }, ct).ConfigureAwait(false);
+                await DeleteByIdAsync(driver, "users", user.Id, ct).ConfigureAwait(false);
+
+                RequestContext ctx = await auth.AuthenticateAsync(
+                    tokenHeader: null,
+                    bearerToken: null,
+                    apiKey: null,
+                    accessKey: credential.AccessKey,
+                    tenantIdHeader: null,
+                    emailHeader: null,
+                    passwordHeader: null,
+                    containsUnsupportedSecretKeyHeader: false,
+                    token: ct).ConfigureAwait(false);
+
+                Assert2.False(ctx.IsAuthenticated, "authentication rejected");
+                Assert2.Equal(AuthenticationResultEnum.NotFound, ctx.AuthenticationResult, "missing user reports not found");
+            }
+            finally
+            {
+                await TempTestStore.DisposeAsync(driver).ConfigureAwait(false);
+            }
+        }
+
+        private static async Task CredentialBearerMissingTenantReturnsNotFoundAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct).ConfigureAwait(false);
+            try
+            {
+                (AuthenticationService auth, _) = CreateAuthenticationServices(driver);
+                Tenant tenant = await driver.Tenants.CreateAsync(new Tenant { Name = "T" }, ct).ConfigureAwait(false);
+                User user = await driver.Users.CreateAsync(new User { TenantId = tenant.Id, Email = "tenant-missing@tempo.local", PasswordSha256 = PasswordHasher.Hash("pw") }, ct).ConfigureAwait(false);
+                Credential credential = await driver.Credentials.CreateAsync(new Credential { TenantId = tenant.Id, UserId = user.Id, Name = "credential" }, ct).ConfigureAwait(false);
+                await DeleteByIdAsync(driver, "tenants", tenant.Id, ct).ConfigureAwait(false);
+
+                RequestContext ctx = await auth.AuthenticateAsync(
+                    tokenHeader: null,
+                    bearerToken: credential.AccessKey,
+                    apiKey: null,
+                    accessKey: null,
+                    tenantIdHeader: null,
+                    emailHeader: null,
+                    passwordHeader: null,
+                    containsUnsupportedSecretKeyHeader: false,
+                    token: ct).ConfigureAwait(false);
+
+                Assert2.False(ctx.IsAuthenticated, "authentication rejected");
+                Assert2.Equal(AuthenticationResultEnum.NotFound, ctx.AuthenticationResult, "missing tenant reports not found");
+            }
+            finally
+            {
+                await TempTestStore.DisposeAsync(driver).ConfigureAwait(false);
+            }
+        }
+
+        private static async Task CredentialBearerInactiveUserReturnsInactiveAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct).ConfigureAwait(false);
+            try
+            {
+                (AuthenticationService auth, _) = CreateAuthenticationServices(driver);
+                Tenant tenant = await driver.Tenants.CreateAsync(new Tenant { Name = "T" }, ct).ConfigureAwait(false);
+                User user = await driver.Users.CreateAsync(new User
+                {
+                    TenantId = tenant.Id,
+                    Email = "inactive-user@tempo.local",
+                    PasswordSha256 = PasswordHasher.Hash("pw"),
+                    Active = false
+                }, ct).ConfigureAwait(false);
+                Credential credential = await driver.Credentials.CreateAsync(new Credential { TenantId = tenant.Id, UserId = user.Id, Name = "credential" }, ct).ConfigureAwait(false);
+
+                RequestContext ctx = await auth.AuthenticateAsync(
+                    tokenHeader: null,
+                    bearerToken: credential.AccessKey,
+                    apiKey: null,
+                    accessKey: null,
+                    tenantIdHeader: null,
+                    emailHeader: null,
+                    passwordHeader: null,
+                    containsUnsupportedSecretKeyHeader: false,
+                    token: ct).ConfigureAwait(false);
+
+                Assert2.False(ctx.IsAuthenticated, "authentication rejected");
+                Assert2.Equal(AuthenticationResultEnum.Inactive, ctx.AuthenticationResult, "inactive user remains inactive");
+            }
+            finally
+            {
+                await TempTestStore.DisposeAsync(driver).ConfigureAwait(false);
+            }
+        }
+
+        private static async Task TokenUserMissingTenantReturnsNotFoundAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct).ConfigureAwait(false);
+            try
+            {
+                (AuthenticationService auth, TokenService tokens) = CreateAuthenticationServices(driver);
+                Tenant tenant = await driver.Tenants.CreateAsync(new Tenant { Name = "T" }, ct).ConfigureAwait(false);
+                User user = await driver.Users.CreateAsync(new User { TenantId = tenant.Id, Email = "token-user@tempo.local", PasswordSha256 = PasswordHasher.Hash("pw") }, ct).ConfigureAwait(false);
+                string tokenValue = tokens.IssueUserToken(tenant.Id, user.Id);
+                await DeleteByIdAsync(driver, "tenants", tenant.Id, ct).ConfigureAwait(false);
+
+                RequestContext ctx = await auth.AuthenticateAsync(
+                    tokenHeader: null,
+                    bearerToken: tokenValue,
+                    apiKey: null,
+                    accessKey: null,
+                    tenantIdHeader: null,
+                    emailHeader: null,
+                    passwordHeader: null,
+                    containsUnsupportedSecretKeyHeader: false,
+                    token: ct).ConfigureAwait(false);
+
+                Assert2.False(ctx.IsAuthenticated, "authentication rejected");
+                Assert2.Equal(AuthenticationResultEnum.NotFound, ctx.AuthenticationResult, "missing tenant reports not found");
+            }
+            finally
+            {
+                await TempTestStore.DisposeAsync(driver).ConfigureAwait(false);
+            }
+        }
+
+        private static async Task EmailPasswordMissingTenantReturnsNotFoundAsync(CancellationToken ct)
+        {
+            SqliteDatabaseDriver driver = await TempTestStore.CreateAsync(ct).ConfigureAwait(false);
+            try
+            {
+                (AuthenticationService auth, _) = CreateAuthenticationServices(driver);
+                Tenant tenant = await driver.Tenants.CreateAsync(new Tenant { Name = "T" }, ct).ConfigureAwait(false);
+                const string password = "pw";
+                User user = await driver.Users.CreateAsync(new User
+                {
+                    TenantId = tenant.Id,
+                    Email = "password-user@tempo.local",
+                    PasswordSha256 = PasswordHasher.Hash(password)
+                }, ct).ConfigureAwait(false);
+                await DeleteByIdAsync(driver, "tenants", tenant.Id, ct).ConfigureAwait(false);
+
+                RequestContext ctx = await auth.AuthenticateAsync(
+                    tokenHeader: null,
+                    bearerToken: null,
+                    apiKey: null,
+                    accessKey: null,
+                    tenantIdHeader: tenant.Id,
+                    emailHeader: user.Email,
+                    passwordHeader: password,
+                    containsUnsupportedSecretKeyHeader: false,
+                    token: ct).ConfigureAwait(false);
+
+                Assert2.False(ctx.IsAuthenticated, "authentication rejected");
+                Assert2.Equal(AuthenticationResultEnum.NotFound, ctx.AuthenticationResult, "missing tenant reports not found");
+            }
+            finally
+            {
+                await TempTestStore.DisposeAsync(driver).ConfigureAwait(false);
+            }
+        }
+
+        private static (AuthenticationService Auth, TokenService Tokens) CreateAuthenticationServices(SqliteDatabaseDriver driver)
+        {
+            AuthSettings settings = new AuthSettings
+            {
+                SigningKey = "auth-service-test-signing-key-0123456789abcdef",
+                TokenExpirationMinutes = 60
+            };
+            TokenService tokens = new TokenService(settings);
+            AuthenticationService auth = new AuthenticationService(driver, tokens, settings);
+            return (auth, tokens);
+        }
+
+        private static async Task DeleteByIdAsync(SqliteDatabaseDriver driver, string tableName, string id, CancellationToken ct)
+        {
+            await driver.ExecuteQueryAsync(
+                "DELETE FROM " + tableName + " WHERE id = " + SqlDialect.Ansi.Quote(id) + ";",
+                false,
+                ct).ConfigureAwait(false);
         }
     }
 }

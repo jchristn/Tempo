@@ -6,6 +6,7 @@ namespace Tempo.Server.Routes
     using Tempo.Core.Requests;
     using Tempo.Core.Security;
     using Tempo.Core.Services;
+    using Tempo.Server.Helpers;
     using WatsonWebserver;
     using WatsonWebserver.Core;
     using WatsonWebserver.Core.OpenApi;
@@ -22,14 +23,29 @@ namespace Tempo.Server.Routes
         public void Register(Webserver server)
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
-            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.POST, "/v1.0/tenants/{tenantId}/flows", CreateAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Create flow", "Flows"));
-            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/flows", EnumerateAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("List flows", "Flows"));
-            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/flows/{id}", ReadAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Read flow", "Flows"));
-            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.PUT, "/v1.0/tenants/{tenantId}/flows/{id}", UpdateAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Update flow", "Flows"));
-            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.DELETE, "/v1.0/tenants/{tenantId}/flows/{id}", DeleteAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Delete flow", "Flows"));
+            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.POST, "/v1.0/tenants/{tenantId}/flows", CreateAsync, null, openApiMetadata: CreateFlowOpenApi());
+            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/flows", EnumerateAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("List flows", "Flows").WithResponse(200, OpenApiResponseMetadata.Ok(OpenApiSchemaCatalog.Enumeration(OpenApiSchemaCatalog.DataFlowRecord()))));
+            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.GET, "/v1.0/tenants/{tenantId}/flows/{id}", ReadAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Read flow", "Flows").WithResponse(200, OpenApiResponseMetadata.Ok(OpenApiSchemaCatalog.DataFlowRecord())).WithResponse(404, OpenApiResponseMetadata.NotFound()));
+            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.PUT, "/v1.0/tenants/{tenantId}/flows/{id}", UpdateAsync, null, openApiMetadata: UpdateFlowOpenApi());
+            server.Routes.PostAuthentication.Parameter.Add(HttpMethod.DELETE, "/v1.0/tenants/{tenantId}/flows/{id}", DeleteAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Delete flow", "Flows").WithResponse(204, OpenApiResponseMetadata.NoContent()).WithResponse(404, OpenApiResponseMetadata.NotFound()));
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.POST, "/v1.0/tenants/{tenantId}/flows/{id}/runs", EnqueueRunAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Enqueue flow run", "Flows"));
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.POST, "/v1.0/tenants/{tenantId}/flows/{id}/ensure-steps", EnsureStepsAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Auto-create any referenced step IDs that do not yet exist", "Flows"));
             server.Routes.PostAuthentication.Parameter.Add(HttpMethod.POST, "/v1.0/tenants/{tenantId}/flows/bulk-delete", BulkDeleteAsync, null, openApiMetadata: OpenApiRouteMetadata.Create("Delete multiple flows by identifier", "Flows"));
+        }
+
+        private static OpenApiRouteMetadata CreateFlowOpenApi()
+        {
+            return OpenApiRouteMetadata.Create("Create flow", "Flows")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json(OpenApiSchemaCatalog.DataFlowWriteRequest(), "Flow create request.", true))
+                .WithResponse(201, OpenApiResponseMetadata.Ok(OpenApiSchemaCatalog.DataFlowRecord()));
+        }
+
+        private static OpenApiRouteMetadata UpdateFlowOpenApi()
+        {
+            return OpenApiRouteMetadata.Create("Update flow", "Flows")
+                .WithRequestBody(OpenApiRequestBodyMetadata.Json(OpenApiSchemaCatalog.DataFlowWriteRequest(), "Flow update request.", true))
+                .WithResponse(200, OpenApiResponseMetadata.Ok(OpenApiSchemaCatalog.DataFlowRecord()))
+                .WithResponse(404, OpenApiResponseMetadata.NotFound());
         }
 
         private async Task<(RequestContext?, string?)> AuthAsync(HttpContextBase ctx)
@@ -122,7 +138,8 @@ namespace Tempo.Server.Routes
             string? inputJson = body != null ? FlowDispatchService.SerializeData(body.Data) : null;
             try
             {
-                var run = await _Host.Dispatch.EnqueueAsync(tid, id, inputJson, rc.UserId);
+                string? sourceIp = ClientIpResolver.Resolve(ctx);
+                var run = await _Host.Dispatch.EnqueueAsync(tid, id, inputJson, rc.UserId, null, sourceIp);
                 await RouteHelpers.JsonAsync(ctx, 202, run);
             }
             catch (InvalidOperationException ex)

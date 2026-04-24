@@ -180,7 +180,7 @@ namespace Tempo.McpServer
             Console.WriteLine();
             Console.WriteLine("Environment overrides:");
             Console.WriteLine("  TEMPO_ENDPOINT, TEMPO_TOKEN, TEMPO_API_KEY");
-            Console.WriteLine("  TEMPO_ACCESS_KEY, TEMPO_SECRET_KEY, TEMPO_TENANT_ID");
+            Console.WriteLine("  TEMPO_ACCESS_KEY, TEMPO_TENANT_ID");
             Console.WriteLine("  TEMPO_MCP_HTTP_HOSTNAME, TEMPO_MCP_HTTP_PORT");
             Console.WriteLine("  TEMPO_MCP_TCP_ADDRESS, TEMPO_MCP_TCP_PORT");
             Console.WriteLine("  TEMPO_MCP_WS_HOSTNAME, TEMPO_MCP_WS_PORT");

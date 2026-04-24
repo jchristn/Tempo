@@ -8,7 +8,7 @@
     <IsPackable>false</IsPackable>
     <AssemblyName>Test.Xunit</AssemblyName>
     <RootNamespace>Test.Xunit</RootNamespace>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

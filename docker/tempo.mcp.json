@@ -1,6 +1,6 @@
 {
   "createdUtc": "2026-04-20T00:00:00.000Z",
-  "softwareVersion": "0.2.0",
+  "softwareVersion": "0.3.0",
   "node": {
     "name": "tempo-mcp",
     "lastStartUtc": "2026-04-20T00:00:00.000Z"
@@ -11,12 +11,11 @@
     "defaultTenantId": null,
     "token": null,
     "apiKey": null,
-    "accessKey": null,
-    "secretKey": null
+    "accessKey": null
   },
   "http": {
     "enabled": true,
-    "hostname": "0.0.0.0",
+    "hostname": "*",
     "port": 8910,
     "rpcPath": "/rpc",
     "eventsPath": "/events"
@@ -28,7 +27,7 @@
   },
   "webSocket": {
     "enabled": true,
-    "hostname": "0.0.0.0",
+    "hostname": "*",
     "port": 8912,
     "path": "/mcp"
   }

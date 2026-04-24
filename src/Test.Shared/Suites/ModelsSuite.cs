@@ -3,6 +3,7 @@ namespace Test.Shared.Suites
     using System;
     using System.Collections.Generic;
     using System.Threading.Tasks;
+    using Tempo.Core.Enums;
     using Tempo.Core.Models;
     using Tempo.Core.Requests;
     using Touchstone.Core;
@@ -36,6 +37,7 @@ namespace Test.Shared.Suites
                         DataFlowRecord r = new DataFlowRecord();
                         Assert2.NotNull(r.Transitions, "transitions not null");
                         Assert2.Equal(0, r.Transitions.Count, "empty");
+                        Assert2.Equal(DataFlowInvocationAuthModeEnum.Public, r.InvocationAuthMode, "public invocation auth default");
                     }),
                     new TestCaseDescriptor("Models", "EnumerationFilterClamps", "Filter clamps paging values", async _ =>
                     {

@@ -1,0 +1,55 @@
+{
+  "createdUtc": "2026-04-21T00:00:00.000Z",
+  "serverEndpoint": "http://tempo-server:8901",
+  "workerId": "wrk_docker",
+  "workerToken": "",
+  "name": "tempo-worker",
+  "kind": "Worker",
+  "maxConcurrentRuns": 2,
+  "maxTaskTimeoutMs": 240000,
+  "reconnectDelayMs": 5000,
+  "requestTimeoutMs": 30000,
+  "labels": [
+    "default"
+  ],
+  "logging": {
+    "consoleLogging": true,
+    "fileLogging": true,
+    "logDirectory": "/var/lib/tempo-worker/logs",
+    "logFilename": "tempo-worker.log"
+  },
+  "runLogs": {
+    "enabled": true,
+    "rootPath": "/var/lib/tempo/run-logs",
+    "retentionDays": 7,
+    "pruneIntervalMinutes": 60,
+    "defaultTailLines": 400,
+    "defaultMaxBytes": 262144,
+    "maxTailLines": 5000,
+    "maxReadBytes": 1048576
+  },
+  "runtimes": {
+    "externalExecution": {
+      "maxConcurrentProcessesServerWide": 4,
+      "maxConcurrentProcessesPerTenant": 2,
+      "defaultMaxRuntimeMs": 30000,
+      "maxStdoutBytes": 1048576,
+      "maxStderrBytes": 1048576,
+      "maxInputBytes": 1048576,
+      "maxOutputBytes": 1048576,
+      "scratchRoot": "/var/lib/tempo-worker/scratch",
+      "cacheRoot": "/var/lib/tempo-worker/runtime-cache",
+      "environmentAllowList": [],
+      "networkPolicyMode": "disabled",
+      "killProcessTreeOnCancel": true,
+      "pythonExecutable": "python3",
+      "nodeExecutable": "node",
+      "dotnetExecutable": "dotnet",
+      "allowPythonDependencyInstall": false
+    },
+    "hostExecutables": {
+      "enabled": false,
+      "allowList": []
+    }
+  }
+}

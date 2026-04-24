@@ -29,10 +29,24 @@
     "retentionDays": 30,
     "pruneIntervalMinutes": 60
   },
+  "logViewer": {
+    "workerRootPath": "./worker-logs",
+    "workerLogFilename": "tempo-worker.log",
+    "defaultTailLines": 200,
+    "maxTailLines": 5000,
+    "defaultMaxBytes": 131072,
+    "maxReadBytes": 1048576
+  },
   "engine": {
     "queueEnabled": true,
+    "serverCanExecuteWorkload": true,
     "maxConcurrentRuns": 4,
-    "pollIntervalMs": 1000
+    "pollIntervalMs": 1000,
+    "loadBalancingStrategy": "LeastLoaded",
+    "workerHeartbeatTimeoutMs": 30000,
+    "leaseDurationMs": 300000,
+    "maxAssignmentAttempts": 3,
+    "allowDuplicateScheduler": false
   },
   "runtimes": {
     "externalExecution": {

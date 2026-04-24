@@ -7,6 +7,7 @@ namespace Test.Shared.Suites
     using Tempo.Core.Enums;
     using Tempo.Core.Services;
     using Tempo.Core.Settings;
+    using Tempo.Worker;
     using Touchstone.Core;
 
     /// <summary>Settings loader tests.</summary>
@@ -203,6 +204,86 @@ namespace Test.Shared.Suites
                         {
                             try { File.Delete(file); } catch { }
                         }
+                    }),
+                    new TestCaseDescriptor("Settings", "WorkerSettingsLoadAndEnvOverride", "Tempo.Worker settings load from JSON and allow environment overrides", async _ =>
+                    {
+                        await Task.CompletedTask;
+                        string file = Path.Combine(Path.GetTempPath(), "tempo-worker-settings-" + Guid.NewGuid().ToString("N") + ".json");
+                        File.WriteAllText(file, "{ \"serverEndpoint\": \"http://json.example:8901\", \"workerId\": \"wrk_json\", \"name\": \"json-worker\", \"maxConcurrentRuns\": 2, \"maxTaskTimeoutMs\": 1500, \"requestTimeoutMs\": 4000, \"runLogs\": { \"enabled\": false, \"rootPath\": \"./run-logs-json\" } }");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvServerEndpoint, "http://env.example:8901");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvMaxConcurrentRuns, "3");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvMaxTaskTimeoutMs, "2500");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvRequestTimeoutMs, "5000");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvRunLogEnabled, "true");
+                        Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvRunLogRoot, "./run-logs-env");
+                        try
+                        {
+                            WorkerSettings settings = WorkerSettingsLoader.Load(file);
+                            Assert2.Equal("http://env.example:8901", settings.ServerEndpoint, "server endpoint env override");
+                            Assert2.Equal("wrk_json", settings.WorkerId, "worker id from json");
+                            Assert2.Equal("json-worker", settings.Name, "worker name from json");
+                            Assert2.Equal(3, settings.MaxConcurrentRuns, "max concurrency env override");
+                            Assert2.Equal(2500, settings.MaxTaskTimeoutMs, "max task timeout env override");
+                            Assert2.Equal(5000, settings.RequestTimeoutMs, "request timeout env override");
+                            Assert2.True(settings.RunLogs.Enabled, "run logs enabled override");
+                            Assert2.Equal("./run-logs-env", settings.RunLogs.RootPath, "run log root env override");
+                        }
+                        finally
+                        {
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvServerEndpoint, null);
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvMaxConcurrentRuns, null);
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvMaxTaskTimeoutMs, null);
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvRequestTimeoutMs, null);
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvRunLogEnabled, null);
+                            Environment.SetEnvironmentVariable(WorkerSettingsLoader.EnvRunLogRoot, null);
+                            try { File.Delete(file); } catch { }
+                        }
+                    }),
+                    new TestCaseDescriptor("Settings", "RunLogSettingsClampAndEnvOverride", "Run-log settings clamp and load environment overrides", async _ =>
+                    {
+                        await Task.CompletedTask;
+                        RunLogSettings runLogs = new RunLogSettings();
+                        runLogs.RetentionDays = 0;
+                        Assert2.Equal(1, runLogs.RetentionDays, "retention clamp low");
+                        runLogs.PruneIntervalMinutes = 0;
+                        Assert2.Equal(1, runLogs.PruneIntervalMinutes, "prune clamp low");
+                        runLogs.DefaultTailLines = 0;
+                        Assert2.Equal(1, runLogs.DefaultTailLines, "default tail clamp low");
+                        runLogs.DefaultMaxBytes = 0;
+                        Assert2.Equal(1L, runLogs.DefaultMaxBytes, "default max bytes clamp low");
+                        runLogs.MaxTailLines = 0;
+                        Assert2.Equal(1, runLogs.MaxTailLines, "max tail clamp low");
+                        runLogs.MaxReadBytes = 0;
+                        Assert2.Equal(1L, runLogs.MaxReadBytes, "max read bytes clamp low");
+
+                        Environment.SetEnvironmentVariable(SettingsLoader.EnvRunLogEnabled, "false");
+                        Environment.SetEnvironmentVariable(SettingsLoader.EnvRunLogRoot, "./run-logs-env");
+                        Environment.SetEnvironmentVariable(SettingsLoader.EnvRunLogRetentionDays, "14");
+                        Environment.SetEnvironmentVariable(SettingsLoader.EnvRunLogPruneIntervalMinutes, "15");
+                        try
+                        {
+                            Settings settings = SettingsLoader.Load(Path.Combine(Path.GetTempPath(), "tempo-nonexistent-" + Guid.NewGuid().ToString("N") + ".json"));
+                            Assert2.False(settings.RunLogs.Enabled, "run logs enabled env override");
+                            Assert2.Equal("./run-logs-env", settings.RunLogs.RootPath, "run log root env override");
+                            Assert2.Equal(14, settings.RunLogs.RetentionDays, "run log retention env override");
+                            Assert2.Equal(15, settings.RunLogs.PruneIntervalMinutes, "run log prune env override");
+                        }
+                        finally
+                        {
+                            Environment.SetEnvironmentVariable(SettingsLoader.EnvRunLogEnabled, null);
+                            Environment.SetEnvironmentVariable(SettingsLoader.EnvRunLogRoot, null);
+                            Environment.SetEnvironmentVariable(SettingsLoader.EnvRunLogRetentionDays, null);
+                            Environment.SetEnvironmentVariable(SettingsLoader.EnvRunLogPruneIntervalMinutes, null);
+                        }
+                    }),
+                    new TestCaseDescriptor("Settings", "WorkerMaxTaskTimeoutClamp", "Worker max task timeout clamps to a non-negative bounded range", async _ =>
+                    {
+                        await Task.CompletedTask;
+                        WorkerSettings settings = new WorkerSettings();
+                        settings.MaxTaskTimeoutMs = -1;
+                        Assert2.Equal(0, settings.MaxTaskTimeoutMs, "timeout clamp low");
+                        settings.MaxTaskTimeoutMs = int.MaxValue;
+                        Assert2.Equal(86400000, settings.MaxTaskTimeoutMs, "timeout clamp high");
                     })
                 });
         }

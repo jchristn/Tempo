@@ -332,7 +332,7 @@ namespace Test.Shared.Suites
                                 Language = "CSharp",
                                 FileName = "Handler.cs",
                                 HandlerType = "Tempo.UserSteps.Handler",
-                                Code = "using System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\nnamespace Tempo.UserSteps;\npublic sealed class Handler : ITempoStepHandler\n{\n    public Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        return Task.FromResult(TempoStepHost.Success(request, new { source = \"csharp\", value = 123 }));\n    }\n}\n"
+                                Code = "using System.Threading;\nusing System.Threading.Tasks;\nusing Tempo;\nusing Tempo.Protocol;\nnamespace Tempo.UserSteps;\npublic sealed class Handler : TempoStepHandlerBase\n{\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\n    {\n        LogInfo(\"C# source step received input: \" + request.Data);\n        return Task.FromResult(Success(request, new { source = \"csharp\", value = 123 }));\n    }\n}\n"
                             }, ct);
                             StepResult cs = await runtime.RunExistingStepAsync(tenant.Id, "source-csharp-step", ct);
                             Assert2.Equal(StepResultTypeEnum.Success, cs.Result, "source csharp result");

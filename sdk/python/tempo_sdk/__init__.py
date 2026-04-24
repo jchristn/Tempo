@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import inspect
 import json
+import logging
 import os
 import secrets
 import string
@@ -32,6 +34,8 @@ __all__ = [
     "StepRequest",
     "StepResult",
     "TempoStepHost",
+    "TempoStepLogger",
+    "TempoExecutionContext",
     "normalize_protocol_version",
     "is_supported_protocol_version",
     "correlate_result",
@@ -40,7 +44,11 @@ __all__ = [
     "exception_result",
     "step",
     "supported_protocol_environment",
+    "create_logger_from_environment",
+    "get_current_execution_context",
 ]
+
+_current_execution_context = None
 
 
 class StepResultType(str, Enum):
@@ -297,6 +305,77 @@ def step(func: Callable[..., Any]) -> Callable[..., Any]:
     return func
 
 
+class TempoStepLogger:
+    """Simple file-backed step logger."""
+
+    def __init__(self, write: Callable[[str, Any], None]) -> None:
+        self._write = write
+
+    def debug(self, *args: Any) -> None:
+        self._write("DEBUG", args)
+
+    def info(self, *args: Any) -> None:
+        self._write("INFO", args)
+
+    def warn(self, *args: Any) -> None:
+        self._write("WARN", args)
+
+    def error(self, *args: Any) -> None:
+        self._write("ERROR", args)
+
+
+@dataclass
+class TempoExecutionContext:
+    """Ambient execution context for the currently running handler."""
+
+    tenant_id: Optional[str]
+    data_flow_id: Optional[str]
+    flow_run_id: Optional[str]
+    run_assignment_id: Optional[str]
+    step_id: Optional[str]
+    step_run_id: Optional[str]
+    worker_id: Optional[str]
+    logger: Optional[TempoStepLogger]
+
+    @staticmethod
+    def current() -> Optional["TempoExecutionContext"]:
+        return _current_execution_context
+
+
+def get_current_execution_context() -> Optional[TempoExecutionContext]:
+    """Return the ambient Tempo execution context when running under TempoStepHost."""
+
+    return _current_execution_context
+
+
+def create_logger_from_environment(env: Optional[dict[str, str]] = None) -> Optional[TempoStepLogger]:
+    """Create a file-backed logger from Tempo launch environment variables."""
+
+    env = env or os.environ
+    path = env.get("TEMPO_RUN_LOG_FILE")
+    if not path:
+        return None
+
+    def write(severity: str, args: Any) -> None:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        parts = []
+        for value in args:
+            if isinstance(value, str):
+                parts.append(value)
+            else:
+                try:
+                    parts.append(json.dumps(value))
+                except Exception:
+                    parts.append(str(value))
+        text = " ".join(parts)
+        if not text:
+            return
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime())}.{int((time.time() % 1) * 1000000):06d}Z [{severity}] {text}\n")
+
+    return TempoStepLogger(write)
+
+
 class TempoStepHost:
     """stdin/stdout runner and JSON helpers."""
 
@@ -319,9 +398,23 @@ class TempoStepHost:
         input_stream = input_stream or sys.stdin
         output_stream = output_stream or sys.stdout
         request: Optional[StepRequest] = None
+        logger = create_logger_from_environment()
+        scope_restore = _install_logging_redirects(logger)
         try:
             text = input_stream.read()
             request = TempoStepHost.deserialize_request(text)
+            global _current_execution_context
+            previous_context = _current_execution_context
+            _current_execution_context = TempoExecutionContext(
+                tenant_id=request.tenant_id,
+                data_flow_id=request.data_flow_id,
+                flow_run_id=request.flow_run_id,
+                run_assignment_id=os.environ.get("TEMPO_RUN_ASSIGNMENT_ID"),
+                step_id=os.environ.get("TEMPO_STEP_ID"),
+                step_run_id=request.step_run_id,
+                worker_id=os.environ.get("TEMPO_WORKER_ID"),
+                logger=logger,
+            )
             maybe_result = handler(request)
             if inspect.isawaitable(maybe_result):
                 maybe_result = await maybe_result
@@ -331,6 +424,9 @@ class TempoStepHost:
                 result = success(request, maybe_result)
         except BaseException as exc:
             result = exception_result(request, exc)
+        finally:
+            _current_execution_context = previous_context if "previous_context" in locals() else None
+            scope_restore()
         output_stream.write(TempoStepHost.serialize_result(result))
         return 0
 
@@ -345,3 +441,47 @@ def supported_protocol_environment() -> str:
     """Return the comma-separated supported protocol value used by Tempo launch env."""
 
     return os.environ.get(SUPPORTED_PROTOCOL_VERSIONS_ENV, ",".join(SUPPORTED))
+
+
+def _install_logging_redirects(logger: Optional[TempoStepLogger]) -> Callable[[], None]:
+    if logger is None:
+        return lambda: None
+
+    original_print = builtins.print
+    original_stderr = sys.stderr
+    original_handlers = list(logging.getLogger().handlers)
+    original_level = logging.getLogger().level
+
+    def patched_print(*args: Any, sep: str = " ", end: str = "\n", file: Any = None, flush: bool = False) -> None:
+        text = sep.join("" if arg is None else str(arg) for arg in args)
+        if end and end != "\n":
+            text += end
+        logger.info(text.rstrip("\n"))
+
+    class _LoggerStream:
+        def write(self, value: str) -> None:
+            if value and value.strip():
+                logger.error(value.rstrip("\n"))
+
+        def flush(self) -> None:
+            return
+
+    class _TempoHandler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            logger.info(self.format(record))
+
+    builtins.print = patched_print
+    sys.stderr = _LoggerStream()
+    handler = _TempoHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+
+    def restore() -> None:
+        builtins.print = original_print
+        sys.stderr = original_stderr
+        root.handlers = original_handlers
+        root.setLevel(original_level)
+
+    return restore

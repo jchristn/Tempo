@@ -7,8 +7,10 @@ const CURRENT = V1;
 const SUPPORTED = Object.freeze([V1]);
 const PROTOCOL_VERSION_ENV = "TEMPO_PROTOCOL_VERSION";
 const SUPPORTED_PROTOCOL_VERSIONS_ENV = "TEMPO_SUPPORTED_PROTOCOL_VERSIONS";
+const RUN_LOG_FILE_ENV = "TEMPO_RUN_LOG_FILE";
 const ID_LENGTH = 32;
 const ID_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+let CURRENT_EXECUTION_CONTEXT = null;
 
 const StepResultType = Object.freeze({
   Success: "Success",
@@ -133,6 +135,17 @@ class StepResult {
   }
 }
 
+class TempoStepLogger {
+  constructor(write) {
+    this._write = typeof write === "function" ? write : () => {};
+  }
+
+  debug(...args) { this._write("DEBUG", args); }
+  info(...args) { this._write("INFO", args); }
+  warn(...args) { this._write("WARN", args); }
+  error(...args) { this._write("ERROR", args); }
+}
+
 function correlateResult(result, request) {
   if (!(result instanceof StepResult)) throw new Error("result must be StepResult.");
   if (!(request instanceof StepRequest)) throw new Error("request must be StepRequest.");
@@ -183,6 +196,24 @@ function supportedProtocolEnvironment(env = process.env) {
   return env[SUPPORTED_PROTOCOL_VERSIONS_ENV] || SUPPORTED.join(",");
 }
 
+function createLoggerFromEnvironment(env = process.env) {
+  const file = env[RUN_LOG_FILE_ENV];
+  if (!file) return null;
+  return new TempoStepLogger((severity, args) => {
+    const text = args.map((value) => {
+      if (typeof value === "string") return value;
+      try { return JSON.stringify(value); } catch { return String(value); }
+    }).join(" ");
+    if (!text) return;
+    require("node:fs").mkdirSync(require("node:path").dirname(file), { recursive: true });
+    require("node:fs").appendFileSync(file, new Date().toISOString() + " [" + severity + "] " + text + "\n", "utf8");
+  });
+}
+
+function getCurrentExecutionContext() {
+  return CURRENT_EXECUTION_CONTEXT;
+}
+
 async function readInput(input) {
   if (input === undefined || input === null) input = process.stdin;
   if (typeof input === "string") return input;
@@ -216,17 +247,68 @@ class TempoStepHost {
   static async run(handler, options = {}) {
     let request = null;
     let result;
+    const env = options.env || process.env;
+    const logger = createLoggerFromEnvironment(env);
+    const previousContext = CURRENT_EXECUTION_CONTEXT;
+    const restore = patchConsole(logger);
     try {
       const inputText = await readInput(options.input);
       request = TempoStepHost.deserializeRequest(inputText);
+      CURRENT_EXECUTION_CONTEXT = {
+        tenantId: request.tenantId,
+        dataFlowId: request.dataFlowId,
+        flowRunId: request.flowRunId,
+        runAssignmentId: env.TEMPO_RUN_ASSIGNMENT_ID || null,
+        stepId: env.TEMPO_STEP_ID || null,
+        stepRunId: request.stepRunId,
+        workerId: env.TEMPO_WORKER_ID || null,
+        logger
+      };
       const maybeResult = await handler(request);
       result = maybeResult instanceof StepResult ? correlateResult(maybeResult, request) : success(request, maybeResult);
     } catch (err) {
       result = exceptionResult(request, err);
+    } finally {
+      restore();
+      CURRENT_EXECUTION_CONTEXT = previousContext;
     }
     writeOutput(options.output, TempoStepHost.serializeResult(result));
     return 0;
   }
+}
+
+function patchConsole(logger) {
+  if (!logger) return () => {};
+
+  const original = {
+    log: console.log,
+    info: console.info,
+    warn: console.warn,
+    error: console.error,
+    debug: console.debug,
+    stderrWrite: process.stderr.write
+  };
+
+  console.log = (...args) => logger.info(...args);
+  console.info = (...args) => logger.info(...args);
+  console.warn = (...args) => logger.warn(...args);
+  console.error = (...args) => logger.error(...args);
+  console.debug = (...args) => logger.debug(...args);
+  process.stderr.write = (chunk, encoding, callback) => {
+    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString(typeof encoding === "string" ? encoding : "utf8");
+    logger.error(text);
+    if (typeof callback === "function") callback();
+    return true;
+  };
+
+  return () => {
+    console.log = original.log;
+    console.info = original.info;
+    console.warn = original.warn;
+    console.error = original.error;
+    console.debug = original.debug;
+    process.stderr.write = original.stderrWrite;
+  };
 }
 
 module.exports = {
@@ -238,6 +320,7 @@ module.exports = {
   StepResultType,
   StepRequest,
   StepResult,
+  TempoStepLogger,
   TempoStepHost,
   normalizeProtocolVersion,
   isSupportedProtocolVersion,
@@ -246,5 +329,7 @@ module.exports = {
   error,
   exceptionResult,
   step,
-  supportedProtocolEnvironment
+  supportedProtocolEnvironment,
+  createLoggerFromEnvironment,
+  getCurrentExecutionContext
 };

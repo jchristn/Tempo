@@ -122,15 +122,14 @@ Root settings shape:
 
 ```json
 {
-  "softwareVersion": "0.2.0",
+  "softwareVersion": "0.3.0",
   "tempo": {
     "endpoint": "http://localhost:8901",
     "timeoutMs": 30000,
     "defaultTenantId": "ten_example",
     "token": null,
     "apiKey": null,
-    "accessKey": null,
-    "secretKey": null
+    "accessKey": null
   },
   "http": {
     "enabled": true,
@@ -161,7 +160,6 @@ Environment variables override the settings file:
 | `TEMPO_TOKEN` | `tempo.token` |
 | `TEMPO_API_KEY` | `tempo.apiKey` |
 | `TEMPO_ACCESS_KEY` | `tempo.accessKey` |
-| `TEMPO_SECRET_KEY` | `tempo.secretKey` |
 | `TEMPO_TENANT_ID` | `tempo.defaultTenantId` |
 | `TEMPO_MCP_HTTP_HOSTNAME` | `http.hostname` |
 | `TEMPO_MCP_HTTP_PORT` | `http.port` |
@@ -180,11 +178,10 @@ Tempo.McpServer forwards these authentication settings as REST headers:
 | --- | --- |
 | `tempo.token` | `x-token` |
 | `tempo.apiKey` | `x-api-key` |
-| `tempo.accessKey` | `x-access-key` |
-| `tempo.secretKey` | `x-secret-key` |
+| `tempo.accessKey` | `Authorization: Bearer {accessKey}` when no token or API key is configured, otherwise `x-access-key` |
 | `tempo.defaultTenantId` | `x-tenant-id` |
 
-Store credentials in environment variables for local agent sessions when possible. Treat settings files containing tokens or secrets as private.
+Store credentials in environment variables for local agent sessions when possible. Treat settings files containing tokens or access keys as private. `x-secret-key` is not supported for Tempo API authentication.
 
 ## Tool Response Envelope
 
@@ -212,7 +209,7 @@ All REST-backed tools return the same response envelope:
 | `body` | Parsed JSON response when possible |
 | `text` | Plain text response for non-JSON bodies |
 
-For HTTP trigger invocation, run metadata such as `x-run-id`, `x-dataflow-id`, `x-trigger-id`, and `x-runtime-ms` is in `headers`. The flow output is in `body`.
+For HTTP trigger invocation, run metadata such as `x-worker-id`, `x-run-id`, `x-dataflow-id`, `x-trigger-id`, and `x-runtime-ms` is in `headers`. The flow output is in `body`.
 
 ## Tool Catalog
 
@@ -226,6 +223,89 @@ For HTTP trigger invocation, run metadata such as `x-run-id`, `x-dataflow-id`, `
 | `tempo_request` | `method`, `path`, optional `body` | Generic REST call for endpoints not covered by typed tools |
 
 `tempo_request.path` must be `/` or start with `/v1.0/`. Supported methods are `GET`, `POST`, `PUT`, and `DELETE`.
+
+### Worker Tools
+
+| Tool | Arguments | Purpose |
+| --- | --- | --- |
+| `listWorkers` | optional `pageNumber`, `pageSize`, `state`, `search`, `enabled`, `drainMode` | List Tempo workers visible to an administrator |
+| `readWorker` | `id` | Read one worker |
+| `drainWorker` | `id` | Put a worker into drain mode |
+| `resumeWorker` | `id` | Resume a drained worker |
+| `blockWorker` | `id` | Block a worker, disconnect it, and deny future connects |
+| `unblockWorker` | `id` | Unblock a worker so it can reconnect |
+
+These tools are not tenant-scoped. They require the MCP server to authenticate to Tempo.Server as an administrator, typically through `tempo.apiKey`.
+
+### Log Tools
+
+| Tool | Arguments | Purpose |
+| --- | --- | --- |
+| `listLogSources` | none | List admin-visible server and worker log sources |
+| `listLogFiles` | `sourceKind`, `sourceId` | List available log files for one source |
+| `readLogFile` | `sourceKind`, `sourceId`, `path`, optional `tailLines`, optional `maxBytes` | Read a bounded tail from one log file |
+| `downloadLogFile` | `sourceKind`, `sourceId`, `path` | Download the complete log file as plain text |
+| `deleteLogFile` | `sourceKind`, `sourceId`, `path` | Delete an archived log file or clear the current one |
+
+These tools are also not tenant-scoped and require administrator credentials.
+
+List sources:
+
+```json
+{}
+```
+
+List worker log files:
+
+```json
+{
+  "sourceKind": "worker",
+  "sourceId": "wrk_docker_1"
+}
+```
+
+Read a bounded tail:
+
+```json
+{
+  "sourceKind": "server",
+  "sourceId": "server",
+  "path": "tempo.log",
+  "tailLines": 200,
+  "maxBytes": 131072
+}
+```
+
+Download a complete file:
+
+```json
+{
+  "sourceKind": "worker",
+  "sourceId": "wrk_docker_1",
+  "path": "tempo-worker.log"
+}
+```
+
+`downloadLogFile` returns the normal MCP response envelope. Because the REST
+route responds with `text/plain`, the complete log file is exposed in the
+envelope's `text` field rather than `body`.
+
+Delete or clear a file:
+
+```json
+{
+  "sourceKind": "worker",
+  "sourceId": "wrk_docker_1",
+  "path": "tempo-worker.1.log"
+}
+```
+
+Delete behavior matches REST:
+
+| Target | Result |
+| --- | --- |
+| Current log file | Cleared by truncation |
+| Archived log file | Deleted from disk |
 
 ### Tenant Tools
 
@@ -258,7 +338,7 @@ Arguments:
 | `executionKey` | no | Stable key used by data flows |
 | `description` | no | Step description |
 | `function` | no | Python or JavaScript function, default is server-defined |
-| `handlerType` | no | C# handler type |
+| `handlerType` | no | C# handler type, usually a class inheriting `TempoStepHandlerBase` |
 | `entrypoint` | no | Entrypoint file or assembly |
 | `fileName` | no | Simple source file name, no path separators |
 | `artifactName` | no | Artifact display name |
@@ -296,6 +376,7 @@ Example `flow_create` body:
   "body": {
     "name": "MCP echo flow",
     "startStepId": "mcp.echo_js",
+    "invocationAuthMode": "Public",
     "transitions": {
       "mcp.echo_js": {
         "name": "Echo",
@@ -329,6 +410,8 @@ Example direct run:
 
 `flow_enqueue_run` returns the run record and does not wait for completion. Use `run_get` and `run_steps` to monitor.
 
+Set flow `invocationAuthMode` to `ApiAuthenticated` when HTTP trigger invocation should require the same Tempo credentials configured for the MCP server. `trigger_fire` and `tempo_request` forward those credentials automatically when `tempo.token`, `tempo.apiKey`, or `tempo.accessKey` is configured.
+
 ### Trigger Tools
 
 | Tool | Arguments | Purpose |
@@ -337,7 +420,7 @@ Example direct run:
 | `trigger_get` | `id`, optional `tenantId` | Read one trigger |
 | `trigger_create` | `body`, optional `tenantId` | Create a trigger |
 | `trigger_update` | `id`, `body`, optional `tenantId` | Update a trigger |
-| `trigger_fire` | `triggerId`, optional `body` | POST to a public HTTP trigger |
+| `trigger_fire` | `triggerId`, optional `body` | POST to an HTTP trigger |
 
 Example trigger creation:
 
@@ -429,8 +512,14 @@ The typed `artifact_file_save` tool is for text content. Use `tempo_request` aga
 | `run_list` | optional `tenantId`, `pageNumber`, `pageSize`, `includeInactive` | List runs |
 | `run_get` | `id`, optional `tenantId` | Read one run |
 | `run_steps` | `id`, optional `tenantId` | List step runs for a run |
+| `run_activity` | `id`, optional `tenantId` | Read the run plus assignment attempts and worker activity |
+| `run_logs_list` | `id`, optional `tenantId` | List file-backed logs for one run |
+| `run_logs_read` | `id`, `path`, optional `tenantId`, optional `tailLines`, optional `maxBytes` | Read a bounded tail from one run-log file |
+| `run_logs_download` | `id`, `path`, optional `tenantId` | Download the complete run-log file |
+| `run_logs_delete` | `id`, `path`, optional `tenantId` | Delete one archived run-log file |
+| `run_logs_delete_all` | `id`, optional `tenantId` | Delete every run-log file for one completed run |
 
-Generic collection helpers also register `run_create` and `run_update`, but Tempo's workflow API creates runs through `flow_enqueue_run` or public trigger invocation. Prefer those workflow tools. Use `tempo_request` for cancel and delete operations:
+Generic collection helpers also register `run_create` and `run_update`, but Tempo's workflow API creates runs through `flow_enqueue_run` or HTTP trigger invocation. Prefer those workflow tools. Use `tempo_request` for cancel and delete operations:
 
 ```json
 {
@@ -445,6 +534,58 @@ Generic collection helpers also register `run_create` and `run_update`, but Temp
   "path": "/v1.0/tenants/ten_example/runs/run_example"
 }
 ```
+
+Read run activity:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example"
+}
+```
+
+List run logs:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example"
+}
+```
+
+Read a bounded run-log tail:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example",
+  "path": "attempt-001-ras_example/worker.log",
+  "tailLines": 200,
+  "maxBytes": 131072
+}
+```
+
+Download a complete run log:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example",
+  "path": "run.log"
+}
+```
+
+Delete one archived run log:
+
+```json
+{
+  "tenantId": "ten_example",
+  "id": "run_example",
+  "path": "attempt-001-ras_example/step-001-sru_example-step.echo.log"
+}
+```
+
+`run_logs_download` returns the normal MCP response envelope. Because the underlying REST route responds with `text/plain`, the complete file is exposed in the envelope's `text` field rather than `body`.
 
 ### Runtime Tools
 
@@ -621,6 +762,8 @@ For each trigger invocation:
 3. Read `headers.x-run-id`.
 4. Call `run_get` for the final run record.
 5. Call `run_steps` for per-step output, errors, artifacts, and timing.
+6. Call `run_activity` to inspect assignment history and worker timeline data.
+7. Call `run_logs_list` and `run_logs_read` to inspect the durable file-backed logs for that run.
 
 Important run and step-run fields:
 
@@ -648,14 +791,14 @@ MCP tools can mutate Tempo resources. Agents should follow these rules:
 | Inspect run headers after `trigger_fire` | Trigger responses put metadata in headers |
 | Use `includeInactive` when reconciling records | Inactive resources may still explain historical runs |
 | Do not delete referenced resources through `tempo_request` casually | REST deletion guards will block unsafe deletes, but attempted deletes still create operator noise |
-| Keep trigger IDs private | Public trigger routes are not tenant-scoped |
+| Keep public trigger IDs private | `Public` trigger invocation is not tenant-scoped; use `ApiAuthenticated` for private flows |
 
 ## Troubleshooting
 
 | Symptom | Likely cause | Next step |
 | --- | --- | --- |
 | Tenant-scoped tool says tenant is required | Neither `tenantId` argument nor `tempo.defaultTenantId` is set | Set `TEMPO_TENANT_ID` or pass `tenantId` |
-| Tool returns `401` | Missing or invalid credentials | Check token, API key, access key, or secret |
+| Tool returns `401` | Missing or invalid credentials | Check token, API key, or access key |
 | Tool returns `403` | Principal lacks tenant or operation permission | Use a principal with the required permission |
 | `trigger_fire` returns `405` | Trigger does not allow POST | Use `tempo_request` GET or update `allowedMethods` |
 | Source step creation fails for Python/JS/.NET | Runtime dependency is unavailable | Call `runtime_list` and inspect server runtime settings |

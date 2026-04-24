@@ -273,6 +273,118 @@ namespace Tempo.Core.Database.Postgresql
             });
             list.Add(m9);
 
+            SchemaMigration m10 = new SchemaMigration { Version = 10, Description = "distributed execution foundation" };
+            m10.Statements.AddRange(new[]
+            {
+                @"CREATE TABLE IF NOT EXISTS workers (
+                    id VARCHAR(64) PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    kind VARCHAR(64) NOT NULL,
+                    state VARCHAR(64) NOT NULL,
+                    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    drain_mode BOOLEAN NOT NULL DEFAULT FALSE,
+                    version VARCHAR(64) NULL,
+                    host_name VARCHAR(255) NULL,
+                    labels_json TEXT NULL,
+                    max_concurrent_runs INT NOT NULL DEFAULT 1,
+                    last_heartbeat_utc TIMESTAMP NULL,
+                    created_utc TIMESTAMP NOT NULL
+                );",
+                @"CREATE TABLE IF NOT EXISTS worker_sessions (
+                    id VARCHAR(64) PRIMARY KEY,
+                    worker_id VARCHAR(64) NOT NULL,
+                    connected_utc TIMESTAMP NOT NULL,
+                    disconnected_utc TIMESTAMP NULL,
+                    disconnect_reason TEXT NULL,
+                    protocol_version VARCHAR(32) NULL
+                );",
+                @"CREATE TABLE IF NOT EXISTS run_assignments (
+                    id VARCHAR(64) PRIMARY KEY,
+                    flow_run_id VARCHAR(64) NOT NULL,
+                    worker_id VARCHAR(64) NOT NULL,
+                    worker_session_id VARCHAR(64) NULL,
+                    attempt_number INT NOT NULL DEFAULT 1,
+                    state VARCHAR(32) NOT NULL,
+                    lease_token VARCHAR(64) NOT NULL,
+                    lease_expires_utc TIMESTAMP NOT NULL,
+                    assigned_utc TIMESTAMP NOT NULL,
+                    completed_utc TIMESTAMP NULL
+                );",
+                @"CREATE TABLE IF NOT EXISTS worker_activity (
+                    id VARCHAR(64) PRIMARY KEY,
+                    worker_id VARCHAR(64) NOT NULL,
+                    worker_session_id VARCHAR(64) NULL,
+                    flow_run_id VARCHAR(64) NULL,
+                    run_assignment_id VARCHAR(64) NULL,
+                    event_type VARCHAR(64) NOT NULL,
+                    severity VARCHAR(32) NULL,
+                    message TEXT NULL,
+                    payload_json TEXT NULL,
+                    created_utc TIMESTAMP NOT NULL
+                );",
+                @"CREATE TABLE IF NOT EXISTS server_instances (
+                    id VARCHAR(64) PRIMARY KEY,
+                    started_utc TIMESTAMP NOT NULL,
+                    last_heartbeat_utc TIMESTAMP NOT NULL,
+                    version VARCHAR(64) NULL
+                );",
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS dispatch_state VARCHAR(32) NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS dispatch_attempt INT NOT NULL DEFAULT 0;",
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS assigned_worker_id VARCHAR(64) NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS run_assignment_id VARCHAR(64) NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS queue_wait_ms BIGINT NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS assigned_utc TIMESTAMP NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS lease_expires_utc TIMESTAMP NULL;",
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS execution_node_kind VARCHAR(32) NULL;",
+                "UPDATE flow_runs SET dispatch_state = 'Pending' WHERE dispatch_state IS NULL OR btrim(dispatch_state) = '';",
+                "CREATE INDEX IF NOT EXISTS idx_flow_runs_dispatch_pending ON flow_runs(dispatch_state, state, created_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_workers_online ON workers(enabled, drain_mode, state, last_heartbeat_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_worker_sessions_stale ON worker_sessions(worker_id, disconnected_utc, connected_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_run_assignments_lease ON run_assignments(state, lease_expires_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_run_assignments_flow_run ON run_assignments(flow_run_id, attempt_number);",
+                "CREATE INDEX IF NOT EXISTS idx_worker_activity_worker ON worker_activity(worker_id, created_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_worker_activity_run ON worker_activity(flow_run_id, created_utc);",
+                "CREATE INDEX IF NOT EXISTS idx_server_instances_heartbeat ON server_instances(last_heartbeat_utc);"
+            });
+            list.Add(m10);
+
+            SchemaMigration m11 = new SchemaMigration { Version = 11, Description = "distributed execution worker auth and placement" };
+            m11.Statements.AddRange(new[]
+            {
+                "ALTER TABLE workers ADD COLUMN IF NOT EXISTS capabilities_json TEXT NULL;",
+                "ALTER TABLE workers ADD COLUMN IF NOT EXISTS token_hash VARCHAR(128) NULL;",
+                "ALTER TABLE workers ADD COLUMN IF NOT EXISTS token_last_rotated_utc TIMESTAMP NULL;",
+                "ALTER TABLE data_flows ADD COLUMN IF NOT EXISTS routing_hint_label VARCHAR(255) NULL;",
+                "ALTER TABLE server_instances ADD COLUMN IF NOT EXISTS host_name VARCHAR(255) NULL;",
+                "UPDATE workers SET capabilities_json = '[]' WHERE capabilities_json IS NULL OR btrim(capabilities_json) = '';",
+                "CREATE INDEX IF NOT EXISTS idx_workers_token_hash ON workers(token_hash);",
+                "CREATE INDEX IF NOT EXISTS idx_data_flows_routing_label ON data_flows(routing_hint_label);"
+            });
+            list.Add(m11);
+
+            SchemaMigration m12 = new SchemaMigration { Version = 12, Description = "worker task timeout metadata" };
+            m12.Statements.AddRange(new[]
+            {
+                "ALTER TABLE workers ADD COLUMN IF NOT EXISTS max_task_timeout_ms INT NOT NULL DEFAULT 0;",
+                "UPDATE workers SET max_task_timeout_ms = 0 WHERE max_task_timeout_ms IS NULL;"
+            });
+            list.Add(m12);
+
+            SchemaMigration m13 = new SchemaMigration { Version = 13, Description = "flow run source ip" };
+            m13.Statements.AddRange(new[]
+            {
+                "ALTER TABLE flow_runs ADD COLUMN IF NOT EXISTS source_ip VARCHAR(64) NULL;"
+            });
+            list.Add(m13);
+
+            SchemaMigration m14 = new SchemaMigration { Version = 14, Description = "flow invocation authentication policy" };
+            m14.Statements.AddRange(new[]
+            {
+                "ALTER TABLE data_flows ADD COLUMN IF NOT EXISTS invocation_auth_mode VARCHAR(32) NOT NULL DEFAULT 'Public';",
+                "UPDATE data_flows SET invocation_auth_mode = 'Public' WHERE invocation_auth_mode IS NULL OR btrim(invocation_auth_mode) = '';"
+            });
+            list.Add(m14);
+
             return list;
         }
     }

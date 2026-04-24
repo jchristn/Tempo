@@ -11,7 +11,7 @@ namespace Tempo.Core.Services
 
     /// <summary>
     /// Resolves an inbound request to an authenticated <see cref="RequestContext"/>.
-    /// Supports token, admin API key, access-key/secret-key, and email/password headers.
+    /// Supports bearer tokens, admin API key, credential access keys, and email/password headers.
     /// </summary>
     public class AuthenticationService
     {
@@ -34,10 +34,10 @@ namespace Tempo.Core.Services
         /// <param name="bearerToken">Decoded bearer token.</param>
         /// <param name="apiKey">Admin API key from <see cref="Constants.HeaderApiKey"/>.</param>
         /// <param name="accessKey">Credential access key.</param>
-        /// <param name="secretKey">Credential secret key.</param>
         /// <param name="tenantIdHeader">Tenant identifier from <see cref="Constants.HeaderTenantId"/>.</param>
         /// <param name="emailHeader">Email from <see cref="Constants.HeaderEmail"/>.</param>
         /// <param name="passwordHeader">Password from <see cref="Constants.HeaderPassword"/>.</param>
+        /// <param name="containsUnsupportedSecretKeyHeader">Whether the caller supplied the unsupported <c>x-secret-key</c> header.</param>
         /// <param name="token">Cancellation token.</param>
         /// <returns>Populated request context.</returns>
         public async Task<RequestContext> AuthenticateAsync(
@@ -45,13 +45,22 @@ namespace Tempo.Core.Services
             string? bearerToken,
             string? apiKey,
             string? accessKey,
-            string? secretKey,
             string? tenantIdHeader,
             string? emailHeader,
             string? passwordHeader,
+            bool containsUnsupportedSecretKeyHeader = false,
             CancellationToken token = default)
         {
-            RequestContext ctx = new RequestContext();
+            RequestContext ctx = new RequestContext
+            {
+                ContainsUnsupportedSecretKeyHeader = containsUnsupportedSecretKeyHeader
+            };
+
+            if (containsUnsupportedSecretKeyHeader)
+            {
+                ctx.AuthenticationResult = AuthenticationResultEnum.Invalid;
+                return ctx;
+            }
 
             if (!string.IsNullOrEmpty(apiKey) && !string.IsNullOrEmpty(_Auth.AdminApiKey)
                 && string.Equals(apiKey, _Auth.AdminApiKey, StringComparison.Ordinal))
@@ -67,53 +76,58 @@ namespace Tempo.Core.Services
             if (!string.IsNullOrEmpty(bearerOrToken))
             {
                 AuthenticationToken? parsed = _Tokens.Validate(bearerOrToken);
-                if (parsed == null)
+                if (parsed != null)
                 {
-                    ctx.AuthenticationResult = AuthenticationResultEnum.Expired;
+                    if (!string.IsNullOrEmpty(parsed.AdministratorId))
+                    {
+                        Administrator? admin = await _Database.Administrators.ReadAsync(parsed.AdministratorId, token).ConfigureAwait(false);
+                        if (admin == null) { ctx.AuthenticationResult = AuthenticationResultEnum.NotFound; return ctx; }
+                        if (!admin.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
+                        PopulateAdmin(ctx, admin);
+                        return ctx;
+                    }
+
+                    if (!string.IsNullOrEmpty(parsed.TenantId) && !string.IsNullOrEmpty(parsed.UserId))
+                    {
+                        User? user = await _Database.Users.ReadAsync(parsed.TenantId, parsed.UserId, token).ConfigureAwait(false);
+                        if (user == null) { ctx.AuthenticationResult = AuthenticationResultEnum.NotFound; return ctx; }
+                        if (!user.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
+                        Tenant? tenant = await _Database.Tenants.ReadAsync(user.TenantId, token).ConfigureAwait(false);
+                        if (tenant == null) { ctx.AuthenticationResult = AuthenticationResultEnum.NotFound; return ctx; }
+                        if (!tenant.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
+                        PopulateUser(ctx, user, tenant);
+                        return ctx;
+                    }
+
+                    ctx.AuthenticationResult = AuthenticationResultEnum.Invalid;
                     return ctx;
                 }
 
-                if (!string.IsNullOrEmpty(parsed.AdministratorId))
+                AuthenticationResultEnum credentialResult = await TryAuthenticateCredentialAsync(ctx, bearerOrToken, token).ConfigureAwait(false);
+                if (credentialResult == AuthenticationResultEnum.Success)
+                    return ctx;
+                if (credentialResult != AuthenticationResultEnum.None)
                 {
-                    Administrator? admin = await _Database.Administrators.ReadAsync(parsed.AdministratorId, token).ConfigureAwait(false);
-                    if (admin == null) { ctx.AuthenticationResult = AuthenticationResultEnum.NotFound; return ctx; }
-                    if (!admin.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
-                    PopulateAdmin(ctx, admin);
+                    ctx.AuthenticationResult = credentialResult;
                     return ctx;
                 }
 
-                if (!string.IsNullOrEmpty(parsed.TenantId) && !string.IsNullOrEmpty(parsed.UserId))
-                {
-                    User? user = await _Database.Users.ReadAsync(parsed.TenantId, parsed.UserId, token).ConfigureAwait(false);
-                    if (user == null) { ctx.AuthenticationResult = AuthenticationResultEnum.NotFound; return ctx; }
-                    if (!user.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
-                    Tenant? tenant = await _Database.Tenants.ReadAsync(user.TenantId, token).ConfigureAwait(false);
-                    if (tenant == null || !tenant.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
-                    PopulateUser(ctx, user, tenant);
-                    return ctx;
-                }
-
-                ctx.AuthenticationResult = AuthenticationResultEnum.Invalid;
+                ctx.AuthenticationResult = AuthenticationResultEnum.Expired;
                 return ctx;
             }
 
             if (!string.IsNullOrEmpty(accessKey))
             {
-                Credential? cred = await _Database.Credentials.ReadByAccessKeyAsync(accessKey, token).ConfigureAwait(false);
-                if (cred == null) { ctx.AuthenticationResult = AuthenticationResultEnum.NotFound; return ctx; }
-                if (!cred.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
-                if (!string.IsNullOrEmpty(secretKey) && !string.Equals(cred.SecretKey, secretKey, StringComparison.Ordinal))
+                AuthenticationResultEnum credentialResult = await TryAuthenticateCredentialAsync(ctx, accessKey, token).ConfigureAwait(false);
+                if (credentialResult == AuthenticationResultEnum.Success)
+                    return ctx;
+                if (credentialResult != AuthenticationResultEnum.None)
                 {
-                    ctx.AuthenticationResult = AuthenticationResultEnum.Invalid; return ctx;
+                    ctx.AuthenticationResult = credentialResult;
+                    return ctx;
                 }
 
-                User? user = await _Database.Users.ReadAsync(cred.TenantId, cred.UserId, token).ConfigureAwait(false);
-                if (user == null || !user.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
-                Tenant? tenant = await _Database.Tenants.ReadAsync(user.TenantId, token).ConfigureAwait(false);
-                if (tenant == null || !tenant.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
-                PopulateUser(ctx, user, tenant);
-                ctx.CredentialId = cred.Id;
-                ctx.Credential = cred;
+                ctx.AuthenticationResult = AuthenticationResultEnum.NotFound;
                 return ctx;
             }
 
@@ -141,7 +155,8 @@ namespace Tempo.Core.Services
                     if (!PasswordHasher.Verify(passwordHeader, user.PasswordSha256))
                     { ctx.AuthenticationResult = AuthenticationResultEnum.Invalid; return ctx; }
                     Tenant? tenant = await _Database.Tenants.ReadAsync(user.TenantId, token).ConfigureAwait(false);
-                    if (tenant == null || !tenant.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
+                    if (tenant == null) { ctx.AuthenticationResult = AuthenticationResultEnum.NotFound; return ctx; }
+                    if (!tenant.Active) { ctx.AuthenticationResult = AuthenticationResultEnum.Inactive; return ctx; }
                     PopulateUser(ctx, user, tenant);
                     return ctx;
                 }
@@ -149,6 +164,25 @@ namespace Tempo.Core.Services
 
             ctx.AuthenticationResult = AuthenticationResultEnum.None;
             return ctx;
+        }
+
+        private async Task<AuthenticationResultEnum> TryAuthenticateCredentialAsync(RequestContext ctx, string accessKey, CancellationToken token)
+        {
+            Credential? cred = await _Database.Credentials.ReadByAccessKeyAsync(accessKey, token).ConfigureAwait(false);
+            if (cred == null) return AuthenticationResultEnum.None;
+            if (!cred.Active) return AuthenticationResultEnum.Inactive;
+
+            User? user = await _Database.Users.ReadAsync(cred.TenantId, cred.UserId, token).ConfigureAwait(false);
+            if (user == null) return AuthenticationResultEnum.NotFound;
+            if (!user.Active) return AuthenticationResultEnum.Inactive;
+            Tenant? tenant = await _Database.Tenants.ReadAsync(user.TenantId, token).ConfigureAwait(false);
+            if (tenant == null) return AuthenticationResultEnum.NotFound;
+            if (!tenant.Active) return AuthenticationResultEnum.Inactive;
+
+            PopulateUser(ctx, user, tenant);
+            ctx.CredentialId = cred.Id;
+            ctx.Credential = cred;
+            return AuthenticationResultEnum.Success;
         }
 
         private static void PopulateAdmin(RequestContext ctx, Administrator admin)

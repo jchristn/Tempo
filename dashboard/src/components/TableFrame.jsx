@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import TablePagination from './TablePagination';
 import DataTable from './DataTable';
 import ConfirmModal from './ConfirmModal';
 import { TrashIcon } from './Icons';
+import { formatNumber } from '../utils/formatters';
 
 /**
  * Combines TablePagination (above), optional bulk-action bar (when rows are
@@ -24,14 +26,16 @@ function TableFrame({
   selectable = false,
   rowId = (item) => item.id,
   onBulkDelete,
-  bulkDeleteLabel = 'Delete Selected',
+  bulkDeleteLabel,
   leftSlot,
   rightSlot
 }) {
+  const { t, i18n } = useTranslation();
   const [selected, setSelected] = useState(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const selectedIds = Array.from(selected);
+  const resolvedBulkDeleteLabel = bulkDeleteLabel || t('components.table.bulkDeleteLabel');
 
   const handleBulkDelete = async () => {
     if (!onBulkDelete) return;
@@ -59,10 +63,10 @@ function TableFrame({
       />
       {selectable && onBulkDelete && selectedIds.length > 0 && (
         <div className="bulk-action-bar">
-          <span><strong>{selectedIds.length}</strong> selected</span>
-          <button className="button-secondary" onClick={() => setSelected(new Set())}>Clear</button>
+          <span><strong>{formatNumber(selectedIds.length, undefined, i18n.resolvedLanguage)}</strong> {t('components.table.bulkSelected', { count: selectedIds.length })}</span>
+          <button className="button-secondary" onClick={() => setSelected(new Set())}>{t('common.actions.clear')}</button>
           <button className="button-danger" onClick={() => setConfirmOpen(true)}>
-            <TrashIcon size={14} /> {bulkDeleteLabel}
+            <TrashIcon size={14} /> {resolvedBulkDeleteLabel}
           </button>
         </div>
       )}
@@ -80,9 +84,9 @@ function TableFrame({
       <ConfirmModal
         open={confirmOpen}
         danger
-        title={bulkDeleteLabel}
-        message={`Delete ${selectedIds.length} selected item${selectedIds.length === 1 ? '' : 's'}? This cannot be undone.`}
-        confirmLabel="Delete"
+        title={resolvedBulkDeleteLabel}
+        message={t('components.table.bulkDeleteConfirm', { count: selectedIds.length })}
+        confirmLabel={t('common.actions.delete')}
         onConfirm={handleBulkDelete}
         onCancel={() => setConfirmOpen(false)}
       />

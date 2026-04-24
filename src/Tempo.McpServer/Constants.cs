@@ -9,7 +9,7 @@ namespace Tempo.McpServer
         public const string ProductName = "Tempo MCP Server";
 
         /// <summary>Software version.</summary>
-        public const string Version = "0.2.0";
+        public const string Version = "0.3.0";
 
         /// <summary>Default settings filename.</summary>
         public const string DefaultSettingsFile = "./tempo.mcp.json";
@@ -28,9 +28,6 @@ namespace Tempo.McpServer
 
         /// <summary>Environment variable for Tempo x-access-key authentication.</summary>
         public const string TempoAccessKeyEnvironmentVariable = "TEMPO_ACCESS_KEY";
-
-        /// <summary>Environment variable for Tempo x-secret-key authentication.</summary>
-        public const string TempoSecretKeyEnvironmentVariable = "TEMPO_SECRET_KEY";
 
         /// <summary>Environment variable for the default Tempo tenant identifier.</summary>
         public const string TempoTenantIdEnvironmentVariable = "TEMPO_TENANT_ID";

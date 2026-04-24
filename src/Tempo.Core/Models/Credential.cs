@@ -4,7 +4,7 @@ namespace Tempo.Core.Models
     using Tempo.Core.Helpers;
 
     /// <summary>
-    /// API access credential for a user. Provides access key / secret key auth.
+    /// API access credential for a user. Access keys authenticate API requests.
     /// </summary>
     public class Credential
     {
@@ -67,7 +67,7 @@ namespace Tempo.Core.Models
             }
         }
 
-        /// <summary>Private secret key. Redacted in public responses.</summary>
+        /// <summary>Private secret key reserved for non-API uses. Not accepted on API requests.</summary>
         public string SecretKey
         {
             get

@@ -15,7 +15,7 @@
     <ApplicationIcon>logo.ico</ApplicationIcon>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <DocumentationFile>Tempo.xml</DocumentationFile>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <PackageIcon>logo.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>data flow dataflow orchestrate orchestrator step lambda faas airflow</PackageTags>

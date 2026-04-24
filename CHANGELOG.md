@@ -2,6 +2,75 @@
 
 All notable changes to Tempo are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Dashboard internationalization across login, navigation, workspace titles/subtitles, tables, filters, buttons, modal labels, hover/help text, shared chrome, and status/enum surfaces for the supported ship locales (`en`, `es`, `zh-Hans`, `yue-Hant-HK`, `ja`, `de`, `fr`, `it`, `zh-Hant-TW`)
+- Dashboard i18n audit enforcement so extracted UI strings must be present for supported non-English locales and new raw localizable JSX text fails test coverage
+- Explicit flow-level HTTP trigger invocation modes for public versus API-authenticated data flows, centered on the `invocationAuthMode` contract (`Public` and `ApiAuthenticated`)
+
+### Documentation
+
+- README coverage for dashboard internationalization, including supported ship locales, operator-facing scope, and audit enforcement
+- README coverage for authenticated versus public data flows, including trigger invocation behavior and generated `curl` expectations
+- Changelog coverage for the `invocationAuthMode` model so public and API-authenticated flow behavior is called out alongside other platform capabilities
+- Archived the working `I18N.md` and `SCALE.md` planning documents under `archive/`
+
+## [0.3.0] - 2026-04-21
+
+### Added
+
+- `Tempo.Worker`, the first-party distributed execution worker daemon for whole-flow-run remote execution
+- Distributed execution schema and contracts, including workers, worker sessions, run assignments, worker activity, and server instance heartbeats
+- `FlowRunExecutionPlan`, remote worker transport, authenticated artifact download for workers, and worker token rotation
+- Worker management REST routes:
+  - `GET /v1.0/workers`
+  - `GET /v1.0/workers/{id}`
+  - `POST /v1.0/workers/{id}/drain`
+  - `POST /v1.0/workers/{id}/resume`
+  - `POST /v1.0/workers/{id}/rotate-token`
+- Dashboard worker management with worker list/detail views, drain/resume actions, run placement columns, and distributed execution settings
+- Dashboard, REST, MCP, and Postman log-management surfaces for file-backed server and worker logs
+- MCP worker tools:
+  - `listWorkers`
+  - `readWorker`
+  - `drainWorker`
+  - `resumeWorker`
+  - `listLogSources`
+  - `listLogFiles`
+  - `readLogFile`
+  - `downloadLogFile`
+  - `deleteLogFile`
+- C# SDK worker-protocol DTOs
+- Operator documentation for distributed execution plus a formal worker-protocol reference
+- Worker Docker assets, compose wiring, and `build-worker.bat`
+
+### Changed
+
+- Replaced the legacy queue-claim worker path with a single authoritative `RunDispatchCoordinator`
+- Server-local execution now runs through the same execution-plan and assignment path as remote workers via a pseudo-worker
+- `flow_runs` now persist dispatch and placement metadata such as `dispatchState`, `dispatchAttempt`, `assignedWorkerId`, `runAssignmentId`, and `executionNodeKind`
+- Engine scheduling settings now include:
+  - `serverCanExecuteWorkload`
+  - `loadBalancingStrategy`
+  - `workerHeartbeatTimeoutMs`
+  - `leaseDurationMs`
+  - `maxAssignmentAttempts`
+  - `allowDuplicateScheduler`
+- Docker compose now includes a worker and uses `v0.3.0` image tags
+- Docker compose now mounts shared worker log storage read-only into the server for the admin log viewer
+- Project, package, dashboard, and MCP version strings now align on `0.3.0`
+
+### Fixed
+
+- Queue ownership and queued-run cancellation now route through one authority instead of multiple direct mutation paths
+- Worker disconnects, stale leases, and duplicate completion frames now recover without leaving stale assignments applied twice
+- Split-brain protection now suppresses scheduling on a second live server by default
+- Operator visibility gaps around worker state and run placement
+- Compose first-run behavior now restores the intended server and worker defaults instead of falling back to generated localhost or empty-admin-key settings when config volumes are absent
+- Factory resets now restore artifact and log storage layouts that survive container recreation and support the admin log viewer
+
 ## [0.2.0] - 2026-04-20
 
 ### Added

@@ -1,8 +1,8 @@
-﻿{
+{
     "info":  {
                  "_postman_id":  "c58ca1ec-0bdc-4f1a-9a2b-0a1b2c3d4e5f",
-                 "name":  "Tempo API 0.2.0",
-                 "description":  "REST API for Tempo Server 0.2.0. Uses {{serverUrl}} + {{token}} + {{tenantId}} variables. Includes current coverage for runtimes, source steps, artifacts, data flows, triggers, runs, request history, settings, and migrations.",
+                 "name":  "Tempo API 0.3.0",
+                 "description":  "REST API for Tempo Server 0.3.0. Uses {{serverUrl}} + {{token}} + {{tenantId}} variables. Set {{token}} to either a Tempo bearer token from /v1.0/token or a credential access key. x-secret-key is intentionally unsupported. Includes current coverage for runtimes, source steps, artifacts, data flows, triggers, runs, run activity, run logs, workers, logs, request history, settings, and migrations.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "variable":  [
@@ -55,6 +55,10 @@
                          "value":  ""
                      },
                      {
+                         "key":  "runLogPath",
+                         "value":  "run.log"
+                     },
+                     {
                          "key":  "artifactId",
                          "value":  ""
                      },
@@ -81,6 +85,30 @@
                      {
                          "key":  "requestHistoryId",
                          "value":  ""
+                     },
+                     {
+                         "key":  "workerId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "workerToken",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "logSourceKind",
+                         "value":  "server"
+                     },
+                     {
+                         "key":  "logSourceId",
+                         "value":  "server"
+                     },
+                     {
+                         "key":  "logPath",
+                         "value":  "tempo.log"
+                     },
+                     {
+                         "key":  "adminApiKey",
+                         "value":  "tempo-local-admin-api-key"
                      }
                  ],
     "auth":  {
@@ -747,7 +775,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"hello world\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
+                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"hello world\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"invocationAuthMode\": \"Public\",\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
                                                                }
                                                   }
                                   },
@@ -771,7 +799,7 @@
                                                                  ],
                                                       "body":  {
                                                                    "mode":  "raw",
-                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"updated from Postman\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
+                                                                   "raw":  "{\n  \"name\": \"demo\",\n  \"description\": \"updated from Postman\",\n  \"startStepId\": \"postman.echo_js\",\n  \"maxRuntimeMs\": 30000,\n  \"invocationAuthMode\": \"Public\",\n  \"transitions\": {\n    \"postman.echo_js\": {\n      \"name\": \"Echo\",\n      \"onSuccess\": null,\n      \"onFailure\": null,\n      \"onException\": null,\n      \"maxTransitions\": 1\n    }\n  },\n  \"active\": true\n}"
                                                                }
                                                   }
                                   },
@@ -956,9 +984,40 @@
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
                                                                                     "const res = pm.response.json();",
-                                                                                    "if (res && res.step && res.step.id) pm.collectionVariables.set('stepId', res.step.id);",
-                                                                                    "if (res && res.artifact && res.artifact.id) pm.collectionVariables.set('artifactId', res.artifact.id);",
-                                                                                    "if (res && res.artifactVersion && res.artifactVersion.version) pm.collectionVariables.set('artifactVersion', res.artifactVersion.version);"
+                                                                                    "if (res \u0026\u0026 res.step \u0026\u0026 res.step.id) pm.collectionVariables.set(\u0027stepId\u0027, res.step.id);",
+                                                                                    "if (res \u0026\u0026 res.artifact \u0026\u0026 res.artifact.id) pm.collectionVariables.set(\u0027artifactId\u0027, res.artifact.id);",
+                                                                                    "if (res \u0026\u0026 res.artifactVersion \u0026\u0026 res.artifactVersion.version) pm.collectionVariables.set(\u0027artifactVersion\u0027, res.artifactVersion.version);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Create step from source (C#)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/steps/source",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"executionKey\": \"postman.echo_csharp\",\n  \"name\": \"Postman Echo C#\",\n  \"language\": \"CSharp\",\n  \"fileName\": \"Handler.cs\",\n  \"handlerType\": \"Tempo.UserSteps.Handler\",\n  \"code\": \"using System.Threading;\\nusing System.Threading.Tasks;\\nusing Tempo;\\nusing Tempo.Protocol;\\n\\nnamespace Tempo.UserSteps;\\n\\npublic sealed class Handler : TempoStepHandlerBase\\n{\\n    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token = default)\\n    {\\n        LogInfo(\\\"Echo step received input: \\\" + request.Data);\\n        return Task.FromResult(Success(request, new { ok = true, input = request.Data }));\\n    }\\n}\\n\"\n}"
+                                                               }
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.step \u0026\u0026 res.step.id) pm.collectionVariables.set(\u0027stepId\u0027, res.step.id);",
+                                                                                    "if (res \u0026\u0026 res.artifact \u0026\u0026 res.artifact.id) pm.collectionVariables.set(\u0027artifactId\u0027, res.artifact.id);",
+                                                                                    "if (res \u0026\u0026 res.artifactVersion \u0026\u0026 res.artifactVersion.version) pm.collectionVariables.set(\u0027artifactVersion\u0027, res.artifactVersion.version);"
                                                                                 ]
                                                                    }
                                                     }
@@ -1341,8 +1400,8 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "const runId = pm.response.headers.get('x-run-id');",
-                                                                                    "if (runId) pm.collectionVariables.set('runId', runId);"
+                                                                                    "const runId = pm.response.headers.get(\u0027x-run-id\u0027);",
+                                                                                    "if (runId) pm.collectionVariables.set(\u0027runId\u0027, runId);"
                                                                                 ]
                                                                    }
                                                     }
@@ -1411,6 +1470,60 @@
                                                   }
                                   },
                                   {
+                                      "name":  "Read run activity",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}/activity"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "List run logs",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (Array.isArray(res) && res.length) pm.collectionVariables.set('runLogPath', res[0].path);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}/logs"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read run log",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}/logs/content?path={{runLogPath}}\u0026tailLines=200\u0026maxBytes=131072"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Download run log",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}/logs/download?path={{runLogPath}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete run log",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}/logs/content?path={{runLogPath}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete all run logs",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "url":  "{{serverUrl}}/v1.0/tenants/{{tenantId}}/runs/{{runId}}/logs"
+                                                  }
+                                  },
+                                  {
                                       "name":  "Cancel run",
                                       "request":  {
                                                       "method":  "POST",
@@ -1439,6 +1552,216 @@
                                                                    "mode":  "raw",
                                                                    "raw":  "{ \"ids\": [\"run_xxx\"] }"
                                                                }
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Workers",
+                     "item":  [
+                                  {
+                                      "name":  "List workers",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/workers?pageNumber=1\u0026pageSize=25"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Read worker",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/workers/{{workerId}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Drain worker",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/workers/{{workerId}}/drain"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Resume worker",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/workers/{{workerId}}/resume"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Block worker",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/workers/{{workerId}}/block"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Unblock worker",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/workers/{{workerId}}/unblock"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Rotate worker token",
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (res \u0026\u0026 res.workerId) pm.collectionVariables.set(\"workerId\", res.workerId);",
+                                                                                    "if (res \u0026\u0026 res.token) pm.collectionVariables.set(\"workerToken\", res.token);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ],
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/workers/{{workerId}}/rotate-token"
+                                                  }
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "Logs",
+                     "item":  [
+                                  {
+                                      "name":  "List log sources",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/logs/sources"
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "const server = Array.isArray(res) ? res.find(x => x.sourceKind === 'server') : null;",
+                                                                                    "if (server) {",
+                                                                                    "  pm.collectionVariables.set('logSourceKind', server.sourceKind);",
+                                                                                    "  pm.collectionVariables.set('logSourceId', server.sourceId);",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "List log files",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/logs/files?sourceKind={{logSourceKind}}\u0026sourceId={{logSourceId}}"
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "const res = pm.response.json();",
+                                                                                    "if (Array.isArray(res) && res.length) {",
+                                                                                    "  const current = res.find(x => x.isCurrent) || res[0];",
+                                                                                    "  if (current && current.path) pm.collectionVariables.set('logPath', current.path);",
+                                                                                    "}"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Read log file",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/logs/files/content?sourceKind={{logSourceKind}}\u0026sourceId={{logSourceId}}\u0026path={{logPath}}\u0026tailLines=200\u0026maxBytes=131072"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Download log file",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/logs/files/download?sourceKind={{logSourceKind}}\u0026sourceId={{logSourceId}}\u0026path={{logPath}}"
+                                                  }
+                                  },
+                                  {
+                                      "name":  "Delete or clear log file",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "x-api-key",
+                                                                         "value":  "{{adminApiKey}}"
+                                                                     }
+                                                                 ],
+                                                      "url":  "{{serverUrl}}/v1.0/logs/files/content?sourceKind={{logSourceKind}}\u0026sourceId={{logSourceId}}\u0026path={{logPath}}"
                                                   }
                                   }
                               ]

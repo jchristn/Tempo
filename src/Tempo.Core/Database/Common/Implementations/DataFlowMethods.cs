@@ -7,6 +7,7 @@ namespace Tempo.Core.Database.Common.Implementations
     using System.Threading;
     using System.Threading.Tasks;
     using Tempo.Core.Database.Interfaces;
+    using Tempo.Core.Enums;
     using Tempo.Core.Helpers;
     using Tempo.Core.Models;
     using Tempo.Core.Requests;
@@ -34,9 +35,9 @@ namespace Tempo.Core.Database.Common.Implementations
             r.LastUpdateUtc = DateTime.UtcNow;
             string transitionsJson = JsonSerializer.Serialize(r.Transitions);
             await _Driver.ExecuteQueryAsync(
-                "INSERT INTO data_flows(id, tenant_id, name, description, trigger_id, start_step_id, max_runtime_ms, transitions, active, is_protected, created_utc, last_update_utc) VALUES (" +
+                "INSERT INTO data_flows(id, tenant_id, name, description, trigger_id, start_step_id, routing_hint_label, invocation_auth_mode, max_runtime_ms, transitions, active, is_protected, created_utc, last_update_utc) VALUES (" +
                 _D.Quote(r.Id) + ", " + _D.Quote(r.TenantId) + ", " + _D.Quote(r.Name) + ", " + _D.Quote(r.Description) + ", " +
-                _D.Quote(r.TriggerId) + ", " + _D.Quote(r.StartStepId) + ", " + r.MaxRuntimeMs + ", " +
+                _D.Quote(r.TriggerId) + ", " + _D.Quote(r.StartStepId) + ", " + _D.Quote(r.RoutingHintLabel) + ", " + _D.Quote(r.InvocationAuthMode.ToString()) + ", " + r.MaxRuntimeMs + ", " +
                 _D.Quote(transitionsJson) + ", " + _D.Bit(r.Active) + ", " + _D.Bit(r.IsProtected) + ", " +
                 _D.Quote(r.CreatedUtc) + ", " + _D.Quote(r.LastUpdateUtc) + ");",
                 false, token).ConfigureAwait(false);
@@ -52,6 +53,8 @@ namespace Tempo.Core.Database.Common.Implementations
             await _Driver.ExecuteQueryAsync(
                 "UPDATE data_flows SET name = " + _D.Quote(r.Name) + ", description = " + _D.Quote(r.Description) + ", " +
                 "trigger_id = " + _D.Quote(r.TriggerId) + ", start_step_id = " + _D.Quote(r.StartStepId) + ", " +
+                "routing_hint_label = " + _D.Quote(r.RoutingHintLabel) + ", " +
+                "invocation_auth_mode = " + _D.Quote(r.InvocationAuthMode.ToString()) + ", " +
                 "max_runtime_ms = " + r.MaxRuntimeMs + ", transitions = " + _D.Quote(transitionsJson) + ", " +
                 "active = " + _D.Bit(r.Active) + ", is_protected = " + _D.Bit(r.IsProtected) + ", " +
                 "last_update_utc = " + _D.Quote(r.LastUpdateUtc) +
@@ -140,6 +143,8 @@ namespace Tempo.Core.Database.Common.Implementations
                 Description = Converters.StringOrNull(row, "description"),
                 TriggerId = Converters.StringOrNull(row, "trigger_id"),
                 StartStepId = Converters.String(row, "start_step_id"),
+                RoutingHintLabel = row.Table.Columns.Contains("routing_hint_label") ? Converters.StringOrNull(row, "routing_hint_label") : null,
+                InvocationAuthMode = InvocationAuthMode(row),
                 MaxRuntimeMs = Converters.Int(row, "max_runtime_ms"),
                 Transitions = transitions,
                 Active = Converters.Bool(row, "active"),
@@ -147,6 +152,16 @@ namespace Tempo.Core.Database.Common.Implementations
                 CreatedUtc = Converters.DateTime(row, "created_utc"),
                 LastUpdateUtc = Converters.DateTime(row, "last_update_utc")
             };
+        }
+
+        private static DataFlowInvocationAuthModeEnum InvocationAuthMode(DataRow row)
+        {
+            if (!row.Table.Columns.Contains("invocation_auth_mode")) return DataFlowInvocationAuthModeEnum.Public;
+
+            string value = Converters.String(row, "invocation_auth_mode");
+            return Enum.TryParse(value, true, out DataFlowInvocationAuthModeEnum parsed)
+                ? parsed
+                : DataFlowInvocationAuthModeEnum.Public;
         }
     }
 }

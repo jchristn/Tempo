@@ -19,6 +19,9 @@ import CredentialsView from '../views/CredentialsView';
 import RolesView from '../views/RolesView';
 import PermissionsView from '../views/PermissionsView';
 import SettingsView from '../views/SettingsView';
+import WorkersView from '../views/WorkersView';
+import LogsView from '../views/LogsView';
+import useAutoTitles from '../utils/useAutoTitles';
 
 const LEGACY_SETUP_WIZARD_DISMISSED_KEY = 'tempo.setupWizard.dismissed';
 
@@ -47,6 +50,8 @@ function Dashboard() {
   const [collapsed, setCollapsed] = useState(false);
   const [setupWizardOpen, setSetupWizardOpen] = useState(false);
   const [workspaceRefreshKey, setWorkspaceRefreshKey] = useState(0);
+
+  useAutoTitles(true);
 
   useEffect(() => {
     if (!apiClient || !principal) return;
@@ -105,6 +110,8 @@ function Dashboard() {
       case 'credentials': return <CredentialsView apiClient={apiClient} principal={principal} />;
       case 'roles': return <RolesView apiClient={apiClient} principal={principal} />;
       case 'permissions': return <PermissionsView apiClient={apiClient} principal={principal} />;
+      case 'workers': return <WorkersView apiClient={apiClient} principal={principal} />;
+      case 'logs': return <LogsView apiClient={apiClient} principal={principal} />;
       case 'settings': return <SettingsView apiClient={apiClient} principal={principal} />;
       default: return <HomeView apiClient={apiClient} />;
     }

@@ -15,6 +15,7 @@ artifact files or built-in code -> step -> data flow -> trigger -> run history
 | Make execution explicit | Use stable step `executionKey` values and clear flow transition names |
 | Keep units small | Prefer steps that perform one operation and return one well-defined output |
 | Preserve observability | Inspect flow runs and step runs after every new trigger or artifact change |
+| Treat placement as an operator concern | Use worker labels and `routingHintLabel` intentionally rather than relying on incidental worker choice |
 | Pin where reproducibility matters | Use immutable artifact version labels for production-critical behavior |
 | Use mutable current intentionally | Use editable artifact files for iteration and local development |
 | Protect production records | Set `isProtected` on production steps, flows, triggers, artifacts, and pinned artifact versions |
@@ -175,6 +176,45 @@ Choose the least powerful runtime that solves the problem.
 
 Use `/v1.0/runtimes` or the MCP `runtime_list` tool before creating steps that depend on `python`, `node`, `dotnet`, or configured host executables.
 
+## Distributed Execution
+
+Tempo v0.3.0 schedules whole flow runs onto either the server pseudo-worker or a remote `Tempo.Worker`.
+
+Recommended operator settings:
+
+| Setting | Guidance |
+| --- | --- |
+| `engine.serverCanExecuteWorkload` | Set `false` when Tempo.Server should be control-plane only |
+| `engine.loadBalancingStrategy` | Use `LeastLoaded` by default; use `LabelPinned` only when a flow really needs a labeled worker pool |
+| `engine.workerHeartbeatTimeoutMs` | Keep it short enough to recover dead workers quickly but long enough to tolerate expected network jitter |
+| `engine.leaseDurationMs` | Set longer than the expected longest assignment dispatch-to-completion interval |
+| `engine.maxAssignmentAttempts` | Keep retries bounded so dead workers do not cause infinite churn |
+
+### Worker Labels and Routing Hints
+
+Use worker labels for durable placement constraints, not for ad hoc queueing.
+
+Good examples:
+
+| Label | Meaning |
+| --- | --- |
+| `python` | Worker has the required Python environment or packages |
+| `gpu` | Worker has GPU access |
+| `isolated` | Worker pool is reserved for a sensitive workflow class |
+
+Set a flow's `routingHintLabel` only when the flow genuinely needs that pool. Otherwise leave placement to `LeastLoaded`.
+
+### Recovery Expectations
+
+Distributed execution is at-least-once. Design flows so a retried assignment does not produce unsafe side effects.
+
+Practical guidance:
+
+1. Make outbound calls idempotent when possible.
+2. Use stable business identifiers in payloads so downstream systems can deduplicate.
+3. Inspect `dispatchAttempt`, `assignedWorkerId`, and `runAssignmentId` when diagnosing recovery.
+4. Drain workers before maintenance instead of killing them mid-run.
+
 ### Built-In Steps
 
 Built-in steps are best for stable platform behavior:
@@ -212,7 +252,7 @@ Provide:
 | `executionKey` | Keeps flows readable and stable |
 | `fileName` | Makes artifact editing understandable |
 | `function` | Makes Python and JavaScript handler resolution explicit |
-| `handlerType` | Makes C# handler resolution explicit |
+| `handlerType` | Makes C# handler resolution explicit, typically a `TempoStepHandlerBase` subclass |
 | `maxRuntimeMs` | Prevents runaway code |
 
 Python handler shape:
@@ -231,6 +271,19 @@ exports.run = async function(input) {
 ```
 
 C# source-step packages compile to an executable entrypoint. Editing `.cs` files inside the artifact is useful for inspection and versioning, but it does not recompile the assembly by itself. To change C# runtime behavior, recreate the source step or upload a rebuilt artifact package.
+
+C# handler shape:
+
+```csharp
+public sealed class Handler : TempoStepHandlerBase
+{
+    public override Task<StepResult> RunAsync(StepRequest request, CancellationToken token)
+    {
+        LogInfo("processing request " + request.RequestId);
+        return Task.FromResult(Success(request, new { ok = true, input = request.Data }));
+    }
+}
+```
 
 ## Artifact Management
 
@@ -447,14 +500,17 @@ Always log or capture `x-run-id` when a caller reports a problem.
 
 Public trigger endpoints are not tenant-scoped and are intended for invocation. Treat trigger IDs as sensitive.
 
+For flows that should not be callable by anyone holding the trigger URL, set the flow's `invocationAuthMode` to `ApiAuthenticated`. The HTTP trigger route will then require the same Tempo API credentials used by management endpoints and will only enqueue the run if the principal can act on the flow's tenant.
+
 For production:
 
 1. Put Tempo behind TLS.
-2. Use a gateway if caller authentication, rate limiting, or request signing is required.
-3. Prefer POST for user-provided input.
-4. Validate the first step input.
-5. Set flow and step timeouts.
-6. Monitor failed and exceptioned runs.
+2. Use `ApiAuthenticated` for tenant-private flows.
+3. Use a gateway if external caller authentication, rate limiting, or request signing needs to differ from Tempo API authentication.
+4. Prefer POST for user-provided input.
+5. Validate the first step input.
+6. Set flow and step timeouts.
+7. Monitor failed and exceptioned runs.
 
 ## Monitoring and Operations
 
@@ -472,6 +528,7 @@ Review:
 | Question | Field |
 | --- | --- |
 | Did the flow finish? | Run `state` |
+| Where did it run? | Run `assignedWorkerId`, `executionNodeKind`, `dispatchAttempt` |
 | What did the caller send? | Run `inputData` |
 | What did the flow return? | Run `outputData` |
 | Which step failed? | Step run `result` and `errorMessage` |
@@ -655,12 +712,13 @@ Before promoting a flow to production:
 4. Artifacts are pinned where reproducibility matters.
 5. Flow `maxRuntimeMs` is set.
 6. Process-backed steps have timeouts.
-7. Public trigger `allowedMethods` is explicit.
-8. First-step input validation is enabled for public input.
-9. Trigger invocation has been tested with production-like curl or client code.
-10. Run and step-run records are reviewed.
-11. Production records are protected.
-12. Rollback artifact versions or previous flow definitions are available.
+7. Flow `invocationAuthMode` matches the intended exposure: `Public` for URL-capability calls, `ApiAuthenticated` for tenant-private calls.
+8. Public trigger `allowedMethods` is explicit.
+9. First-step input validation is enabled for public input.
+10. Trigger invocation has been tested with production-like curl or client code, including auth headers when `ApiAuthenticated` is used.
+11. Run and step-run records are reviewed.
+12. Production records are protected.
+13. Rollback artifact versions or previous flow definitions are available.
 
 ## Troubleshooting Patterns
 
@@ -735,4 +793,3 @@ Use this as a starting point:
 7. Add failure or exception branches.
 8. Set timeouts and validation.
 9. Pin artifacts or protect records before production use.
-

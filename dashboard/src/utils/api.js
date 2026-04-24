@@ -1,6 +1,8 @@
 /**
  * API client for communicating with the Tempo Server.
  */
+import i18n from '../i18n';
+
 class ApiError extends Error {
   constructor(status, body) {
     super('HTTP ' + status + ': ' + body);
@@ -16,13 +18,13 @@ class ApiClient {
   }
 
   _headers(extra = {}) {
-    const headers = { 'Content-Type': 'application/json', ...extra };
+    const headers = { 'Content-Type': 'application/json', 'Accept-Language': i18n.resolvedLanguage || i18n.language || 'en', ...extra };
     if (this.token) headers['Authorization'] = 'Bearer ' + this.token;
     return headers;
   }
 
   _authHeaders(extra = {}) {
-    const headers = { ...extra };
+    const headers = { 'Accept-Language': i18n.resolvedLanguage || i18n.language || 'en', ...extra };
     if (this.token) headers['Authorization'] = 'Bearer ' + this.token;
     return headers;
   }
@@ -231,8 +233,82 @@ class ApiClient {
   async listRuns(tenantId, filters = {}) { return this._request('GET', this._ten(tenantId, '/runs'), { query: filters }); }
   async readRun(tenantId, id) { return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id))); }
   async readRunSteps(tenantId, id) { return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/steps')); }
+  async getRunActivity(tenantId, id) { return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/activity')); }
+  async listRunLogs(tenantId, id) { return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs')); }
+  async readRunLog(tenantId, id, path, options = {}) {
+    return this._request('GET', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs/content'), {
+      query: {
+        path,
+        tailLines: options.tailLines,
+        maxBytes: options.maxBytes
+      }
+    });
+  }
+  async deleteRunLog(tenantId, id, path) {
+    return this._request('DELETE', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs/content'), { query: { path } });
+  }
+  async deleteRunLogs(tenantId, id) {
+    return this._request('DELETE', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs'));
+  }
+  async downloadRunLog(tenantId, id, path) {
+    const url = new URL(this.baseUrl + this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/logs/download'));
+    url.searchParams.set('path', path);
+    const response = await fetch(url.toString(), { method: 'GET', headers: this._authHeaders() });
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '');
+      throw new ApiError(response.status, errorBody || response.statusText);
+    }
+    const disposition = response.headers.get('content-disposition') || '';
+    const fileNameMatch = disposition.match(/filename=\"?([^"]+)\"?/i);
+    return {
+      blob: await response.blob(),
+      fileName: fileNameMatch ? fileNameMatch[1] : 'tempo-run.log'
+    };
+  }
   async cancelRun(tenantId, id) { return this._request('POST', this._ten(tenantId, '/runs/' + encodeURIComponent(id) + '/cancel')); }
   async deleteRun(tenantId, id) { return this._request('DELETE', this._ten(tenantId, '/runs/' + encodeURIComponent(id))); }
+
+  async listWorkers(filters = {}) { return this._request('GET', '/v1.0/workers', { query: filters }); }
+  async readWorker(id) { return this._request('GET', '/v1.0/workers/' + encodeURIComponent(id)); }
+  async drainWorker(id) { return this._request('POST', '/v1.0/workers/' + encodeURIComponent(id) + '/drain'); }
+  async resumeWorker(id) { return this._request('POST', '/v1.0/workers/' + encodeURIComponent(id) + '/resume'); }
+  async blockWorker(id) { return this._request('POST', '/v1.0/workers/' + encodeURIComponent(id) + '/block'); }
+  async unblockWorker(id) { return this._request('POST', '/v1.0/workers/' + encodeURIComponent(id) + '/unblock'); }
+  async rotateWorkerToken(id) { return this._request('POST', '/v1.0/workers/' + encodeURIComponent(id) + '/rotate-token'); }
+
+  async listLogSources() { return this._request('GET', '/v1.0/logs/sources'); }
+  async listLogFiles(sourceKind, sourceId) { return this._request('GET', '/v1.0/logs/files', { query: { sourceKind, sourceId } }); }
+  async readLogFile(sourceKind, sourceId, path, options = {}) {
+    return this._request('GET', '/v1.0/logs/files/content', {
+      query: {
+        sourceKind,
+        sourceId,
+        path,
+        tailLines: options.tailLines,
+        maxBytes: options.maxBytes
+      }
+    });
+  }
+  async deleteLogFile(sourceKind, sourceId, path) {
+    return this._request('DELETE', '/v1.0/logs/files/content', { query: { sourceKind, sourceId, path } });
+  }
+  async downloadLogFile(sourceKind, sourceId, path) {
+    const url = new URL(this.baseUrl + '/v1.0/logs/files/download');
+    url.searchParams.set('sourceKind', sourceKind);
+    url.searchParams.set('sourceId', sourceId);
+    url.searchParams.set('path', path);
+    const response = await fetch(url.toString(), { method: 'GET', headers: this._authHeaders() });
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '');
+      throw new ApiError(response.status, errorBody || response.statusText);
+    }
+    const disposition = response.headers.get('content-disposition') || '';
+    const fileNameMatch = disposition.match(/filename=\"?([^"]+)\"?/i);
+    return {
+      blob: await response.blob(),
+      fileName: fileNameMatch ? fileNameMatch[1] : 'tempo.log'
+    };
+  }
 }
 
 export default ApiClient;

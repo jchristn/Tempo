@@ -26,7 +26,8 @@ namespace Test.Shared.Suites
                                 "schema_migrations", "accounts", "administrators", "tenants", "users",
                                 "credentials", "roles", "user_role_maps", "permissions", "role_permission_maps",
                                 "data_flows", "steps", "triggers", "flow_runs", "step_runs", "request_history",
-                                "artifacts", "artifact_versions"
+                                "artifacts", "artifact_versions", "artifact_files", "workers", "worker_sessions",
+                                "run_assignments", "worker_activity", "server_instances"
                             };
                             foreach (string name in expected)
                             {

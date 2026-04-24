@@ -25,8 +25,10 @@ namespace Tempo.Core.Runtime
             IEnumerable<string> environmentReferences,
             ExternalExecutionSettings settings,
             ExternalRuntimeCapacityManager capacity,
+            RunLogSession? runLogs = null,
+            RunLogStepScope? runLogStep = null,
             int maxRuntimeMs = 0)
-            : base(tenantId, artifact, artifactRoot, entrypoint, ".", arguments, environmentReferences, settings, capacity, maxRuntimeMs)
+            : base(tenantId, artifact, artifactRoot, entrypoint, ".", arguments, environmentReferences, settings, capacity, runLogs, runLogStep, maxRuntimeMs)
         {
             _PythonExecutable = pythonExecutable;
             _Module = module;
@@ -67,15 +69,75 @@ namespace Tempo.Core.Runtime
         {
             return """
 import importlib
+import builtins
 import json
+import logging
+import os
 import sys
 import traceback
+from datetime import datetime
+
+
+class TempoLogWriter:
+    def __init__(self, path):
+        self._path = path
+
+    def _write_line(self, level, text):
+        if not self._path or text is None:
+            return
+        message = str(text)
+        if not message:
+            return
+        with open(self._path, "a", encoding="utf-8") as handle:
+            for line in message.splitlines() or [message]:
+                handle.write(f"{datetime.utcnow().isoformat()}Z [{level}] {line}\n")
+
+    def write(self, text):
+        if text and text.strip():
+            self._write_line("STDERR", text.rstrip("\n"))
+
+    def flush(self):
+        return
+
+    def log(self, level, text):
+        self._write_line(level, text)
+
+
+def configure_logging():
+    path = os.environ.get("TEMPO_RUN_LOG_FILE")
+    if not path:
+        return None
+    writer = TempoLogWriter(path)
+
+    def tempo_print(*args, sep=" ", end="\n", file=None, flush=False):
+        text = sep.join("" if arg is None else str(arg) for arg in args)
+        if end and end != "\n":
+            text += end
+        writer.log("INFO", text.rstrip("\n"))
+
+    builtins.print = tempo_print
+    sys.stderr = writer
+
+    class TempoHandler(logging.Handler):
+        def emit(self, record):
+            try:
+                writer.log(record.levelname, self.format(record))
+            except Exception:
+                pass
+
+    handler = TempoHandler()
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+    return writer
 
 def main():
     module_name = sys.argv[1]
     function_name = sys.argv[2]
     raw = sys.stdin.read()
     req = json.loads(raw)
+    configure_logging()
     try:
         module = importlib.import_module(module_name)
         fn = getattr(module, function_name)

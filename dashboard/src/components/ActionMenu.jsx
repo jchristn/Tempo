@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
 import { MoreVerticalIcon } from './Icons';
+import { translateLiteral } from '../utils/i18n';
 
 /**
  * Three-dot action menu. Dropdown is rendered via portal so it is never clipped
@@ -9,6 +11,7 @@ import { MoreVerticalIcon } from './Icons';
  * items = [{ label, onClick, variant?: 'danger', hidden? }]
  */
 function ActionMenu({ items }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, align: 'below' });
   const triggerRef = useRef(null);
@@ -54,7 +57,8 @@ function ActionMenu({ items }) {
         type="button"
         className="action-menu-trigger"
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-        aria-label="Actions"
+        aria-label={t('common.actions.actions')}
+        title={t('common.actions.actions')}
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -62,16 +66,23 @@ function ActionMenu({ items }) {
       </button>
       {open && createPortal(
         <div ref={menuRef} className="action-menu-dropdown" role="menu" style={{ position: 'fixed', top: pos.top, left: pos.left }}>
-          {visibleItems.map((it, i) => (
-            <button
-              key={i}
-              type="button"
-              className={'action-menu-item' + (it.variant === 'danger' ? ' danger' : '')}
-              onClick={(e) => { e.stopPropagation(); setOpen(false); it.onClick?.(); }}
-            >
-              {it.label}
-            </button>
-          ))}
+          {visibleItems.map((it, i) => {
+            const label = typeof it.label === 'string' ? translateLiteral(t, it.label) : it.label;
+            const title = typeof it.title === 'string'
+              ? translateLiteral(t, it.title)
+              : (typeof it.label === 'string' ? translateLiteral(t, it.label) : it.title || it.label);
+            return (
+              <button
+                key={i}
+                type="button"
+                className={'action-menu-item' + (it.variant === 'danger' ? ' danger' : '')}
+                title={title}
+                onClick={(e) => { e.stopPropagation(); setOpen(false); it.onClick?.(); }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>,
         document.body
       )}

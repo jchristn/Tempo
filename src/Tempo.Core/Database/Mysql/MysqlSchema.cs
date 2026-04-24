@@ -269,6 +269,118 @@ namespace Tempo.Core.Database.Mysql
             });
             list.Add(m9);
 
+            SchemaMigration m10 = new SchemaMigration { Version = 10, Description = "distributed execution foundation" };
+            m10.Statements.AddRange(new[]
+            {
+                @"CREATE TABLE IF NOT EXISTS workers (
+                    id VARCHAR(64) PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    kind VARCHAR(64) NOT NULL,
+                    state VARCHAR(64) NOT NULL,
+                    enabled TINYINT NOT NULL DEFAULT 1,
+                    drain_mode TINYINT NOT NULL DEFAULT 0,
+                    version VARCHAR(64) NULL,
+                    host_name VARCHAR(255) NULL,
+                    labels_json LONGTEXT NULL,
+                    max_concurrent_runs INT NOT NULL DEFAULT 1,
+                    last_heartbeat_utc DATETIME(3) NULL,
+                    created_utc DATETIME(3) NOT NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+                @"CREATE TABLE IF NOT EXISTS worker_sessions (
+                    id VARCHAR(64) PRIMARY KEY,
+                    worker_id VARCHAR(64) NOT NULL,
+                    connected_utc DATETIME(3) NOT NULL,
+                    disconnected_utc DATETIME(3) NULL,
+                    disconnect_reason TEXT NULL,
+                    protocol_version VARCHAR(32) NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+                @"CREATE TABLE IF NOT EXISTS run_assignments (
+                    id VARCHAR(64) PRIMARY KEY,
+                    flow_run_id VARCHAR(64) NOT NULL,
+                    worker_id VARCHAR(64) NOT NULL,
+                    worker_session_id VARCHAR(64) NULL,
+                    attempt_number INT NOT NULL DEFAULT 1,
+                    state VARCHAR(32) NOT NULL,
+                    lease_token VARCHAR(64) NOT NULL,
+                    lease_expires_utc DATETIME(3) NOT NULL,
+                    assigned_utc DATETIME(3) NOT NULL,
+                    completed_utc DATETIME(3) NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+                @"CREATE TABLE IF NOT EXISTS worker_activity (
+                    id VARCHAR(64) PRIMARY KEY,
+                    worker_id VARCHAR(64) NOT NULL,
+                    worker_session_id VARCHAR(64) NULL,
+                    flow_run_id VARCHAR(64) NULL,
+                    run_assignment_id VARCHAR(64) NULL,
+                    event_type VARCHAR(64) NOT NULL,
+                    severity VARCHAR(32) NULL,
+                    message TEXT NULL,
+                    payload_json LONGTEXT NULL,
+                    created_utc DATETIME(3) NOT NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+                @"CREATE TABLE IF NOT EXISTS server_instances (
+                    id VARCHAR(64) PRIMARY KEY,
+                    started_utc DATETIME(3) NOT NULL,
+                    last_heartbeat_utc DATETIME(3) NOT NULL,
+                    version VARCHAR(64) NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+                "ALTER TABLE flow_runs ADD COLUMN dispatch_state VARCHAR(32) NULL AFTER execution_snapshot_json;",
+                "ALTER TABLE flow_runs ADD COLUMN dispatch_attempt INT NOT NULL DEFAULT 0 AFTER dispatch_state;",
+                "ALTER TABLE flow_runs ADD COLUMN assigned_worker_id VARCHAR(64) NULL AFTER dispatch_attempt;",
+                "ALTER TABLE flow_runs ADD COLUMN run_assignment_id VARCHAR(64) NULL AFTER assigned_worker_id;",
+                "ALTER TABLE flow_runs ADD COLUMN queue_wait_ms BIGINT NULL AFTER run_assignment_id;",
+                "ALTER TABLE flow_runs ADD COLUMN assigned_utc DATETIME(3) NULL AFTER queue_wait_ms;",
+                "ALTER TABLE flow_runs ADD COLUMN lease_expires_utc DATETIME(3) NULL AFTER assigned_utc;",
+                "ALTER TABLE flow_runs ADD COLUMN execution_node_kind VARCHAR(32) NULL AFTER lease_expires_utc;",
+                "UPDATE flow_runs SET dispatch_state = 'Pending' WHERE dispatch_state IS NULL OR TRIM(dispatch_state) = '';",
+                "CREATE INDEX idx_flow_runs_dispatch_pending ON flow_runs(dispatch_state, state, created_utc);",
+                "CREATE INDEX idx_workers_online ON workers(enabled, drain_mode, state, last_heartbeat_utc);",
+                "CREATE INDEX idx_worker_sessions_stale ON worker_sessions(worker_id, disconnected_utc, connected_utc);",
+                "CREATE INDEX idx_run_assignments_lease ON run_assignments(state, lease_expires_utc);",
+                "CREATE INDEX idx_run_assignments_flow_run ON run_assignments(flow_run_id, attempt_number);",
+                "CREATE INDEX idx_worker_activity_worker ON worker_activity(worker_id, created_utc);",
+                "CREATE INDEX idx_worker_activity_run ON worker_activity(flow_run_id, created_utc);",
+                "CREATE INDEX idx_server_instances_heartbeat ON server_instances(last_heartbeat_utc);"
+            });
+            list.Add(m10);
+
+            SchemaMigration m11 = new SchemaMigration { Version = 11, Description = "distributed execution worker auth and placement" };
+            m11.Statements.AddRange(new[]
+            {
+                "ALTER TABLE workers ADD COLUMN capabilities_json LONGTEXT NULL AFTER labels_json;",
+                "ALTER TABLE workers ADD COLUMN token_hash VARCHAR(128) NULL AFTER capabilities_json;",
+                "ALTER TABLE workers ADD COLUMN token_last_rotated_utc DATETIME(3) NULL AFTER token_hash;",
+                "ALTER TABLE data_flows ADD COLUMN routing_hint_label VARCHAR(255) NULL AFTER active;",
+                "ALTER TABLE server_instances ADD COLUMN host_name VARCHAR(255) NULL AFTER id;",
+                "UPDATE workers SET capabilities_json = '[]' WHERE capabilities_json IS NULL OR TRIM(capabilities_json) = '';",
+                "CREATE INDEX idx_workers_token_hash ON workers(token_hash);",
+                "CREATE INDEX idx_data_flows_routing_label ON data_flows(routing_hint_label);"
+            });
+            list.Add(m11);
+
+            SchemaMigration m12 = new SchemaMigration { Version = 12, Description = "worker task timeout metadata" };
+            m12.Statements.AddRange(new[]
+            {
+                "ALTER TABLE workers ADD COLUMN max_task_timeout_ms INT NOT NULL DEFAULT 0 AFTER max_concurrent_runs;",
+                "UPDATE workers SET max_task_timeout_ms = 0 WHERE max_task_timeout_ms IS NULL;"
+            });
+            list.Add(m12);
+
+            SchemaMigration m13 = new SchemaMigration { Version = 13, Description = "flow run source ip" };
+            m13.Statements.AddRange(new[]
+            {
+                "ALTER TABLE flow_runs ADD COLUMN source_ip VARCHAR(64) NULL AFTER trigger_id;"
+            });
+            list.Add(m13);
+
+            SchemaMigration m14 = new SchemaMigration { Version = 14, Description = "flow invocation authentication policy" };
+            m14.Statements.AddRange(new[]
+            {
+                "ALTER TABLE data_flows ADD COLUMN invocation_auth_mode VARCHAR(32) NOT NULL DEFAULT 'Public' AFTER routing_hint_label;",
+                "UPDATE data_flows SET invocation_auth_mode = 'Public' WHERE invocation_auth_mode IS NULL OR TRIM(invocation_auth_mode) = '';"
+            });
+            list.Add(m14);
+
             return list;
         }
     }

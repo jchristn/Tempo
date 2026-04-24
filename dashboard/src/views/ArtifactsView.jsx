@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import PageHeader from '../components/PageHeader';
 import TableFrame from '../components/TableFrame';
 import Modal from '../components/Modal';
@@ -6,27 +7,10 @@ import TenantPicker from '../components/TenantPicker';
 import CopyableId from '../components/CopyableId';
 import ConfirmModal from '../components/ConfirmModal';
 import JsonViewerModal from '../components/JsonViewerModal';
+import ModalRecordId from '../components/ModalRecordId';
 import RowActions from '../components/RowActions';
-import { formatTime } from '../utils/formatters';
-
-function normalizeError(err) {
-  if (!err) return 'Request failed.';
-  if (err.body) {
-    try {
-      const parsed = JSON.parse(err.body);
-      return parsed.message || parsed.details || err.message;
-    } catch { return err.body; }
-  }
-  return err.message || String(err);
-}
-
-function formatBytes(value) {
-  const n = Number(value || 0);
-  if (n < 1024) return n + ' B';
-  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-  if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
-  return (n / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-}
+import { formatBytes, formatNumber, formatTime } from '../utils/formatters';
+import { normalizeApiError, translateLiteral } from '../utils/i18n';
 
 function pick(obj, camel, pascal, fallback = undefined) {
   if (!obj) return fallback;
@@ -97,6 +81,8 @@ function newImportVersion() {
 }
 
 function ArtifactsView({ apiClient, principal }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const [tenantId, setTenantId] = useState(principal?.tenantId || '');
   const [data, setData] = useState(null);
   const [files, setFiles] = useState([]);
@@ -151,7 +137,7 @@ function ArtifactsView({ apiClient, principal }) {
     setQuotaUsage((current) => ({ ...current, loading: true, error: null }));
     loadArtifactUsage(apiClient, tenantId)
       .then((result) => { if (!cancelled) setQuotaUsage({ loading: false, error: null, ...result }); })
-      .catch((err) => { if (!cancelled) setQuotaUsage((current) => ({ ...current, loading: false, error: normalizeError(err) })); });
+      .catch((err) => { if (!cancelled) setQuotaUsage((current) => ({ ...current, loading: false, error: normalizeApiError(err, t) })); });
     return () => { cancelled = true; };
   }, [apiClient, tenantId, refreshKey, fileRefreshKey]);
 
@@ -208,7 +194,7 @@ function ArtifactsView({ apiClient, principal }) {
         isBinary: !!pick(file, 'isBinary', 'IsBinary', false)
       });
     } catch (err) {
-      setFormError(normalizeError(err));
+      setFormError(normalizeApiError(err, t));
     }
   };
 
@@ -233,7 +219,7 @@ function ArtifactsView({ apiClient, principal }) {
       setEditingArtifact(null);
       refresh();
     } catch (err) {
-      setFormError(normalizeError(err));
+      setFormError(normalizeApiError(err, t));
     }
   };
 
@@ -252,7 +238,7 @@ function ArtifactsView({ apiClient, principal }) {
       setSelectedPath(response.file?.path || editor.path);
       refreshFiles();
     } catch (err) {
-      setFormError(normalizeError(err));
+      setFormError(normalizeApiError(err, t));
     } finally {
       setSaving(false);
     }
@@ -279,7 +265,7 @@ function ArtifactsView({ apiClient, principal }) {
   const importZip = async () => {
     setFormError('');
     try {
-      if (!importForm.file) throw new Error('ZIP file is required.');
+      if (!importForm.file) throw new Error(tl('ZIP file is required.'));
       const sha = importForm.sha256 || await sha256Hex(importForm.file);
       await apiClient.uploadArtifactVersion(tenantId, importing.id, importForm.file, {
         version: importForm.version.trim() || newImportVersion(),
@@ -292,7 +278,7 @@ function ArtifactsView({ apiClient, principal }) {
       refreshFiles();
       refresh();
     } catch (err) {
-      setFormError(normalizeError(err));
+      setFormError(normalizeApiError(err, t));
     }
   };
 
@@ -312,7 +298,7 @@ function ArtifactsView({ apiClient, principal }) {
   const artifactColumns = [
     { key: 'name', label: 'Name', tip: 'Tenant-scoped artifact name' },
     { key: 'id', label: 'Identifier', tip: 'Artifact identifier', render: (a) => <CopyableId value={a.id} /> },
-    { key: 'active', label: 'Active', tip: 'Inactive artifacts are hidden by default', render: (a) => a.active ? 'Yes' : 'No' },
+    { key: 'active', label: 'Active', tip: 'Inactive artifacts are hidden by default', render: (a) => a.active ? t('common.boolean.yes') : t('common.boolean.no') },
     { key: 'updated', label: 'Updated', tip: 'Last update time', render: (a) => formatTime(a.lastUpdateUtc) },
     { key: 'actions', label: '', style: { width: 48 }, render: (a) => (
       <RowActions
@@ -321,17 +307,17 @@ function ArtifactsView({ apiClient, principal }) {
         onViewJson={() => setJsonRow(a)}
         onDelete={() => setConfirmDelete(a)}
         deleteDisabled={!!a.isProtected}
-        extra={[{ label: 'Import ZIP', onClick: () => openImport(a) }]}
+        extra={[{ label: tl('Import ZIP'), onClick: () => openImport(a) }]}
       />
     )}
   ];
 
   const fileColumns = [
-    { key: 'path', label: 'Path', tip: 'Artifact-relative file path', cellClass: 'artifact-file-path-cell', render: (f) => <code className="monospace" title={f.path}>{f.path}</code> },
-    { key: 'byteLength', label: 'Size', tip: 'Decoded byte length', render: (f) => formatBytes(f.byteLength) },
-    { key: 'contentType', label: 'Type', tip: 'Content type', render: (f) => f.contentType || '-' },
-    { key: 'isBinary', label: 'Binary', tip: 'Whether content is stored as base64', render: (f) => f.isBinary ? 'Yes' : 'No' },
-    { key: 'lastUpdateUtc', label: 'Updated', tip: 'Last file update', render: (f) => formatTime(f.lastUpdateUtc) },
+    { key: 'path', label: tl('Path'), tip: tl('Artifact-relative file path'), cellClass: 'artifact-file-path-cell', render: (f) => <code className="monospace" title={f.path}>{f.path}</code> },
+    { key: 'byteLength', label: tl('Size'), tip: tl('Decoded byte length'), render: (f) => formatBytes(f.byteLength) },
+    { key: 'contentType', label: tl('Type'), tip: tl('Content type'), render: (f) => f.contentType || '-' },
+    { key: 'isBinary', label: tl('Binary'), tip: tl('Whether content is stored as base64'), render: (f) => f.isBinary ? t('common.boolean.yes') : t('common.boolean.no') },
+    { key: 'lastUpdateUtc', label: tl('Updated'), tip: tl('Last file update'), render: (f) => formatTime(f.lastUpdateUtc) },
     { key: 'actions', label: '', style: { width: 48 }, render: (f) => (
       <RowActions
         onView={() => selectFile(f.path)}
@@ -349,12 +335,12 @@ function ArtifactsView({ apiClient, principal }) {
   return (
     <div>
       <PageHeader
-        title="Artifacts"
-        subtitle={'Edit artifact files used by artifact-backed steps. Tempo packages the current files into a runnable current snapshot. ' + (data?.totalCount ?? '-') + ' artifacts total.'}
+        title={tl('Artifacts')}
+        subtitle={tl('Edit artifact files used by artifact-backed steps. Tempo packages the current files into a runnable current snapshot. {{count}} artifacts total.', { count: data?.totalCount ?? '-' })}
         actions={
           <>
             <TenantPicker apiClient={apiClient} value={tenantId} onChange={setTenantId} />
-            <button className="button-primary" onClick={() => { setEditingArtifact({ name: '', description: '', active: true }); setFormError(''); }}>+ New artifact</button>
+            <button className="button-primary" onClick={() => { setEditingArtifact({ name: '', description: '', active: true }); setFormError(''); }}>{tl('+ New artifact')}</button>
           </>
         }
       />
@@ -371,12 +357,12 @@ function ArtifactsView({ apiClient, principal }) {
         onPageSizeChange={(s) => { setPageSize(s); setPageNumber(1); }}
         onRefresh={refresh}
         loading={loading}
-        emptyMessage="No artifacts found."
+        emptyMessage={tl('No artifacts found.')}
         onRowClick={selectArtifact}
         leftSlot={
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }} title="Show inactive artifacts">
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }} title={tl('Show inactive artifacts')}>
             <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} style={{ width: 'auto' }} />
-            Include inactive
+            {tl('Include inactive')}
           </label>
         }
       />
@@ -384,22 +370,22 @@ function ArtifactsView({ apiClient, principal }) {
       {selected && (
         <div style={{ marginTop: 'var(--spacing-lg)' }}>
           <PageHeader
-            title={selected.name + ' files'}
-            subtitle={'Edit files for ' + selected.id + '. The current snapshot is what artifact-backed steps run.'}
+            title={tl('{{name}} files', { name: selected.name })}
+            subtitle={tl('Edit files for {{id}}. The current snapshot is what artifact-backed steps run.', { id: selected.id })}
             actions={
               <>
-                <button className="button-secondary" onClick={() => openImport(selected)}>Import ZIP</button>
-                <button className="button-secondary" onClick={downloadCurrent} disabled={!currentVersion}>Download current</button>
-                <button className="button-primary" onClick={startNewFile}>+ New file</button>
+                <button className="button-secondary" onClick={() => openImport(selected)}>{tl('Import ZIP')}</button>
+                <button className="button-secondary" onClick={downloadCurrent} disabled={!currentVersion}>{tl('Download current')}</button>
+                <button className="button-primary" onClick={startNewFile}>{tl('+ New file')}</button>
               </>
             }
           />
 
           {snapshotStatus?.snapshotUpdated && (
-            <div className="callout callout-success">Current snapshot updated: <CopyableId value={snapshotStatus.artifactVersion?.sha256} max={18} />.</div>
+            <div className="callout callout-success">{tl('Current snapshot updated:')} <CopyableId value={snapshotStatus.artifactVersion?.sha256} max={18} />.</div>
           )}
           {snapshotStatus?.snapshotError && (
-            <div className="callout callout-warning">File saved, but the current snapshot was not rebuilt: {snapshotStatus.snapshotError}</div>
+            <div className="callout callout-warning">{tl('File saved, but the current snapshot was not rebuilt:')} {snapshotStatus.snapshotError}</div>
           )}
           {formError && <div className="login-error">{formError}</div>}
 
@@ -415,28 +401,28 @@ function ArtifactsView({ apiClient, principal }) {
                 onPageSizeChange={(s) => { setFilePageSize(s); setFilePageNumber(1); }}
                 onRefresh={refreshFiles}
                 loading={filesLoading}
-                emptyMessage="No files in this artifact."
+                emptyMessage={tl('No files in this artifact.')}
                 onRowClick={(file) => selectFile(file.path)}
               />
             </div>
 
             <div className="artifact-editor-panel">
-              <div className="artifact-editor-title">File editor</div>
-              {!editor && <div className="empty-state">Select a file or create a new one.</div>}
+              <div className="artifact-editor-title">{tl('File editor')}</div>
+              {!editor && <div className="empty-state">{tl('Select a file or create a new one.')}</div>}
               {editor && (
                 <>
                   <div className="form-grid two">
-                    <div className="form-row"><label>Path</label><input value={editor.path} placeholder="handler.js" onChange={(e) => setEditor({ ...editor, path: e.target.value })} /></div>
-                    <div className="form-row"><label>Content type</label><input value={editor.contentType || ''} placeholder="text/plain" onChange={(e) => setEditor({ ...editor, contentType: e.target.value })} /></div>
+                    <div className="form-row"><label>{tl('Path')}</label><input value={editor.path} placeholder="handler.js" onChange={(e) => setEditor({ ...editor, path: e.target.value })} /></div>
+                    <div className="form-row"><label>{tl('Content type')}</label><input value={editor.contentType || ''} placeholder="text/plain" onChange={(e) => setEditor({ ...editor, contentType: e.target.value })} /></div>
                   </div>
-                  <div className="form-row"><label><input type="checkbox" checked={!!editor.isBinary} onChange={(e) => setEditor({ ...editor, isBinary: e.target.checked })} style={{ width: 'auto' }} /> Base64 binary content</label></div>
+                  <div className="form-row"><label><input type="checkbox" checked={!!editor.isBinary} onChange={(e) => setEditor({ ...editor, isBinary: e.target.checked })} style={{ width: 'auto' }} /> {tl('Base64 binary content')}</label></div>
                   <div className="form-row">
-                    <label>{editor.isBinary ? 'Base64 content' : 'Text content'}</label>
+                    <label>{editor.isBinary ? tl('Base64 content') : tl('Text content')}</label>
                     <textarea rows={22} spellCheck={false} value={editor.content || ''} onChange={(e) => setEditor({ ...editor, content: e.target.value })} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--spacing-sm)' }}>
-                    {selectedPath && <button className="button-secondary" onClick={() => setConfirmFileDelete({ path: selectedPath })}>Delete file</button>}
-                    <button className="button-primary" onClick={saveFile} disabled={saving}>{saving ? 'Saving...' : 'Save file'}</button>
+                    {selectedPath && <button className="button-secondary" onClick={() => setConfirmFileDelete({ path: selectedPath })}>{tl('Delete file')}</button>}
+                    <button className="button-primary" onClick={saveFile} disabled={saving}>{saving ? tl('Saving...') : tl('Save file')}</button>
                   </div>
                 </>
               )}
@@ -446,27 +432,39 @@ function ArtifactsView({ apiClient, principal }) {
       )}
 
       {editingArtifact && (
-        <Modal open size="small" onClose={() => setEditingArtifact(null)} title={editingArtifact.id ? 'Edit artifact' : 'Create artifact'}
+        <Modal
+          open
+          size="small"
+          onClose={() => setEditingArtifact(null)}
+          title={editingArtifact.id ? tl('Edit artifact') : tl('Create artifact')}
+          headerMeta={<ModalRecordId label={tl('Artifact ID')} value={editingArtifact.id} />}
           footer={<>
-            <button className="button-secondary" onClick={() => setEditingArtifact(null)}>Cancel</button>
-            <button className="button-primary" onClick={saveArtifact}>Save</button>
-          </>}>
+            <button className="button-secondary" onClick={() => setEditingArtifact(null)}>{t('common.actions.cancel')}</button>
+            <button className="button-primary" onClick={saveArtifact}>{t('common.actions.save')}</button>
+          </>}
+        >
           {formError && <div className="login-error">{formError}</div>}
-          <div className="form-row"><label>Name</label><input value={editingArtifact.name || ''} placeholder="python-order-enricher" onChange={(e) => setEditingArtifact({ ...editingArtifact, name: e.target.value })} /></div>
-          <div className="form-row"><label>Description</label><textarea rows={3} value={editingArtifact.description || ''} onChange={(e) => setEditingArtifact({ ...editingArtifact, description: e.target.value })} /></div>
-          {editingArtifact.id && <div className="form-row"><label><input type="checkbox" checked={editingArtifact.active !== false} onChange={(e) => setEditingArtifact({ ...editingArtifact, active: e.target.checked })} style={{ width: 'auto' }} /> Active</label></div>}
+          <div className="form-row"><label>{tl('Name')}</label><input value={editingArtifact.name || ''} placeholder="python-order-enricher" onChange={(e) => setEditingArtifact({ ...editingArtifact, name: e.target.value })} /></div>
+          <div className="form-row"><label>{tl('Description')}</label><textarea rows={3} value={editingArtifact.description || ''} onChange={(e) => setEditingArtifact({ ...editingArtifact, description: e.target.value })} /></div>
+          {editingArtifact.id && <div className="form-row"><label><input type="checkbox" checked={editingArtifact.active !== false} onChange={(e) => setEditingArtifact({ ...editingArtifact, active: e.target.checked })} style={{ width: 'auto' }} /> {t('common.generic.active')}</label></div>}
         </Modal>
       )}
 
       {importing && (
-        <Modal open size="small" onClose={() => setImporting(null)} title={'Import ZIP into ' + importing.name}
+        <Modal
+          open
+          size="small"
+          onClose={() => setImporting(null)}
+          title={tl('Import ZIP into {{name}}', { name: importing.name })}
+          headerMeta={<ModalRecordId label={tl('Artifact ID')} value={importing.id} />}
           footer={<>
-            <button className="button-secondary" onClick={() => setImporting(null)}>Cancel</button>
-            <button className="button-primary" onClick={importZip}>Import</button>
-          </>}>
+            <button className="button-secondary" onClick={() => setImporting(null)}>{t('common.actions.cancel')}</button>
+            <button className="button-primary" onClick={importZip}>{tl('Import')}</button>
+          </>}
+        >
           {formError && <div className="login-error">{formError}</div>}
-          <div className="callout callout-warning">Importing replaces the editable files for this artifact and rebuilds the current snapshot.</div>
-          <div className="form-row"><label>Archive file</label><input type="file" accept=".zip,application/zip" onChange={async (e) => {
+          <div className="callout callout-warning">{tl('Importing replaces the editable files for this artifact and rebuilds the current snapshot.')}</div>
+          <div className="form-row"><label>{tl('Archive file')}</label><input type="file" accept=".zip,application/zip" onChange={async (e) => {
             const file = e.target.files && e.target.files[0];
             if (!file) return setImportForm({ ...importForm, file: null, sha256: '' });
             setImportForm({ ...importForm, file, sha256: '' });
@@ -475,27 +473,29 @@ function ArtifactsView({ apiClient, principal }) {
               setImportForm((current) => current.file === file ? { ...current, sha256: sha } : current);
             } catch { }
           }} /></div>
-          <div className="form-row"><label>Import version label</label><input value={importForm.version} onChange={(e) => setImportForm({ ...importForm, version: e.target.value })} /></div>
-          {importForm.file && <div className="form-row"><label>SHA-256</label><input value={importForm.sha256 || 'Calculating...'} readOnly /></div>}
+          <div className="form-row"><label>{tl('Import version label')}</label><input value={importForm.version} onChange={(e) => setImportForm({ ...importForm, version: e.target.value })} /></div>
+          {importForm.file && <div className="form-row"><label>{tl('SHA-256')}</label><input value={importForm.sha256 || tl('Calculating...')} readOnly /></div>}
         </Modal>
       )}
 
-      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title="Artifact JSON" />
+      <JsonViewerModal open={!!jsonRow} onClose={() => setJsonRow(null)} value={jsonRow} title={tl('Artifact JSON')} />
       <ConfirmModal
         open={!!confirmDelete}
         danger
-        title="Delete artifact"
-        message={'Delete artifact "' + (confirmDelete?.name || '') + '"? Artifacts referenced by steps cannot be deleted.'}
-        confirmLabel="Delete"
+        title={tl('Delete artifact')}
+        recordId={confirmDelete?.id || ''}
+        recordIdLabel={tl('Artifact ID')}
+        message={tl('Delete artifact "{{name}}"? Artifacts referenced by steps cannot be deleted.', { name: confirmDelete?.name || '' })}
+        confirmLabel={t('common.actions.delete')}
         onConfirm={async () => { await apiClient.deleteArtifact(tenantId, confirmDelete.id); setConfirmDelete(null); setSelected(null); refresh(); }}
         onCancel={() => setConfirmDelete(null)}
       />
       <ConfirmModal
         open={!!confirmFileDelete}
         danger
-        title="Delete artifact file"
-        message={'Delete file "' + (confirmFileDelete?.path || '') + '"? The current snapshot will be rebuilt if the remaining files are runnable.'}
-        confirmLabel="Delete"
+        title={tl('Delete artifact file')}
+        message={tl('Delete file "{{path}}"? The current snapshot will be rebuilt if the remaining files are runnable.', { path: confirmFileDelete?.path || '' })}
+        confirmLabel={t('common.actions.delete')}
         onConfirm={() => deleteSelectedFile(confirmFileDelete.path)}
         onCancel={() => setConfirmFileDelete(null)}
       />
@@ -504,6 +504,8 @@ function ArtifactsView({ apiClient, principal }) {
 }
 
 function ArtifactQuotaTiles({ quotaUsage }) {
+  const { t } = useTranslation();
+  const tl = (value, options) => translateLiteral(t, value, options);
   const usage = quotaUsage.usage || {};
   const settings = quotaUsage.settings || null;
   const retainedBytes = Number(usage.retainedBytes || 0);
@@ -518,25 +520,25 @@ function ArtifactQuotaTiles({ quotaUsage }) {
     <>
       <div className="summary-tiles">
         <div className={'summary-tile ' + quotaClass}>
-          <div className="label">Retained bytes</div>
+          <div className="label">{tl('Retained bytes')}</div>
           <div className="value">{quotaUsage.loading ? '-' : formatBytes(retainedBytes)}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">Tenant quota</div>
-          <div className="value">{quotaUsage.loading ? '-' : tenantQuota > 0 ? formatBytes(tenantQuota) : 'Unavailable'}</div>
+          <div className="label">{tl('Tenant quota')}</div>
+          <div className="value">{quotaUsage.loading ? '-' : tenantQuota > 0 ? formatBytes(tenantQuota) : t('common.generic.notAvailable')}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">Max upload</div>
-          <div className="value">{quotaUsage.loading ? '-' : settings?.maxUploadBytes ? formatBytes(settings.maxUploadBytes) : 'Unavailable'}</div>
+          <div className="label">{tl('Max upload')}</div>
+          <div className="value">{quotaUsage.loading ? '-' : settings?.maxUploadBytes ? formatBytes(settings.maxUploadBytes) : t('common.generic.notAvailable')}</div>
         </div>
         <div className="summary-tile">
-          <div className="label">Snapshots</div>
-          <div className="value">{quotaUsage.loading ? '-' : Number(usage.activeVersions || 0).toLocaleString() + ' active'}</div>
+          <div className="label">{tl('Snapshots')}</div>
+          <div className="value">{quotaUsage.loading ? '-' : tl('{{count}} active snapshots', { count: formatNumber(Number(usage.activeVersions || 0)) })}</div>
         </div>
       </div>
       {!quotaUsage.loading && quotaUsage.settingsError && (
         <div className="callout callout-warning" style={{ marginTop: 'calc(var(--spacing-md) * -1)' }}>
-          Artifact settings are not visible for this session. Usage is estimated from artifact version records.
+          {tl('Artifact settings are not visible for this session. Usage is estimated from artifact version records.')}
         </div>
       )}
       {!quotaUsage.loading && quotaUsage.error && <div className="login-error">{quotaUsage.error}</div>}

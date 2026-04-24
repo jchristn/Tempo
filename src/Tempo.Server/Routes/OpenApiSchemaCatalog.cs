@@ -1,7 +1,9 @@
 namespace Tempo.Server.Routes
 {
     using System.Collections.Generic;
+    using Tempo.Core.Responses;
     using Tempo.Core.Runtime;
+    using Tempo.Core.Workers;
     using WatsonWebserver.Core.OpenApi;
 
     /// <summary>Reusable OpenAPI schema metadata for route bodies that Watson cannot infer from raw context handlers.</summary>
@@ -41,6 +43,46 @@ namespace Tempo.Server.Routes
             schema.Properties["details"] = String("Optional error details.", true);
             schema.Required.Add("code");
             schema.Required.Add("message");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata DataFlowRecord()
+        {
+            OpenApiSchemaMetadata schema = DataFlowShape("Persisted data flow definition.");
+            schema.Properties["id"] = String("Flow identifier.", false);
+            schema.Properties["tenantId"] = String("Tenant identifier.", false);
+            schema.Properties["createdUtc"] = String("Creation timestamp.", false, "date-time");
+            schema.Properties["lastUpdateUtc"] = String("Last update timestamp.", false, "date-time");
+            schema.Required.Add("id");
+            schema.Required.Add("tenantId");
+            schema.Required.Add("createdUtc");
+            schema.Required.Add("lastUpdateUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata DataFlowWriteRequest()
+        {
+            OpenApiSchemaMetadata schema = DataFlowShape("Create or update a data flow.");
+            schema.Example = new
+            {
+                name = "Echo flow",
+                description = "Returns the output from the echo step",
+                startStepId = "example.echo",
+                invocationAuthMode = "Public",
+                maxRuntimeMs = 30000,
+                transitions = new Dictionary<string, object>
+                {
+                    ["example.echo"] = new
+                    {
+                        name = "Echo",
+                        onSuccess = (string?)null,
+                        onFailure = (string?)null,
+                        onException = (string?)null,
+                        maxTransitions = 1
+                    }
+                },
+                active = true
+            };
             return schema;
         }
 
@@ -100,7 +142,7 @@ namespace Tempo.Server.Routes
             schema.Properties["entrypoint"] = String("Manifest entrypoint name.", true);
             schema.Properties["module"] = String("Python module name or JavaScript module path. Defaults from fileName.", true);
             schema.Properties["function"] = String("Python function or JavaScript export to call.", true);
-            schema.Properties["handlerType"] = String("C# handler type implementing Tempo.Protocol.ITempoStepHandler.", true);
+            schema.Properties["handlerType"] = String("C# handler type implementing Tempo.Protocol.ITempoStepHandler or inheriting Tempo.Protocol.TempoStepHandlerBase.", true);
             schema.Properties["contractType"] = ContractTypeSchema();
             schema.Properties["inputSchema"] = String("Optional JSON schema for step input.", true);
             schema.Properties["outputSchema"] = String("Optional JSON schema for step output.", true);
@@ -348,6 +390,328 @@ namespace Tempo.Server.Routes
             schema.Required.Add("pageSize");
             schema.Required.Add("totalCount");
             schema.Required.Add("items");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata WorkerCapability()
+        {
+            OpenApiSchemaMetadata schema = Object("Advertised worker capability.");
+            schema.Properties["executionKey"] = String("Execution key or wildcard capability marker.", false);
+            schema.Properties["tenantScope"] = String("Tenant scope or wildcard.", false);
+            schema.Properties["sourceKind"] = String("Source kind used for placement matching.", false);
+            schema.Properties["runtimeKey"] = String("Runtime provider key or wildcard.", false);
+            schema.Properties["signatureHash"] = String("Capability signature hash or wildcard.", false);
+            schema.Required.Add("executionKey");
+            schema.Required.Add("tenantScope");
+            schema.Required.Add("sourceKind");
+            schema.Required.Add("runtimeKey");
+            schema.Required.Add("signatureHash");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata WorkerSession()
+        {
+            OpenApiSchemaMetadata schema = Object("Latest worker session.");
+            schema.Properties["id"] = String("Worker session identifier.", false);
+            schema.Properties["workerId"] = String("Worker identifier.", false);
+            schema.Properties["connectedUtc"] = String("Session start timestamp.", false, "date-time");
+            schema.Properties["disconnectedUtc"] = String("Session end timestamp, when disconnected.", true, "date-time");
+            schema.Properties["disconnectReason"] = String("Disconnect reason, when known.", true);
+            schema.Properties["protocolVersion"] = String("Worker protocol version.", true);
+            schema.Required.Add("id");
+            schema.Required.Add("workerId");
+            schema.Required.Add("connectedUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata WorkerSummary()
+        {
+            OpenApiSchemaMetadata schema = Object("Worker summary.");
+            schema.Properties["id"] = String("Worker identifier.", false);
+            schema.Properties["name"] = String("Worker display name.", false);
+            schema.Properties["kind"] = String("Worker kind.", false);
+            schema.Properties["state"] = String("Worker state.", false);
+            schema.Properties["enabled"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["drainMode"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["version"] = String("Worker version.", true);
+            schema.Properties["hostName"] = String("Worker host name.", true);
+            schema.Properties["labels"] = OpenApiSchemaMetadata.CreateArray(String("Worker label.", false));
+            schema.Properties["capabilities"] = OpenApiSchemaMetadata.CreateArray(WorkerCapability());
+            schema.Properties["maxConcurrentRuns"] = PositiveInteger("Maximum concurrent runs.");
+            schema.Properties["maxTaskTimeoutMs"] = NonNegativeInteger("Maximum worker-enforced task timeout in milliseconds. Zero means no explicit worker timeout.");
+            schema.Properties["activeAssignmentCount"] = NonNegativeInteger("Current active assignments.");
+            schema.Properties["tokenLastRotatedUtc"] = String("Worker token last-rotated timestamp.", true, "date-time");
+            schema.Properties["lastHeartbeatUtc"] = String("Last observed heartbeat timestamp.", true, "date-time");
+            schema.Properties["createdUtc"] = String("Worker creation timestamp.", false, "date-time");
+            schema.Properties["latestSession"] = WorkerSession();
+            schema.Properties["latestSession"].Nullable = true;
+            schema.Required.Add("id");
+            schema.Required.Add("name");
+            schema.Required.Add("kind");
+            schema.Required.Add("state");
+            schema.Required.Add("enabled");
+            schema.Required.Add("drainMode");
+            schema.Required.Add("labels");
+            schema.Required.Add("capabilities");
+            schema.Required.Add("maxConcurrentRuns");
+            schema.Required.Add("maxTaskTimeoutMs");
+            schema.Required.Add("activeAssignmentCount");
+            schema.Required.Add("createdUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata LogSourceSummary()
+        {
+            OpenApiSchemaMetadata schema = Object("Log source summary.");
+            schema.Properties["sourceKind"] = EnumString("Log source kind.", "server", "worker");
+            schema.Properties["sourceId"] = String("Log source identifier.", false);
+            schema.Properties["displayName"] = String("Human-readable source label.", false);
+            schema.Properties["available"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["hasFiles"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["fileCount"] = NonNegativeInteger("Number of files currently visible.");
+            schema.Properties["enabled"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["active"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["state"] = String("Optional source state, primarily for workers.", true);
+            schema.Properties["hostName"] = String("Optional host name.", true);
+            schema.Properties["lastModifiedUtc"] = String("Latest file-modified timestamp within this source.", true, "date-time");
+            schema.Required.Add("sourceKind");
+            schema.Required.Add("sourceId");
+            schema.Required.Add("displayName");
+            schema.Required.Add("available");
+            schema.Required.Add("hasFiles");
+            schema.Required.Add("fileCount");
+            schema.Required.Add("enabled");
+            schema.Required.Add("active");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata FlowRunSummary()
+        {
+            OpenApiSchemaMetadata schema = Object("Flow run record.");
+            schema.Properties["id"] = String("Run identifier.", false);
+            schema.Properties["tenantId"] = String("Tenant identifier.", false);
+            schema.Properties["dataFlowId"] = String("Flow identifier.", false);
+            schema.Properties["triggeredByUserId"] = String("User identifier that enqueued the run.", true);
+            schema.Properties["triggerId"] = String("Trigger identifier that enqueued the run.", true);
+            schema.Properties["sourceIp"] = String("Client source IP observed at enqueue time.", true);
+            schema.Properties["state"] = EnumString("Run lifecycle state.", "Queued", "Running", "Succeeded", "Failed", "Exception", "Cancelled");
+            schema.Properties["inputData"] = String("Serialized input payload.", true);
+            schema.Properties["outputData"] = String("Serialized output payload.", true);
+            schema.Properties["errorMessage"] = String("Terminal error message when present.", true);
+            schema.Properties["executionSnapshotJson"] = String("Serialized execution snapshot.", true);
+            schema.Properties["dispatchState"] = String("Fine-grained dispatch state.", true);
+            schema.Properties["dispatchAttempt"] = NonNegativeInteger("Dispatch attempt count.");
+            schema.Properties["assignedWorkerId"] = String("Assigned worker identifier.", true);
+            schema.Properties["runAssignmentId"] = String("Current assignment identifier.", true);
+            schema.Properties["queueWaitMs"] = NonNegativeLong("Queue wait in milliseconds.");
+            schema.Properties["assignedUtc"] = String("Assignment timestamp.", true, "date-time");
+            schema.Properties["leaseExpiresUtc"] = String("Lease-expiry timestamp.", true, "date-time");
+            schema.Properties["executionNodeKind"] = EnumString("Execution node kind.", "Server", "Worker");
+            schema.Properties["createdUtc"] = String("Creation timestamp.", false, "date-time");
+            schema.Properties["startedUtc"] = String("Start timestamp.", true, "date-time");
+            schema.Properties["completedUtc"] = String("Completion timestamp.", true, "date-time");
+            schema.Properties["lastUpdateUtc"] = String("Last update timestamp.", false, "date-time");
+            schema.Required.Add("id");
+            schema.Required.Add("tenantId");
+            schema.Required.Add("dataFlowId");
+            schema.Required.Add("state");
+            schema.Required.Add("createdUtc");
+            schema.Required.Add("lastUpdateUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunAssignmentRecord()
+        {
+            OpenApiSchemaMetadata schema = Object("Run assignment attempt.");
+            schema.Properties["id"] = String("Assignment identifier.", false);
+            schema.Properties["flowRunId"] = String("Flow-run identifier.", false);
+            schema.Properties["workerId"] = String("Worker identifier.", false);
+            schema.Properties["workerSessionId"] = String("Worker-session identifier.", true);
+            schema.Properties["attemptNumber"] = NonNegativeInteger("Assignment attempt number.");
+            schema.Properties["state"] = String("Assignment state.", false);
+            schema.Properties["leaseToken"] = String("Assignment lease token.", false);
+            schema.Properties["leaseExpiresUtc"] = String("Lease-expiry timestamp.", false, "date-time");
+            schema.Properties["assignedUtc"] = String("Assignment timestamp.", false, "date-time");
+            schema.Properties["completedUtc"] = String("Completion timestamp.", true, "date-time");
+            schema.Required.Add("id");
+            schema.Required.Add("flowRunId");
+            schema.Required.Add("workerId");
+            schema.Required.Add("attemptNumber");
+            schema.Required.Add("state");
+            schema.Required.Add("leaseToken");
+            schema.Required.Add("leaseExpiresUtc");
+            schema.Required.Add("assignedUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata WorkerActivityRecord()
+        {
+            OpenApiSchemaMetadata schema = Object("Worker activity event.");
+            schema.Properties["id"] = String("Activity identifier.", false);
+            schema.Properties["workerId"] = String("Worker identifier.", false);
+            schema.Properties["workerSessionId"] = String("Worker-session identifier.", true);
+            schema.Properties["flowRunId"] = String("Flow-run identifier when present.", true);
+            schema.Properties["runAssignmentId"] = String("Run-assignment identifier when present.", true);
+            schema.Properties["eventType"] = String("Activity event type.", false);
+            schema.Properties["severity"] = String("Severity label.", true);
+            schema.Properties["message"] = String("Human-readable message.", true);
+            schema.Properties["payloadJson"] = String("Optional structured payload JSON.", true);
+            schema.Properties["createdUtc"] = String("Creation timestamp.", false, "date-time");
+            schema.Required.Add("id");
+            schema.Required.Add("workerId");
+            schema.Required.Add("eventType");
+            schema.Required.Add("createdUtc");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunActivityResponse()
+        {
+            OpenApiSchemaMetadata schema = Object("Flow run plus assignment and worker activity history.");
+            schema.Properties["run"] = FlowRunSummary();
+            schema.Properties["assignments"] = OpenApiSchemaMetadata.CreateArray(RunAssignmentRecord());
+            schema.Properties["activity"] = OpenApiSchemaMetadata.CreateArray(WorkerActivityRecord());
+            schema.Required.Add("run");
+            schema.Required.Add("assignments");
+            schema.Required.Add("activity");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunLogFileSummary()
+        {
+            OpenApiSchemaMetadata schema = Object("Run-log file summary.");
+            schema.Properties["flowRunId"] = String("Flow-run identifier.", false);
+            schema.Properties["path"] = String("Path relative to the run directory.", false);
+            schema.Properties["fileName"] = String("Simple file name.", false);
+            schema.Properties["kind"] = EnumString("Run-log file kind.", "Run", "Worker", "Host", "Step", "StepStderr");
+            schema.Properties["attemptNumber"] = NonNegativeInteger("Assignment attempt number.");
+            schema.Properties["runAssignmentId"] = String("Run-assignment identifier.", true);
+            schema.Properties["workerId"] = String("Worker identifier.", true);
+            schema.Properties["stepId"] = String("Step identifier.", true);
+            schema.Properties["stepRunId"] = String("Step-run identifier.", true);
+            schema.Properties["byteLength"] = NonNegativeLong("Total file size in bytes.");
+            schema.Properties["lastModifiedUtc"] = String("Last file-modified timestamp.", false, "date-time");
+            schema.Properties["active"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["deleteAllowed"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["downloadAllowed"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["deleteMode"] = EnumString("Delete behavior for this file.", "Delete", "Truncate");
+            schema.Required.Add("flowRunId");
+            schema.Required.Add("path");
+            schema.Required.Add("fileName");
+            schema.Required.Add("kind");
+            schema.Required.Add("byteLength");
+            schema.Required.Add("lastModifiedUtc");
+            schema.Required.Add("active");
+            schema.Required.Add("deleteAllowed");
+            schema.Required.Add("downloadAllowed");
+            schema.Required.Add("deleteMode");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunLogFileRead()
+        {
+            OpenApiSchemaMetadata schema = RunLogFileSummary();
+            schema.Description = "Bounded run-log file read response.";
+            schema.Properties["contentType"] = String("Returned content type.", false);
+            schema.Properties["content"] = String("Returned text content.", false);
+            schema.Properties["truncated"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["tailLines"] = PositiveInteger("Tail line count applied to this read.");
+            schema.Properties["maxBytes"] = NonNegativeLong("Maximum bytes allowed for this read.");
+            schema.Properties["returnedByteLength"] = NonNegativeLong("UTF-8 byte count returned in content.");
+            schema.Required.Add("contentType");
+            schema.Required.Add("content");
+            schema.Required.Add("truncated");
+            schema.Required.Add("tailLines");
+            schema.Required.Add("maxBytes");
+            schema.Required.Add("returnedByteLength");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata RunLogDelete()
+        {
+            OpenApiSchemaMetadata schema = Object("Run-log file delete or truncate result.");
+            schema.Properties["flowRunId"] = String("Flow-run identifier.", false);
+            schema.Properties["path"] = String("Path relative to the run directory.", false);
+            schema.Properties["action"] = EnumString("Mutation applied to the file.", "Deleted", "Truncated");
+            schema.Properties["success"] = OpenApiSchemaMetadata.Boolean();
+            schema.Required.Add("flowRunId");
+            schema.Required.Add("path");
+            schema.Required.Add("action");
+            schema.Required.Add("success");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata LogFileSummary()
+        {
+            OpenApiSchemaMetadata schema = Object("Log file summary.");
+            schema.Properties["sourceKind"] = EnumString("Log source kind.", "server", "worker");
+            schema.Properties["sourceId"] = String("Log source identifier.", false);
+            schema.Properties["path"] = String("Path relative to the source root.", false);
+            schema.Properties["fileName"] = String("Simple file name.", false);
+            schema.Properties["byteLength"] = NonNegativeLong("Total file byte length.");
+            schema.Properties["lastModifiedUtc"] = String("Last file-modified timestamp.", false, "date-time");
+            schema.Properties["isCurrent"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["sourceActive"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["deleteAllowed"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["downloadAllowed"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["deleteMode"] = EnumString("Delete behavior for this file.", "Delete", "Truncate");
+            schema.Required.Add("sourceKind");
+            schema.Required.Add("sourceId");
+            schema.Required.Add("path");
+            schema.Required.Add("fileName");
+            schema.Required.Add("byteLength");
+            schema.Required.Add("lastModifiedUtc");
+            schema.Required.Add("isCurrent");
+            schema.Required.Add("sourceActive");
+            schema.Required.Add("deleteAllowed");
+            schema.Required.Add("downloadAllowed");
+            schema.Required.Add("deleteMode");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata LogFileRead()
+        {
+            OpenApiSchemaMetadata schema = LogFileSummary();
+            schema.Description = "Bounded log file read response.";
+            schema.Properties["contentType"] = String("Returned content type.", false);
+            schema.Properties["content"] = String("Returned text content.", false);
+            schema.Properties["truncated"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["tailLines"] = PositiveInteger("Tail line count applied to this read.");
+            schema.Properties["maxBytes"] = NonNegativeLong("Maximum bytes allowed for this read.");
+            schema.Properties["returnedByteLength"] = NonNegativeLong("UTF-8 byte count returned in content.");
+            schema.Required.Add("contentType");
+            schema.Required.Add("content");
+            schema.Required.Add("truncated");
+            schema.Required.Add("tailLines");
+            schema.Required.Add("maxBytes");
+            schema.Required.Add("returnedByteLength");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata LogFileDelete()
+        {
+            OpenApiSchemaMetadata schema = Object("Log file delete or truncate result.");
+            schema.Properties["sourceKind"] = EnumString("Log source kind.", "server", "worker");
+            schema.Properties["sourceId"] = String("Log source identifier.", false);
+            schema.Properties["path"] = String("Path relative to the source root.", false);
+            schema.Properties["action"] = EnumString("Mutation applied to the file.", "Deleted", "Truncated");
+            schema.Properties["success"] = OpenApiSchemaMetadata.Boolean();
+            schema.Required.Add("sourceKind");
+            schema.Required.Add("sourceId");
+            schema.Required.Add("path");
+            schema.Required.Add("action");
+            schema.Required.Add("success");
+            return schema;
+        }
+
+        public static OpenApiSchemaMetadata WorkerTokenIssueResult()
+        {
+            OpenApiSchemaMetadata schema = Object("Issued worker token.");
+            schema.Properties["workerId"] = String("Worker identifier.", false);
+            schema.Properties["token"] = String("Plaintext worker token. Store it immediately; only the hash is persisted.", false);
+            schema.Properties["issuedUtc"] = String("Issue timestamp.", false, "date-time");
+            schema.Required.Add("workerId");
+            schema.Required.Add("token");
+            schema.Required.Add("issuedUtc");
             return schema;
         }
 
@@ -717,6 +1081,25 @@ namespace Tempo.Server.Routes
         private static OpenApiSchemaMetadata RuntimeKeyLiteral(RuntimeKey key)
         {
             return EnumString("Runtime discriminator value.", key.ToString());
+        }
+
+        private static OpenApiSchemaMetadata DataFlowShape(string description)
+        {
+            OpenApiSchemaMetadata schema = Object(description);
+            schema.Properties["name"] = String("Display name.", false);
+            schema.Properties["description"] = String("Optional description.", true);
+            schema.Properties["triggerId"] = String("Optional associated trigger identifier.", true);
+            schema.Properties["startStepId"] = String("First execution key in the transition graph.", false);
+            schema.Properties["routingHintLabel"] = String("Optional worker-placement label for label-pinned scheduling.", true);
+            schema.Properties["invocationAuthMode"] = EnumString("HTTP trigger invocation authentication policy.", "Public", "ApiAuthenticated");
+            schema.Properties["maxRuntimeMs"] = NonNegativeInteger("Maximum flow runtime in milliseconds. Zero means no timeout.");
+            schema.Properties["transitions"] = Object("Transition map keyed by step execution key.");
+            schema.Properties["active"] = OpenApiSchemaMetadata.Boolean();
+            schema.Properties["isProtected"] = OpenApiSchemaMetadata.Boolean();
+            schema.Required.Add("name");
+            schema.Required.Add("startStepId");
+            schema.Required.Add("transitions");
+            return schema;
         }
 
         private static OpenApiSchemaMetadata StringArray(string itemDescription)

@@ -54,6 +54,7 @@ namespace Tempo.Core.Runtime
                 VersionId = version.Id,
                 Version = version.Version,
                 Sha256 = version.Sha256,
+                ManifestJson = version.ManifestJson,
                 ManifestEntrypoint = entrypoint
             };
             snapshot.ArtifactVersions[key] = resolved;

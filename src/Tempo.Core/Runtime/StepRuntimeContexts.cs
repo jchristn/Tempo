@@ -16,7 +16,15 @@ namespace Tempo.Core.Runtime
     {
         public string TenantId { get; set; } = string.Empty;
         public string ExecutionKey { get; set; } = string.Empty;
+        public string FlowRunId { get; set; } = string.Empty;
+        public string StepRunId { get; set; } = string.Empty;
+        public string? RunAssignmentId { get; set; } = null;
+        public string? WorkerId { get; set; } = null;
+        public int AttemptNumber { get; set; } = 0;
+        public int StepSequence { get; set; } = 0;
         public FlowRunExecutionSnapshot Snapshot { get; set; } = new FlowRunExecutionSnapshot();
+        public RunLogSession? RunLogSession { get; set; } = null;
+        public RunLogStepScope? RunLogStep { get; set; } = null;
     }
 
     /// <summary>Resolved step execution metadata.</summary>
@@ -46,6 +54,7 @@ namespace Tempo.Core.Runtime
         public string VersionId { get; set; } = string.Empty;
         public string Version { get; set; } = string.Empty;
         public string Sha256 { get; set; } = string.Empty;
+        public string? ManifestJson { get; set; } = null;
         public string? ManifestEntrypoint { get; set; } = null;
     }
 }

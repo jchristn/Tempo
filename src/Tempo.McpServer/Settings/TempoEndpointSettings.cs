@@ -23,7 +23,7 @@ namespace Tempo.McpServer.Settings
         /// <summary>Tempo x-access-key value.</summary>
         public string? AccessKey { get; set; } = null;
 
-        /// <summary>Tempo x-secret-key value.</summary>
+        /// <summary>Legacy unsupported setting retained for config compatibility. Ignored by the client.</summary>
         public string? SecretKey { get; set; } = null;
     }
 }

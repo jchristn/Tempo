@@ -31,9 +31,6 @@ namespace Tempo.Core.Database.Interfaces
         /// <summary>Enumerate flow runs.</summary>
         Task<EnumerationResult<FlowRun>> EnumerateAsync(FlowRunFilter filter, CancellationToken token = default);
 
-        /// <summary>Pop the next queued run for execution (sets state to Running).</summary>
-        Task<FlowRun?> ClaimNextQueuedAsync(CancellationToken token = default);
-
         /// <summary>Record a step run.</summary>
         Task<StepRun> CreateStepRunAsync(StepRun run, CancellationToken token = default);
 

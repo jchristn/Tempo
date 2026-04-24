@@ -38,8 +38,11 @@ namespace Tempo.Core.Security
         /// <summary>User identifier, if any.</summary>
         public string? UserId { get; set; } = null;
 
-        /// <summary>Credential identifier, if authentication used an access/secret key pair.</summary>
+        /// <summary>Credential identifier, if authentication used a credential access key.</summary>
         public string? CredentialId { get; set; } = null;
+
+        /// <summary>Whether the request supplied the unsupported <c>x-secret-key</c> header.</summary>
+        public bool ContainsUnsupportedSecretKeyHeader { get; set; } = false;
 
         /// <summary>Whether the principal is a global administrator (admins table or user IsAdmin flag).</summary>
         public bool IsAdmin { get; set; } = false;

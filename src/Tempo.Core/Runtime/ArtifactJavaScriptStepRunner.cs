@@ -25,8 +25,10 @@ namespace Tempo.Core.Runtime
             IEnumerable<string> environmentReferences,
             ExternalExecutionSettings settings,
             ExternalRuntimeCapacityManager capacity,
+            RunLogSession? runLogs = null,
+            RunLogStepScope? runLogStep = null,
             int maxRuntimeMs = 0)
-            : base(tenantId, artifact, artifactRoot, entrypoint, ".", arguments, environmentReferences, settings, capacity, maxRuntimeMs)
+            : base(tenantId, artifact, artifactRoot, entrypoint, ".", arguments, environmentReferences, settings, capacity, runLogs, runLogStep, maxRuntimeMs)
         {
             _NodeExecutable = string.IsNullOrWhiteSpace(nodeExecutable) ? "node" : nodeExecutable;
             _Module = module;
@@ -68,6 +70,47 @@ namespace Tempo.Core.Runtime
 const fs = require("fs");
 const path = require("path");
 const { pathToFileURL } = require("url");
+
+function logWriter() {
+  const file = process.env.TEMPO_RUN_LOG_FILE;
+  if (!file) return null;
+  return (level, args) => {
+    const text = Array.isArray(args) ? args.map(value => {
+      if (typeof value === "string") return value;
+      try { return JSON.stringify(value); } catch { return String(value); }
+    }).join(" ") : String(args);
+    if (!text) return;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const normalized = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    for (const line of normalized.split("\n")) {
+      if (!line) continue;
+      fs.appendFileSync(file, new Date().toISOString() + " [" + level + "] " + line + "\n", "utf8");
+    }
+  };
+}
+
+function configureLogging() {
+  const writer = logWriter();
+  if (!writer) return;
+
+  const map = {
+    log: "INFO",
+    info: "INFO",
+    warn: "WARN",
+    error: "ERROR",
+    debug: "DEBUG"
+  };
+
+  for (const [name, level] of Object.entries(map)) {
+    console[name] = (...args) => writer(level, args);
+  }
+
+  process.stderr.write = (chunk, encoding, callback) => {
+    writer("STDERR", [typeof chunk === "string" ? chunk : Buffer.from(chunk).toString(typeof encoding === "string" ? encoding : "utf8")]);
+    if (typeof callback === "function") callback();
+    return true;
+  };
+}
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -121,6 +164,7 @@ async function loadModule(modulePath) {
 async function main() {
   const moduleName = process.argv[2];
   const functionName = process.argv[3] || "run";
+  configureLogging();
   const raw = await readStdin();
   const req = JSON.parse(raw || "{}");
   try {
