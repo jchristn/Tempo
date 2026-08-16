@@ -5,11 +5,12 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <NoWarn>1591;CS8618</NoWarn>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Tempo.Core\Tempo.Core.csproj" />
+    <ProjectReference Include="..\Tempo.McpServer\Tempo.McpServer.csproj" />
     <ProjectReference Include="..\Tempo.Server\Tempo.Server.csproj" />
     <ProjectReference Include="..\Tempo.Worker\Tempo.Worker.csproj" />
     <ProjectReference Include="..\Test.ArtifactFixture\Test.ArtifactFixture.csproj" ReferenceOutputAssembly="false" />
@@ -18,6 +19,8 @@
 
   <ItemGroup>
     <PackageReference Include="Touchstone.Core" Version="0.1.12" />
+    <!-- Direct reference so the Voltaic assemblies flow to the test output; Tempo.McpServer is an Exe project and does not propagate its package dependencies transitively. -->
+    <PackageReference Include="Voltaic" Version="0.6.0" />
   </ItemGroup>
 
   <ItemGroup>

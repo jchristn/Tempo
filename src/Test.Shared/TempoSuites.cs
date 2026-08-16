@@ -42,7 +42,8 @@ namespace Test.Shared
                     DeletionProtectionSuite.Build(),
                     LogManagementSuite.Build(),
                     RequestHistorySuite.Build(),
-                    HydrationSuite.Build()
+                    HydrationSuite.Build(),
+                    McpToolRegistrarSuite.Build()
                 };
             }
         }

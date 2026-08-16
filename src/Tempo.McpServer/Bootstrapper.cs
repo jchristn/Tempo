@@ -8,7 +8,7 @@ namespace Tempo.McpServer
     using Tempo.McpServer.Services;
     using Tempo.McpServer.Settings;
     using Tempo.McpServer.Tools;
-    using Voltaic;
+    using Voltaic.Mcp;
 
     /// <summary>
     /// Composition root for the Tempo MCP server.

@@ -9,7 +9,7 @@
     <NoWarn>1591;CS8618</NoWarn>
     <AssemblyName>Tempo.Worker</AssemblyName>
     <RootNamespace>Tempo.Worker</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

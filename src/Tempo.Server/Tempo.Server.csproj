@@ -9,11 +9,11 @@
     <NoWarn>1591;CS8618</NoWarn>
     <AssemblyName>Tempo.Server</AssemblyName>
     <RootNamespace>Tempo.Server</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Watson" Version="7.0.12" />
+    <PackageReference Include="Watson" Version="7.1.0" />
   </ItemGroup>
 
   <ItemGroup>

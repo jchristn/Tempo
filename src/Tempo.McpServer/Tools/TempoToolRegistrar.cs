@@ -8,7 +8,8 @@ namespace Tempo.McpServer.Tools
     using System.Threading;
     using System.Threading.Tasks;
     using Tempo.McpServer.Services;
-    using Voltaic;
+    using Voltaic.Core;
+    using Voltaic.Mcp;
 
     /// <summary>
     /// Registers Tempo tools on Voltaic MCP transports.
@@ -23,7 +24,7 @@ namespace Tempo.McpServer.Tools
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, args => Invoke(tool, args));
+                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, args => Invoke(tool, ToJsonElement(args)));
             }
         }
 
@@ -35,7 +36,7 @@ namespace Tempo.McpServer.Tools
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterMethod(tool.Name, args => Invoke(tool, args));
+                server.RegisterMethod(tool.Name, args => Invoke(tool, ToJsonElement(args)));
             }
         }
 
@@ -47,13 +48,20 @@ namespace Tempo.McpServer.Tools
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterMethod(tool.Name, args => Invoke(tool, args));
+                server.RegisterMethod(tool.Name, args => Invoke(tool, ToJsonElement(args)));
             }
         }
 
         private static object Invoke(TempoToolDefinition tool, JsonElement? args)
         {
             return tool.Handler(args, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        internal static JsonElement? ToJsonElement(RpcParameters? args)
+        {
+            if (args == null || !args.HasValue || string.IsNullOrWhiteSpace(args.RawJson)) return null;
+            using JsonDocument document = JsonDocument.Parse(args.RawJson);
+            return document.RootElement.Clone();
         }
 
         private static IReadOnlyList<TempoToolDefinition> CreateDefinitions(TempoApiClient client)

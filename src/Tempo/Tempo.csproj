@@ -15,11 +15,11 @@
     <ApplicationIcon>logo.ico</ApplicationIcon>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <DocumentationFile>Tempo.xml</DocumentationFile>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <PackageIcon>logo.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>data flow dataflow orchestrate orchestrator step lambda faas airflow</PackageTags>
-    <PackageReleaseNotes>Server, dashboard, RBAC, four-provider database, drag-and-drop flow editor.</PackageReleaseNotes>
+    <PackageReleaseNotes>Dependency refresh: Npgsql 10, Microsoft.Data.SqlClient 7, Microsoft.Data.Sqlite 10.0.11 (resolves SQLitePCLRaw advisory GHSA-2m69-gcr7-jv3q), MySqlConnector 2.6.2, RestWrapper 3.2.0, SyslogLogging 2.2.1, Watson 7.1.0.</PackageReleaseNotes>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     <IncludeSymbols>True</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
@@ -30,11 +30,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
-    <PackageReference Include="Padlock" Version="1.0.0" />
-    <PackageReference Include="PrettyId" Version="2.0.0" />
-    <PackageReference Include="RestWrapper" Version="3.1.8" />
-    <PackageReference Include="SyslogLogging" Version="2.0.11" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Padlock" Version="1.0.4" />
+    <PackageReference Include="PrettyId" Version="2.0.1" />
+    <PackageReference Include="RestWrapper" Version="3.2.0" />
+    <PackageReference Include="SyslogLogging" Version="2.2.1" />
   </ItemGroup>
 
   <ItemGroup>
