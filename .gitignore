@@ -342,4 +342,10 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+
+# Tempo runtime logs
+run-logs/
+
+# i18n resource generator cache
+dashboard/scripts/.generatedResources.cache.json
  
