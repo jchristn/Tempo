@@ -184,6 +184,7 @@ const en = {
     version: 'Tempo version {{version}}',
     toggleSidebar: 'Toggle sidebar',
     github: 'View Tempo on GitHub',
+    discord: 'Join the Tempo Discord',
     authenticatedPrincipal: 'Authenticated principal',
     serverAt: 'Tempo server at {{serverUrl}}'
   },
@@ -402,7 +403,8 @@ const localeOverrides = {
       setupWizard: 'Asistente de configuración',
       openSetupWizard: 'Abrir asistente de configuración',
       toggleSidebar: 'Mostrar u ocultar barra lateral',
-      github: 'Ver Tempo en GitHub'
+      github: 'Ver Tempo en GitHub',
+      discord: 'Únete al Discord de Tempo'
     },
     login: {
       subtitle: 'Orquestación de flujos de datos',
@@ -487,7 +489,8 @@ const localeOverrides = {
       setupWizard: '设置向导',
       openSetupWizard: '打开设置向导',
       toggleSidebar: '切换侧边栏',
-      github: '在 GitHub 上查看 Tempo'
+      github: '在 GitHub 上查看 Tempo',
+      discord: '加入 Tempo Discord'
     },
     login: {
       subtitle: '数据流编排',

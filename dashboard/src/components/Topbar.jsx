@@ -1,9 +1,10 @@
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './LanguageSelector';
-import { GithubIcon, LogoutIcon, MenuIcon, MoonIcon, SunIcon } from './Icons';
+import { DiscordIcon, GithubIcon, LogoutIcon, MenuIcon, MoonIcon, SunIcon } from './Icons';
 
 const GITHUB_URL = 'https://github.com/jchristn/tempo';
+const DISCORD_URL = 'https://discord.gg/tRAN8HgvK5';
 const GITHUB_SIZE = 26;
 const ICON_SIZE = 36;
 
@@ -34,6 +35,9 @@ function Topbar({ theme, onToggleTheme, onToggleSidebar, onLogout, principal }) 
           </button>
           <a className="topbar-icon-button" href={GITHUB_URL} target="_blank" rel="noopener noreferrer" title={t('navigation.github')} aria-label={t('navigation.github')}>
             <GithubIcon size={GITHUB_SIZE} />
+          </a>
+          <a className="topbar-icon-button" href={DISCORD_URL} target="_blank" rel="noopener noreferrer" title={t('navigation.discord')} aria-label={t('navigation.discord')}>
+            <DiscordIcon size={GITHUB_SIZE} />
           </a>
           <button
             className="topbar-icon-button"
