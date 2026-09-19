@@ -19,15 +19,25 @@ namespace Tempo.Core.Services
     /// <summary>Ensures a fresh tenant has one representative step for each startup runtime type.</summary>
     public class DefaultRuntimeStepSeeder
     {
+        /// <summary>Execution key for the Builtin.Class sample step.</summary>
         public const string BuiltinClassExecutionKey = "tempo.sample.builtin.class";
+        /// <summary>Execution key for the Builtin.Method sample step.</summary>
         public const string BuiltinMethodExecutionKey = "tempo.sample.builtin.method";
+        /// <summary>Execution key for the Builtin.Unknown compatibility sample step.</summary>
         public const string BuiltinUnknownExecutionKey = "tempo.sample.builtin.unknown";
+        /// <summary>Execution key for the External.Rest sample step.</summary>
         public const string ExternalRestExecutionKey = "tempo.sample.external.rest";
+        /// <summary>Execution key for the Legacy.InlineRest compatibility sample step.</summary>
         public const string LegacyInlineRestExecutionKey = "tempo.sample.legacy.inline_rest";
+        /// <summary>Execution key for the Artifact.Process sample step.</summary>
         public const string ArtifactProcessExecutionKey = "tempo.sample.artifact.process";
+        /// <summary>Execution key for the Artifact.Python sample step.</summary>
         public const string ArtifactPythonExecutionKey = "tempo.sample.artifact.python";
+        /// <summary>Execution key for the Artifact.JavaScript sample step.</summary>
         public const string ArtifactJavaScriptExecutionKey = "tempo.sample.artifact.javascript";
+        /// <summary>Execution key for the Artifact.DotnetProcess sample step.</summary>
         public const string ArtifactDotnetProcessExecutionKey = "tempo.sample.artifact.dotnet_process";
+        /// <summary>Execution key for the Host.Executable sample step.</summary>
         public const string HostExecutableExecutionKey = "tempo.sample.host.executable";
 
         private readonly DatabaseDriverBase _Database;

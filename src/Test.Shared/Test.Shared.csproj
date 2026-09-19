@@ -3,9 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <NoWarn>1591;CS8618</NoWarn>
-    <Version>0.4.0</Version>
+    <Nullable>enable</Nullable>    <Version>0.4.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

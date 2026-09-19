@@ -768,12 +768,25 @@ namespace Tempo.Core.Runtime
     /// </summary>
     public sealed class RunLogSessionContext
     {
+        /// <summary>Flow run identifier. Default: empty string.</summary>
         public string FlowRunId { get; set; } = string.Empty;
+
+        /// <summary>Tenant identifier. Default: empty string.</summary>
         public string TenantId { get; set; } = string.Empty;
+
+        /// <summary>Data flow identifier. Default: empty string.</summary>
         public string DataFlowId { get; set; } = string.Empty;
+
+        /// <summary>Attempt number for this run assignment. Default: 0.</summary>
         public int AttemptNumber { get; set; } = 0;
+
+        /// <summary>Optional run assignment identifier. Default: null.</summary>
         public string? RunAssignmentId { get; set; } = null;
+
+        /// <summary>Optional worker identifier. Default: null.</summary>
         public string? WorkerId { get; set; } = null;
+
+        /// <summary>Optional node kind. Default: null.</summary>
         public string? NodeKind { get; set; } = null;
     }
 
@@ -782,12 +795,25 @@ namespace Tempo.Core.Runtime
     /// </summary>
     public sealed class RunLogStepScope
     {
+        /// <summary>Sequence number of the step within the attempt. Default: 0.</summary>
         public int Sequence { get; set; } = 0;
+
+        /// <summary>Step identifier. Default: empty string.</summary>
         public string StepId { get; set; } = string.Empty;
+
+        /// <summary>Step run identifier. Default: empty string.</summary>
         public string StepRunId { get; set; } = string.Empty;
+
+        /// <summary>Absolute path to the step log file. Default: empty string.</summary>
         public string LogPath { get; set; } = string.Empty;
+
+        /// <summary>Path to the step log file relative to the run directory. Default: empty string.</summary>
         public string RelativeLogPath { get; set; } = string.Empty;
+
+        /// <summary>Absolute path to the step stderr log file. Default: empty string.</summary>
         public string StderrPath { get; set; } = string.Empty;
+
+        /// <summary>Path to the step stderr log file relative to the run directory. Default: empty string.</summary>
         public string RelativeStderrPath { get; set; } = string.Empty;
     }
 }

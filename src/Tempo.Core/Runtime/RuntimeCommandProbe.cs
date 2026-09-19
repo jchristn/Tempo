@@ -13,24 +13,40 @@ namespace Tempo.Core.Runtime
         private const int DefaultTimeoutMs = 3000;
         private static readonly ConcurrentDictionary<string, RuntimeCommandProbeResult> _Cache = new ConcurrentDictionary<string, RuntimeCommandProbeResult>(StringComparer.Ordinal);
 
+        /// <summary>Probes availability of the configured Python executable.</summary>
+        /// <param name="settings">External execution settings supplying the Python executable path.</param>
+        /// <returns>The probe result describing availability.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
         public static RuntimeCommandProbeResult ProbePython(ExternalExecutionSettings settings)
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             return Probe(settings.PythonExecutable, new[] { "--version" }, "Python");
         }
 
+        /// <summary>Probes availability of the configured Node.js executable.</summary>
+        /// <param name="settings">External execution settings supplying the Node.js executable path.</param>
+        /// <returns>The probe result describing availability.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
         public static RuntimeCommandProbeResult ProbeNode(ExternalExecutionSettings settings)
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             return Probe(settings.NodeExecutable, new[] { "--version" }, "Node.js");
         }
 
+        /// <summary>Probes availability of the configured .NET runtime executable.</summary>
+        /// <param name="settings">External execution settings supplying the dotnet executable path.</param>
+        /// <returns>The probe result describing availability.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
         public static RuntimeCommandProbeResult ProbeDotnetRuntime(ExternalExecutionSettings settings)
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             return Probe(settings.DotnetExecutable, new[] { "--info" }, ".NET");
         }
 
+        /// <summary>Probes availability of the .NET SDK and verifies at least one SDK is installed.</summary>
+        /// <param name="settings">External execution settings supplying the dotnet executable path.</param>
+        /// <returns>The probe result describing availability, marked missing when no SDKs are reported.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
         public static RuntimeCommandProbeResult ProbeDotnetSdk(ExternalExecutionSettings settings)
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
@@ -44,6 +60,11 @@ namespace Tempo.Core.Runtime
             return result;
         }
 
+        /// <summary>Probes availability of an arbitrary executable, caching the result by command and arguments.</summary>
+        /// <param name="executable">Executable path or command to run.</param>
+        /// <param name="arguments">Arguments passed to the executable.</param>
+        /// <param name="displayName">Human-readable name used in result messages.</param>
+        /// <returns>The probe result describing availability.</returns>
         public static RuntimeCommandProbeResult Probe(string executable, string[] arguments, string displayName)
         {
             if (string.IsNullOrWhiteSpace(executable)) return RuntimeCommandProbeResult.Missing(executable, displayName + " executable is not configured.");
@@ -96,11 +117,19 @@ namespace Tempo.Core.Runtime
     /// <summary>Result from probing a host runtime command.</summary>
     public sealed class RuntimeCommandProbeResult
     {
+        /// <summary>True when the probed command is available.</summary>
         public bool Available { get; private set; }
+        /// <summary>The command that was probed. Default: empty.</summary>
         public string Command { get; private set; } = string.Empty;
+        /// <summary>Human-readable message describing the outcome. Default: empty.</summary>
         public string Message { get; private set; } = string.Empty;
+        /// <summary>Captured command output. Default: empty.</summary>
         public string Output { get; private set; } = string.Empty;
 
+        /// <summary>Creates a result indicating the command was found and available.</summary>
+        /// <param name="command">The command that was probed.</param>
+        /// <param name="output">Captured command output.</param>
+        /// <returns>An available probe result.</returns>
         public static RuntimeCommandProbeResult Found(string command, string output)
         {
             return new RuntimeCommandProbeResult
@@ -112,6 +141,10 @@ namespace Tempo.Core.Runtime
             };
         }
 
+        /// <summary>Creates a result indicating the command was unavailable.</summary>
+        /// <param name="command">The command that was probed, if known.</param>
+        /// <param name="message">Message describing why the command is unavailable.</param>
+        /// <returns>An unavailable probe result.</returns>
         public static RuntimeCommandProbeResult Missing(string? command, string message)
         {
             return new RuntimeCommandProbeResult

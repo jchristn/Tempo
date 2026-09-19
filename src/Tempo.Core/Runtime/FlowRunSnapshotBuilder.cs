@@ -9,6 +9,15 @@ namespace Tempo.Core.Runtime
     /// <summary>Builds run-start snapshots for artifact-backed steps.</summary>
     public static class FlowRunSnapshotBuilder
     {
+        /// <summary>
+        /// Builds a run-start execution snapshot by resolving artifact versions for every artifact-backed step in the flow.
+        /// </summary>
+        /// <param name="database">The database driver used to read steps and artifact versions. Cannot be null.</param>
+        /// <param name="run">The flow run to build the snapshot for. Cannot be null.</param>
+        /// <param name="flow">The data flow whose transitions are inspected. Cannot be null.</param>
+        /// <param name="token">A token to observe for cancellation.</param>
+        /// <returns>The populated flow-run execution snapshot.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="database"/>, <paramref name="run"/>, or <paramref name="flow"/> is null.</exception>
         public static async Task<FlowRunExecutionSnapshot> BuildAsync(DatabaseDriverBase database, FlowRun run, DataFlowRecord flow, CancellationToken token = default)
         {
             if (database == null) throw new ArgumentNullException(nameof(database));

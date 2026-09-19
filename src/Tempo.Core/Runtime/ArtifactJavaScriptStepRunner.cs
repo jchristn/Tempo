@@ -13,6 +13,23 @@ namespace Tempo.Core.Runtime
         private readonly string _Module;
         private readonly string _Function;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ArtifactJavaScriptStepRunner"/> class.
+        /// </summary>
+        /// <param name="tenantId">The tenant identifier that owns the execution.</param>
+        /// <param name="artifact">The resolved artifact version snapshot to execute.</param>
+        /// <param name="artifactRoot">The extracted artifact root directory.</param>
+        /// <param name="entrypoint">The manifest entrypoint name.</param>
+        /// <param name="nodeExecutable">The Node.js executable to invoke. Defaults to "node" when null or whitespace.</param>
+        /// <param name="module">The JavaScript module to load.</param>
+        /// <param name="function">The exported function to invoke.</param>
+        /// <param name="arguments">Additional command-line arguments passed to the module.</param>
+        /// <param name="environmentReferences">Names of environment variables to forward to the process.</param>
+        /// <param name="settings">The external execution settings.</param>
+        /// <param name="capacity">The capacity manager controlling concurrent external executions.</param>
+        /// <param name="runLogs">Optional run-log session for capturing output.</param>
+        /// <param name="runLogStep">Optional run-log step scope for capturing output.</param>
+        /// <param name="maxRuntimeMs">Maximum runtime in milliseconds (0 for no timeout).</param>
         public ArtifactJavaScriptStepRunner(
             string tenantId,
             ArtifactVersionSnapshot artifact,
@@ -35,6 +52,11 @@ namespace Tempo.Core.Runtime
             _Function = function;
         }
 
+        /// <summary>
+        /// Builds the <see cref="ProcessStartInfo"/> that launches Node.js against a generated shim invoking the configured module and function.
+        /// </summary>
+        /// <param name="scratch">Per-run scratch directory into which the JavaScript shim is written.</param>
+        /// <returns>A configured <see cref="ProcessStartInfo"/> ready to start.</returns>
         protected override ProcessStartInfo BuildStartInfo(string scratch)
         {
             string shim = Path.Combine(scratch, "__tempo_javascript_shim.cjs");

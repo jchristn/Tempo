@@ -29,21 +29,56 @@ namespace Tempo.Core.Runtime
             Converters = { new JsonStringEnumConverter() }
         };
 
+        /// <summary>Identifier of the tenant that owns the execution.</summary>
         protected readonly string _TenantId;
+
+        /// <summary>Root directory containing the extracted artifact.</summary>
         protected readonly string _ArtifactRoot;
+
+        /// <summary>Root directory under which per-run scratch directories are created.</summary>
         protected readonly string _ScratchRoot;
+
+        /// <summary>External execution settings governing limits and behavior.</summary>
         protected readonly ExternalExecutionSettings _Settings;
+
+        /// <summary>Capacity manager used to acquire an execution lease.</summary>
         protected readonly ExternalRuntimeCapacityManager _Capacity;
+
+        /// <summary>Relative artifact path of the command to execute.</summary>
         protected readonly string _Command;
+
+        /// <summary>Arguments passed to the command.</summary>
         protected readonly List<string> _Arguments;
+
+        /// <summary>Names of environment variables to forward to the process.</summary>
         protected readonly List<string> _EnvironmentReferences;
+
+        /// <summary>Optional run log session for capturing host output; null when run logging is disabled.</summary>
         protected readonly RunLogSession? _RunLogs;
+
+        /// <summary>Optional run log step scope for capturing step output; null when run logging is disabled.</summary>
         protected readonly RunLogStepScope? _RunLogStep;
         private readonly int _MaxRuntimeMs;
         private bool _UseLinuxProcessGroupKill;
 
         private const int SigKill = 9;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ArtifactProcessStepRunner"/> class.
+        /// </summary>
+        /// <param name="tenantId">Identifier of the tenant that owns the execution.</param>
+        /// <param name="artifact">Snapshot of the artifact version to execute.</param>
+        /// <param name="artifactRoot">Root directory containing the extracted artifact.</param>
+        /// <param name="entrypoint">Manifest entrypoint associated with the artifact.</param>
+        /// <param name="command">Relative artifact path of the command to execute.</param>
+        /// <param name="arguments">Arguments passed to the command.</param>
+        /// <param name="environmentReferences">Names of environment variables to forward to the process.</param>
+        /// <param name="settings">External execution settings governing limits and behavior.</param>
+        /// <param name="capacity">Capacity manager used to acquire an execution lease.</param>
+        /// <param name="runLogs">Optional run log session for capturing host output.</param>
+        /// <param name="runLogStep">Optional run log step scope for capturing step output.</param>
+        /// <param name="maxRuntimeMs">Maximum runtime in milliseconds; when 0 or less the settings default is used.</param>
+        /// <exception cref="ArgumentNullException">Thrown when a required argument is null.</exception>
         public ArtifactProcessStepRunner(
             string tenantId,
             ArtifactVersionSnapshot artifact,
@@ -76,15 +111,52 @@ namespace Tempo.Core.Runtime
             _MaxRuntimeMs = maxRuntimeMs > 0 ? maxRuntimeMs : _Settings.DefaultMaxRuntimeMs;
         }
 
+        /// <summary>
+        /// Identifier of the artifact being executed, or null if unavailable.
+        /// </summary>
         public string? ArtifactId { get; }
+
+        /// <summary>
+        /// Identifier of the artifact version being executed, or null if unavailable.
+        /// </summary>
         public string? ArtifactVersionId { get; }
+
+        /// <summary>
+        /// Version of the artifact being executed, or null if unavailable.
+        /// </summary>
         public string? ArtifactVersion { get; }
+
+        /// <summary>
+        /// SHA-256 hash of the artifact being executed, or null if unavailable.
+        /// </summary>
         public string? ArtifactSha256 { get; }
+
+        /// <summary>
+        /// Manifest entrypoint associated with the artifact, or null if unavailable.
+        /// </summary>
         public string? ManifestEntrypoint { get; }
+
+        /// <summary>
+        /// Timestamp, in UTC, when the execution was queued for capacity, or null if not yet queued.
+        /// </summary>
         public DateTime? CapacityQueuedUtc { get; private set; }
+
+        /// <summary>
+        /// Timestamp, in UTC, when the execution acquired a capacity lease, or null if not yet acquired.
+        /// </summary>
         public DateTime? CapacityAcquiredUtc { get; private set; }
+
+        /// <summary>
+        /// Time, in milliseconds, spent waiting for capacity, or null if not measured.
+        /// </summary>
         public long? CapacityWaitMs { get; private set; }
 
+        /// <summary>
+        /// Executes the artifact process for the supplied request, acquiring a capacity lease and streaming the request as JSON over stdin.
+        /// </summary>
+        /// <param name="req">Step request to execute.</param>
+        /// <param name="token">Token used to cancel the execution.</param>
+        /// <returns>The step result produced by the artifact process.</returns>
         protected override async Task<StepResult> ExecuteInternal(StepRequest req, CancellationToken token)
         {
             string scratch = ScratchPath(req.StepRunId);
@@ -108,6 +180,11 @@ namespace Tempo.Core.Runtime
             }
         }
 
+        /// <summary>
+        /// Builds the <see cref="ProcessStartInfo"/> used to launch the artifact command, including working directory, arguments, and forwarded environment variables.
+        /// </summary>
+        /// <param name="scratch">Per-run scratch directory exposed to the process via <c>TEMPO_SCRATCH_DIR</c>.</param>
+        /// <returns>A configured <see cref="ProcessStartInfo"/> ready to start.</returns>
         protected virtual ProcessStartInfo BuildStartInfo(string scratch)
         {
             string commandPath = ResolveArtifactPath(_Command);
@@ -136,6 +213,10 @@ namespace Tempo.Core.Runtime
             return psi;
         }
 
+        /// <summary>
+        /// Wraps the process with <c>setsid</c> on Linux so the whole process group can be terminated, when the utility is available.
+        /// </summary>
+        /// <param name="psi">Process start info to wrap in place.</param>
         protected void WrapWithLinuxProcessGroup(ProcessStartInfo psi)
         {
             _UseLinuxProcessGroupKill = false;
@@ -244,6 +325,11 @@ namespace Tempo.Core.Runtime
             }
         }
 
+        /// <summary>
+        /// Sets the file name and leading arguments on the start info based on the command's file extension (for example <c>.dll</c>, <c>.cmd</c>, <c>.bat</c>, or <c>.sh</c>).
+        /// </summary>
+        /// <param name="psi">Process start info to populate.</param>
+        /// <param name="commandPath">Resolved absolute path of the command to execute.</param>
         protected void AddCommand(ProcessStartInfo psi, string commandPath)
         {
             string ext = Path.GetExtension(commandPath).ToLowerInvariant();
@@ -270,6 +356,13 @@ namespace Tempo.Core.Runtime
             }
         }
 
+        /// <summary>
+        /// Resolves a relative artifact path to an absolute path, ensuring it stays within the artifact root and refers to an existing file.
+        /// </summary>
+        /// <param name="relativePath">Relative artifact path to resolve.</param>
+        /// <returns>The resolved absolute path.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the path is not a safe relative reference or escapes the artifact root.</exception>
+        /// <exception cref="FileNotFoundException">Thrown when the resolved file does not exist.</exception>
         protected string ResolveArtifactPath(string relativePath)
         {
             if (ArtifactManifestService.IsUnsafePathReference(relativePath))
@@ -379,6 +472,11 @@ namespace Tempo.Core.Runtime
             };
         }
 
+        /// <summary>
+        /// Replaces characters that are not alphanumeric, underscore, dash, or dot with an underscore so the value is safe to use as a path segment.
+        /// </summary>
+        /// <param name="value">Value to sanitize.</param>
+        /// <returns>A sanitized string safe for use as a single path segment.</returns>
         protected static string SafeSegment(string value)
         {
             char[] chars = value.ToCharArray();

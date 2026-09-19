@@ -10,20 +10,35 @@ namespace Tempo.Worker
     /// </summary>
     public static class WorkerSettingsLoader
     {
+        /// <summary>Default path to the worker settings file when none is supplied.</summary>
         public const string DefaultSettingsFile = "./tempo.worker.json";
+        /// <summary>Environment variable naming the worker settings file to load.</summary>
         public const string EnvSettingsFile = "TEMPO_WORKER_SETTINGS_FILE";
+        /// <summary>Environment variable overriding the server endpoint.</summary>
         public const string EnvServerEndpoint = "TEMPO_WORKER_SERVER_ENDPOINT";
+        /// <summary>Environment variable overriding the worker identifier.</summary>
         public const string EnvWorkerId = "TEMPO_WORKER_ID";
+        /// <summary>Environment variable overriding the worker authentication token.</summary>
         public const string EnvWorkerToken = "TEMPO_WORKER_TOKEN";
+        /// <summary>Environment variable overriding the worker name.</summary>
         public const string EnvWorkerName = "TEMPO_WORKER_NAME";
+        /// <summary>Environment variable overriding the worker kind.</summary>
         public const string EnvWorkerKind = "TEMPO_WORKER_KIND";
+        /// <summary>Environment variable overriding the worker labels (comma-separated).</summary>
         public const string EnvWorkerLabels = "TEMPO_WORKER_LABELS";
+        /// <summary>Environment variable overriding the maximum concurrent runs.</summary>
         public const string EnvMaxConcurrentRuns = "TEMPO_WORKER_MAX_CONCURRENT_RUNS";
+        /// <summary>Environment variable overriding the maximum task timeout in milliseconds.</summary>
         public const string EnvMaxTaskTimeoutMs = "TEMPO_WORKER_MAX_TASK_TIMEOUT_MS";
+        /// <summary>Environment variable overriding the request timeout in milliseconds.</summary>
         public const string EnvRequestTimeoutMs = "TEMPO_WORKER_REQUEST_TIMEOUT_MS";
+        /// <summary>Environment variable overriding the log directory.</summary>
         public const string EnvLogDirectory = "TEMPO_WORKER_LOG_DIRECTORY";
+        /// <summary>Environment variable overriding the log filename.</summary>
         public const string EnvLogFilename = "TEMPO_WORKER_LOG_FILENAME";
+        /// <summary>Environment variable toggling run-log capture.</summary>
         public const string EnvRunLogEnabled = "TEMPO_RUN_LOG_ENABLED";
+        /// <summary>Environment variable overriding the run-log root path.</summary>
         public const string EnvRunLogRoot = "TEMPO_RUN_LOG_ROOT";
 
         /// <summary>Load worker settings from disk and environment overrides.</summary>

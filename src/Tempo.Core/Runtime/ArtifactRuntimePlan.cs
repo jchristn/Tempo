@@ -12,11 +12,17 @@ namespace Tempo.Core.Runtime
     /// <summary>Resolved artifact, manifest, entrypoint, and extracted root for execution.</summary>
     public class ArtifactRuntimePlan
     {
+        /// <summary>Resolved artifact version snapshot used for execution.</summary>
         public ArtifactVersionSnapshot Artifact { get; set; } = new ArtifactVersionSnapshot();
+        /// <summary>Resolved artifact version record.</summary>
         public ArtifactVersionRecord Version { get; set; } = new ArtifactVersionRecord();
+        /// <summary>Parsed artifact runtime manifest.</summary>
         public ArtifactManifest Manifest { get; set; } = new ArtifactManifest();
+        /// <summary>Name of the selected manifest entrypoint. Default: empty string.</summary>
         public string EntrypointName { get; set; } = string.Empty;
+        /// <summary>Selected manifest entrypoint definition.</summary>
         public ArtifactManifestEntrypoint Entrypoint { get; set; } = new ArtifactManifestEntrypoint();
+        /// <summary>Filesystem path to the extracted artifact root. Default: empty string.</summary>
         public string ArtifactRoot { get; set; } = string.Empty;
 
         internal static async Task AddArtifactReferenceValidationErrorsAsync(
@@ -38,6 +44,17 @@ namespace Tempo.Core.Runtime
             if (artifact == null || !artifact.Active) errors.Add("artifactId was not found for this tenant.");
         }
 
+        /// <summary>Resolves the artifact, manifest, entrypoint, and extracted root for execution using the database.</summary>
+        /// <param name="database">The database driver used to resolve the artifact version.</param>
+        /// <param name="blobStore">The blob store used to retrieve the artifact package.</param>
+        /// <param name="settings">External execution settings.</param>
+        /// <param name="context">The step execution context.</param>
+        /// <param name="step">The step record being executed.</param>
+        /// <param name="config">The artifact process runtime configuration.</param>
+        /// <param name="expectedRuntimeKey">The runtime key expected by the step.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A resolved runtime plan for execution.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when the artifact, version, manifest, or entrypoint cannot be resolved or fails validation.</exception>
         public static async Task<ArtifactRuntimePlan> ResolveAsync(
             DatabaseDriverBase database,
             IArtifactBlobStore blobStore,
@@ -79,6 +96,17 @@ namespace Tempo.Core.Runtime
             };
         }
 
+        /// <summary>Resolves the artifact, manifest, entrypoint, and extracted root for execution using a precomputed execution snapshot.</summary>
+        /// <param name="blobStore">The blob store used to retrieve the artifact package.</param>
+        /// <param name="settings">External execution settings.</param>
+        /// <param name="context">The step execution context containing the artifact snapshot.</param>
+        /// <param name="step">The step record being executed.</param>
+        /// <param name="config">The artifact process runtime configuration.</param>
+        /// <param name="expectedRuntimeKey">The runtime key expected by the step.</param>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>A resolved runtime plan for execution.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when blobStore, settings, context, step, or config is null.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the artifact snapshot, manifest, or entrypoint cannot be resolved or fails validation.</exception>
         public static async Task<ArtifactRuntimePlan> ResolveAsync(
             IArtifactBlobStore blobStore,
             ExternalExecutionSettings settings,

@@ -11,11 +11,22 @@ namespace Tempo.Core.Runtime
         private readonly StepRuntimeRegistry _Registry;
         private readonly DefaultJsonTypeInfoResolver _DefaultResolver = new DefaultJsonTypeInfoResolver();
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="RuntimeRegistryJsonTypeInfoResolver"/> class.
+        /// </summary>
+        /// <param name="registry">The runtime registry supplying the derived configuration types. Cannot be null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="registry"/> is null.</exception>
         public RuntimeRegistryJsonTypeInfoResolver(StepRuntimeRegistry registry)
         {
             _Registry = registry ?? throw new ArgumentNullException(nameof(registry));
         }
 
+        /// <summary>
+        /// Returns type information for the requested type, applying registry-driven polymorphism for <see cref="StepRuntimeConfig"/>.
+        /// </summary>
+        /// <param name="type">The type to resolve information for.</param>
+        /// <param name="options">The serializer options in effect.</param>
+        /// <returns>The polymorphic type information for <see cref="StepRuntimeConfig"/>, or null for any other type.</returns>
         public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options)
         {
             if (type != typeof(StepRuntimeConfig)) return null;

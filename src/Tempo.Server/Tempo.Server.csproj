@@ -5,9 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>1591;CS8618</NoWarn>
-    <AssemblyName>Tempo.Server</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>    <AssemblyName>Tempo.Server</AssemblyName>
     <RootNamespace>Tempo.Server</RootNamespace>
     <Version>0.4.0</Version>
   </PropertyGroup>

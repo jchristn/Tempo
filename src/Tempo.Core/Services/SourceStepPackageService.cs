@@ -26,6 +26,13 @@ namespace Tempo.Core.Services
         private readonly IArtifactBlobStore _BlobStore;
         private readonly ExternalExecutionSettings _Settings;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SourceStepPackageService"/> class.
+        /// </summary>
+        /// <param name="database">The database driver used to persist artifacts and steps. Cannot be null.</param>
+        /// <param name="blobStore">The blob store used to persist artifact package content. Cannot be null.</param>
+        /// <param name="settings">The external execution settings. May be null, in which case defaults are used.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="database"/> or <paramref name="blobStore"/> is null.</exception>
         public SourceStepPackageService(DatabaseDriverBase database, IArtifactBlobStore blobStore, ExternalExecutionSettings? settings = null)
         {
             _Database = database ?? throw new ArgumentNullException(nameof(database));
@@ -33,6 +40,16 @@ namespace Tempo.Core.Services
             _Settings = settings ?? new ExternalExecutionSettings();
         }
 
+        /// <summary>
+        /// Builds an artifact package from pasted source and creates a persisted step bound to it.
+        /// </summary>
+        /// <param name="tenantId">The tenant identifier that owns the created artifact and step. Cannot be null or whitespace.</param>
+        /// <param name="request">The source step creation request. Cannot be null and must pass validation.</param>
+        /// <param name="token">A token to observe for cancellation.</param>
+        /// <returns>A response describing the created step, artifact, and artifact version.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="tenantId"/> or <paramref name="request"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when the request fails validation or specifies an unsupported language.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when a required build toolchain is unavailable or compilation fails.</exception>
         public async Task<SourceStepCreateResponse> CreateAsync(string tenantId, SourceStepCreateRequest request, CancellationToken token = default)
         {
             if (string.IsNullOrWhiteSpace(tenantId)) throw new ArgumentNullException(nameof(tenantId));

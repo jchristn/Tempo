@@ -21,6 +21,16 @@ namespace Tempo.Core.Runtime
         private readonly ExternalExecutionSettings _Settings;
         private readonly ExternalRuntimeCapacityManager? _Capacity;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ArtifactPythonRuntimeProvider"/> class.
+        /// </summary>
+        /// <param name="availability">Availability state of the runtime.</param>
+        /// <param name="securityNotes">Operator-facing security notes for the runtime.</param>
+        /// <param name="settings">External execution settings. Cannot be null.</param>
+        /// <param name="database">Optional database driver used to resolve artifact references.</param>
+        /// <param name="blobStore">Optional artifact blob store used to materialize artifacts.</param>
+        /// <param name="capacity">Optional external runtime capacity manager.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
         public ArtifactPythonRuntimeProvider(
             StepRuntimeAvailabilityStateEnum availability,
             string securityNotes,
@@ -59,10 +69,20 @@ namespace Tempo.Core.Runtime
             };
         }
 
+        /// <summary>Runtime key that uniquely identifies this provider.</summary>
         public RuntimeKey RuntimeKey => StepRuntimeKeys.ArtifactPython;
+        /// <summary>CLR type of the strongly-typed configuration this provider expects.</summary>
         public Type ConfigType => typeof(ArtifactPythonRuntimeConfig);
+        /// <summary>Describes the runtime, including its availability, capabilities, and configuration properties.</summary>
+        /// <returns>The runtime descriptor.</returns>
         public StepRuntimeDescriptor Describe() => _Descriptor;
 
+        /// <summary>
+        /// Validates the supplied runtime configuration for a step.
+        /// </summary>
+        /// <param name="context">The validation context, including tenant and configuration.</param>
+        /// <param name="token">Token used to cancel the operation.</param>
+        /// <returns>The validation result indicating success or the collected errors.</returns>
         public async Task<StepConfigValidationResult> ValidateAsync(StepRuntimeValidationContext context, CancellationToken token = default)
         {
             if (_Descriptor.Availability != StepRuntimeAvailabilityStateEnum.Available)
@@ -74,6 +94,17 @@ namespace Tempo.Core.Runtime
             return errors.Count == 0 ? StepConfigValidationResult.Success() : StepConfigValidationResult.Failure(errors);
         }
 
+        /// <summary>
+        /// Creates a step runner for executing a step with the supplied configuration.
+        /// </summary>
+        /// <param name="context">The step execution context.</param>
+        /// <param name="step">The step record being executed.</param>
+        /// <param name="config">The runtime configuration for the step.</param>
+        /// <param name="token">Token used to cancel the operation.</param>
+        /// <returns>A step runner capable of executing the step.</returns>
+        /// <exception cref="NotSupportedException">Thrown when the runtime is unavailable or required services are missing.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="config"/> is not the expected configuration type.</exception>
+        /// <exception cref="InvalidOperationException">Thrown when the resolved entrypoint is missing required module or function values.</exception>
         public async Task<StepRunner> CreateRunnerAsync(StepExecutionContext context, StepRecord step, StepRuntimeConfig config, CancellationToken token = default)
         {
             if (_Descriptor.Availability != StepRuntimeAvailabilityStateEnum.Available)

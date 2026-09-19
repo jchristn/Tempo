@@ -17,6 +17,11 @@ namespace Tempo.Core.Runtime
         private readonly ExternalExecutionSettings _Settings;
         private readonly string _CacheRoot;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PythonEnvironmentCache"/> class.
+        /// </summary>
+        /// <param name="settings">The external execution settings that supply the cache root and Python configuration. Cannot be null.</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="settings"/> is null.</exception>
         public PythonEnvironmentCache(ExternalExecutionSettings settings)
         {
             _Settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -24,6 +29,14 @@ namespace Tempo.Core.Runtime
             Directory.CreateDirectory(_CacheRoot);
         }
 
+        /// <summary>
+        /// Prepares a Python interpreter for the artifact plan, building and reusing a virtual environment when dependencies are declared.
+        /// </summary>
+        /// <param name="plan">The artifact runtime plan describing the artifact and its entrypoint.</param>
+        /// <param name="pythonVersion">The requested Python executable name or version. May be null to use the configured default.</param>
+        /// <param name="token">A token to observe for cancellation.</param>
+        /// <returns>The path to the Python executable to use for execution.</returns>
+        /// <exception cref="InvalidOperationException">Thrown when dependency installation is required but disabled by settings, or when environment setup fails.</exception>
         public async Task<string> PrepareAsync(ArtifactRuntimePlan plan, string? pythonVersion, CancellationToken token = default)
         {
             string basePython = ResolvePythonExecutable(pythonVersion);
@@ -45,6 +58,10 @@ namespace Tempo.Core.Runtime
             return python;
         }
 
+        /// <summary>
+        /// Deletes the cached virtual environments for the specified artifact content hash.
+        /// </summary>
+        /// <param name="sha256">The SHA-256 content hash of the artifact package.</param>
         public void DeleteCache(string sha256)
         {
             string path = Path.GetFullPath(Path.Combine(_CacheRoot, SafeSegment(sha256)));
