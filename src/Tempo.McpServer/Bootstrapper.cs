@@ -105,7 +105,8 @@ namespace Tempo.McpServer
                 TempoToolRegistrar.Register(httpServer, client);
                 servers.Add(httpServer);
                 tasks.Add(httpServer.StartAsync(token));
-                Console.WriteLine("HTTP MCP: http://" + settings.Http.Hostname + ":" + settings.Http.Port + settings.Http.RpcPath);
+                Console.WriteLine("HTTP MCP (Streamable HTTP, use this for MCP clients): " + TempoMcpInstaller.BuildClientUrl(settings.Http));
+                Console.WriteLine("HTTP JSON-RPC (legacy): http://" + settings.Http.Hostname + ":" + settings.Http.Port + settings.Http.RpcPath);
             }
 
             if (settings.Tcp.Enabled)

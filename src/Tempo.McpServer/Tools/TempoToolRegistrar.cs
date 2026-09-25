@@ -16,45 +16,59 @@ namespace Tempo.McpServer.Tools
     /// </summary>
     public static class TempoToolRegistrar
     {
-        /// <summary>Register tools on an HTTP MCP server.</summary>
+        /// <summary>
+        /// Register tools on an HTTP MCP server so they are discoverable through <c>tools/list</c>
+        /// and invocable through <c>tools/call</c>, over both session-based and stateless (2026-07-28) Streamable HTTP.
+        /// </summary>
         /// <param name="server">HTTP MCP server.</param>
         /// <param name="client">Tempo API client.</param>
+        /// <exception cref="ArgumentNullException">Thrown when server or client is null.</exception>
         public static void Register(McpHttpServer server, TempoApiClient client)
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, args => Invoke(tool, ToJsonElement(args)));
+                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeAsync(tool, args, token));
             }
         }
 
-        /// <summary>Register methods on a TCP MCP server.</summary>
+        /// <summary>
+        /// Register tools on a TCP MCP server so they are discoverable through <c>tools/list</c> and invocable through <c>tools/call</c>.
+        /// Each tool is also registered as a JSON-RPC method of the same name for callers that invoke tools directly.
+        /// </summary>
         /// <param name="server">TCP MCP server.</param>
         /// <param name="client">Tempo API client.</param>
+        /// <exception cref="ArgumentNullException">Thrown when server or client is null.</exception>
         public static void Register(McpTcpServer server, TempoApiClient client)
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterMethod(tool.Name, args => Invoke(tool, ToJsonElement(args)));
+                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeAsync(tool, args, token));
+                server.RegisterMethod(tool.Name, (args, token) => InvokeAsync(tool, args, token));
             }
         }
 
-        /// <summary>Register methods on a WebSocket MCP server.</summary>
+        /// <summary>
+        /// Register tools on a WebSocket MCP server so they are discoverable through <c>tools/list</c> and invocable through <c>tools/call</c>.
+        /// Each tool is also registered as a JSON-RPC method of the same name for callers that invoke tools directly.
+        /// </summary>
         /// <param name="server">WebSocket MCP server.</param>
         /// <param name="client">Tempo API client.</param>
+        /// <exception cref="ArgumentNullException">Thrown when server or client is null.</exception>
         public static void Register(McpWebsocketsServer server, TempoApiClient client)
         {
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterMethod(tool.Name, args => Invoke(tool, ToJsonElement(args)));
+                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeAsync(tool, args, token));
+                server.RegisterMethod(tool.Name, (args, token) => InvokeAsync(tool, args, token));
             }
         }
 
-        private static object Invoke(TempoToolDefinition tool, JsonElement? args)
+        private static async Task<object> InvokeAsync(TempoToolDefinition tool, RpcParameters? args, CancellationToken token)
         {
-            return tool.Handler(args, CancellationToken.None).GetAwaiter().GetResult();
+            return await tool.Handler(ToJsonElement(args), token).ConfigureAwait(false);
         }
 
         internal static JsonElement? ToJsonElement(RpcParameters? args)

@@ -11,14 +11,16 @@ Tempo.McpServer includes a built-in installer for Claude Code only.
 The install command:
 
 - updates `~/.claude.json`
-- sets `mcpServers.tempo` to an HTTP MCP entry that points at the configured Tempo MCP RPC URL
+- sets `mcpServers.tempo` to an HTTP MCP entry that points at the configured Tempo MCP Streamable HTTP URL (`/mcp`)
 - writes or updates `~/.claude/agents/tempo.md`
 
-Default RPC endpoint:
+Default MCP client endpoint (Streamable HTTP):
 
 ```text
-http://127.0.0.1:8910/rpc
+http://127.0.0.1:8910/mcp
 ```
+
+If you installed with an earlier build, your `~/.claude.json` entry may still point at `http://127.0.0.1:8910/rpc`. Re-run the install command (or change the URL to `/mcp` by hand). Claude Code 2.1.x talks the stateless `2026-07-28` MCP revision, and the legacy `/rpc` endpoint does not return that revision's result shape, so Claude Code lists zero Tempo tools there.
 
 You do not need to have Tempo.McpServer already running to execute the install command. The install command only writes local Claude Code configuration. Tempo.McpServer does need to be running before Claude Code can connect to the endpoint.
 
@@ -42,7 +44,7 @@ dotnet run --project src/Tempo.McpServer/Tempo.McpServer.csproj -- --config ./te
 
 After install, restart Claude Code.
 
-The built-in installer does not configure Codex CLI, Gemini CLI, Cursor, or other MCP clients. For those clients, register the Tempo HTTP JSON-RPC endpoint manually using the client's own MCP configuration format.
+The built-in installer does not configure Codex CLI, Gemini CLI, Cursor, or other MCP clients. For those clients, register the Tempo Streamable HTTP endpoint (`http://127.0.0.1:8910/mcp`) manually using the client's own MCP configuration format.
 
 ## Runtime Model
 
@@ -58,12 +60,17 @@ Default MCP transports:
 
 | Transport | Default endpoint |
 | --- | --- |
-| HTTP JSON-RPC | `http://127.0.0.1:8910/rpc` |
+| HTTP Streamable HTTP (recommended for MCP clients) | `http://127.0.0.1:8910/mcp` |
+| HTTP JSON-RPC (legacy) | `http://127.0.0.1:8910/rpc` |
 | HTTP SSE events | `http://127.0.0.1:8910/events` |
 | TCP | `tcp://127.0.0.1:8911` |
 | WebSocket | `ws://127.0.0.1:8912/mcp` |
 
 At least one MCP transport must be enabled.
+
+Every transport exposes the same Tempo tools through standard MCP discovery and invocation (`tools/list` and `tools/call`). The TCP and WebSocket transports also accept each tool name as a direct JSON-RPC method for callers that invoke tools without `tools/call`.
+
+Protocol versions: the `initialize` handshake negotiates at most `2025-11-25` on every transport. The Streamable HTTP endpoint also serves the stateless `2026-07-28` revision (`server/discover` plus per-request `_meta` and `Mcp-Method` headers, no session), which is what current Claude Code releases use.
 
 ## Starting the MCP Server
 

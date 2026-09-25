@@ -57,7 +57,8 @@ Default endpoints:
 - Dashboard: `http://localhost:3000`
 - Tempo.Server: `http://localhost:8901`
 - Tempo.Worker: included in the compose stack as `tempo-worker-1`, `tempo-worker-2`, and `tempo-worker-3`
-- Tempo.McpServer HTTP RPC: `http://127.0.0.1:8910/rpc`
+- Tempo.McpServer HTTP (Streamable HTTP, use this for MCP clients): `http://127.0.0.1:8910/mcp`
+- Tempo.McpServer HTTP JSON-RPC (legacy): `http://127.0.0.1:8910/rpc`
 - Tempo.McpServer TCP: `127.0.0.1:8911`
 - Tempo.McpServer WebSocket: `ws://127.0.0.1:8912/mcp`
 

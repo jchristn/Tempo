@@ -18,7 +18,7 @@
   <ItemGroup>
     <PackageReference Include="Touchstone.Core" Version="0.1.12" />
     <!-- Direct reference so the Voltaic assemblies flow to the test output; Tempo.McpServer is an Exe project and does not propagate its package dependencies transitively. -->
-    <PackageReference Include="Voltaic" Version="0.6.0" />
+    <PackageReference Include="Voltaic" Version="1.1.0" />
   </ItemGroup>
 
   <ItemGroup>

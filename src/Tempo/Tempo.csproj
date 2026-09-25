@@ -30,11 +30,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
-    <PackageReference Include="Padlock" Version="1.0.4" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Padlock" Version="1.1.0" />
     <PackageReference Include="PrettyId" Version="2.0.1" />
-    <PackageReference Include="RestWrapper" Version="3.2.0" />
-    <PackageReference Include="SyslogLogging" Version="2.2.1" />
+    <PackageReference Include="RestWrapper" Version="3.3.0" />
+    <PackageReference Include="SyslogLogging" Version="2.2.2" />
   </ItemGroup>
 
   <ItemGroup>

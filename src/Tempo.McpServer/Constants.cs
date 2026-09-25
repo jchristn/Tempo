@@ -14,6 +14,14 @@ namespace Tempo.McpServer
         /// <summary>Default settings filename.</summary>
         public const string DefaultSettingsFile = "./tempo.mcp.json";
 
+        /// <summary>
+        /// Streamable HTTP MCP endpoint path served by the HTTP transport. Fixed by Voltaic and not configurable.
+        /// This is the endpoint MCP clients such as Claude Code must use: it serves both session-based handshakes and
+        /// the stateless 2026-07-28 revision. The legacy <c>rpcPath</c> endpoint does not apply the 2026-07-28 result
+        /// shape, so stateless clients connected to it see zero tools.
+        /// </summary>
+        public const string StreamableHttpPath = "/mcp";
+
         /// <summary>Default Tempo API endpoint.</summary>
         public const string DefaultTempoEndpoint = "http://localhost:8901";
 

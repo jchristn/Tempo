@@ -43,7 +43,8 @@ namespace Test.Shared
                     LogManagementSuite.Build(),
                     RequestHistorySuite.Build(),
                     HydrationSuite.Build(),
-                    McpToolRegistrarSuite.Build()
+                    McpToolRegistrarSuite.Build(),
+                    McpTransportSuite.Build()
                 };
             }
         }
