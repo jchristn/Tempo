@@ -28,7 +28,7 @@ namespace Tempo.McpServer.Tools
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeAsync(tool, args, token));
+                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeToolAsync(tool, client, args, token));
             }
         }
 
@@ -44,7 +44,7 @@ namespace Tempo.McpServer.Tools
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeAsync(tool, args, token));
+                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeToolAsync(tool, client, args, token));
                 server.RegisterMethod(tool.Name, (args, token) => InvokeAsync(tool, args, token));
             }
         }
@@ -61,7 +61,7 @@ namespace Tempo.McpServer.Tools
             if (server == null) throw new ArgumentNullException(nameof(server));
             foreach (TempoToolDefinition tool in CreateDefinitions(client))
             {
-                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeAsync(tool, args, token));
+                server.RegisterTool(tool.Name, tool.Description, tool.InputSchema, (args, token) => InvokeToolAsync(tool, client, args, token));
                 server.RegisterMethod(tool.Name, (args, token) => InvokeAsync(tool, args, token));
             }
         }
@@ -71,6 +71,38 @@ namespace Tempo.McpServer.Tools
             return await tool.Handler(ToJsonElement(args), token).ConfigureAwait(false);
         }
 
+        private static async Task<object> InvokeToolAsync(TempoToolDefinition tool, TempoApiClient client, RpcParameters? args, CancellationToken token)
+        {
+            try
+            {
+                return await InvokeAsync(tool, args, token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // MCP reports tool execution failures as isError results so the model can read and react to them;
+                // letting them escape becomes an opaque JSON-RPC -32603 "Internal error".
+                McpToolCallResult result = McpToolCallResult.FromText(DescribeFailure(tool, client, ex));
+                result.IsError = true;
+                return result;
+            }
+        }
+
+        internal static string DescribeFailure(TempoToolDefinition tool, TempoApiClient client, Exception ex)
+        {
+            string prefix = "Tempo tool '" + tool.Name + "' failed: ";
+            if (ex is HttpRequestException)
+                return prefix + "could not reach Tempo.Server at " + client.Endpoint + " (" + ex.Message + "). Check that Tempo.Server is running and settings.tempo.endpoint is correct.";
+            if (ex is TaskCanceledException || ex is TimeoutException)
+                return prefix + "Tempo.Server at " + client.Endpoint + " did not respond before the configured timeout (settings.tempo.timeoutMs).";
+            if (ex is ArgumentException)
+                return prefix + "invalid arguments: " + ex.Message;
+            return prefix + ex.Message;
+        }
+
         internal static JsonElement? ToJsonElement(RpcParameters? args)
         {
             if (args == null || !args.HasValue || string.IsNullOrWhiteSpace(args.RawJson)) return null;
@@ -78,7 +110,7 @@ namespace Tempo.McpServer.Tools
             return document.RootElement.Clone();
         }
 
-        private static IReadOnlyList<TempoToolDefinition> CreateDefinitions(TempoApiClient client)
+        internal static IReadOnlyList<TempoToolDefinition> CreateDefinitions(TempoApiClient client)
         {
             if (client == null) throw new ArgumentNullException(nameof(client));
 

@@ -1,5 +1,7 @@
 namespace Tempo.McpServer
 {
+    using System.Reflection;
+
     /// <summary>
     /// MCP server constants.
     /// </summary>
@@ -8,8 +10,11 @@ namespace Tempo.McpServer
         /// <summary>Product name.</summary>
         public const string ProductName = "Tempo MCP Server";
 
-        /// <summary>Software version.</summary>
-        public const string Version = "0.3.0";
+        /// <summary>
+        /// Software version, read from the assembly's informational version (the project <c>Version</c>) with any
+        /// <c>+build</c> metadata removed, so it always matches the built package. Never null or empty.
+        /// </summary>
+        public static readonly string Version = ReadVersion();
 
         /// <summary>Default settings filename.</summary>
         public const string DefaultSettingsFile = "./tempo.mcp.json";
@@ -22,8 +27,11 @@ namespace Tempo.McpServer
         /// </summary>
         public const string StreamableHttpPath = "/mcp";
 
-        /// <summary>Default Tempo API endpoint.</summary>
-        public const string DefaultTempoEndpoint = "http://localhost:8901";
+        /// <summary>
+        /// Default Tempo API endpoint. Uses <c>127.0.0.1</c> rather than <c>localhost</c> because Tempo.Server binds IPv4
+        /// loopback by default and resolving <c>localhost</c> to <c>::1</c> first adds about 2 seconds per connection on Windows.
+        /// </summary>
+        public const string DefaultTempoEndpoint = "http://127.0.0.1:8901";
 
         /// <summary>Environment variable for the Tempo API endpoint.</summary>
         public const string TempoEndpointEnvironmentVariable = "TEMPO_ENDPOINT";
@@ -57,5 +65,18 @@ namespace Tempo.McpServer
 
         /// <summary>Environment variable for MCP WebSocket port.</summary>
         public const string McpWebSocketPortEnvironmentVariable = "TEMPO_MCP_WS_PORT";
+
+        private static string ReadVersion()
+        {
+            Assembly assembly = typeof(Constants).Assembly;
+            string? informational = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            if (!string.IsNullOrWhiteSpace(informational))
+            {
+                int metadataIndex = informational.IndexOf('+');
+                return metadataIndex > 0 ? informational.Substring(0, metadataIndex) : informational;
+            }
+
+            return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        }
     }
 }

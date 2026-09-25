@@ -53,8 +53,10 @@ Tempo.McpServer connects to one Tempo.Server endpoint and forwards MCP tool call
 Default Tempo endpoint:
 
 ```text
-http://localhost:8901
+http://127.0.0.1:8901
 ```
+
+The default uses `127.0.0.1` because Tempo.Server binds IPv4 loopback by default. If you configure `localhost`, the MCP server still connects to loopback over IPv4 first, so tool calls do not pay the roughly 2 second refused-IPv6 fallback that `localhost` otherwise costs on Windows.
 
 Default MCP transports:
 
@@ -62,13 +64,15 @@ Default MCP transports:
 | --- | --- |
 | HTTP Streamable HTTP (recommended for MCP clients) | `http://127.0.0.1:8910/mcp` |
 | HTTP JSON-RPC (legacy) | `http://127.0.0.1:8910/rpc` |
-| HTTP SSE events | `http://127.0.0.1:8910/events` |
+| HTTP SSE events (legacy, pairs with `/rpc`) | `http://127.0.0.1:8910/events` |
 | TCP | `tcp://127.0.0.1:8911` |
 | WebSocket | `ws://127.0.0.1:8912/mcp` |
 
 At least one MCP transport must be enabled.
 
-Every transport exposes the same Tempo tools through standard MCP discovery and invocation (`tools/list` and `tools/call`). The TCP and WebSocket transports also accept each tool name as a direct JSON-RPC method for callers that invoke tools without `tools/call`.
+Client URLs printed at startup and written by `install` are derived from the bind settings. Wildcard bind hosts (`*`, `+`, `0.0.0.0`, `::`), such as the ones in `docker/tempo.mcp.json`, are replaced with `127.0.0.1`, and IPv6 literals are bracketed. `softwareVersion` is rewritten at startup from the built assembly version and reported to clients as `serverInfo.version`.
+
+Every transport exposes the same Tempo tools through standard MCP discovery and invocation (`tools/list` and `tools/call`). `tools/list` returns only Tempo tools; Voltaic (2.0.0 and later) publishes no demo tools of its own, and the MCP `ping` request returns an empty result (`{}`). On the HTTP transport tools are reachable only through `tools/call`, which validates arguments against the input schema; a bare JSON-RPC call to a tool name returns `-32601`. The TCP and WebSocket transports also accept each tool name as a direct JSON-RPC method for callers that invoke tools without `tools/call`.
 
 Protocol versions: the `initialize` handshake negotiates at most `2025-11-25` on every transport. The Streamable HTTP endpoint also serves the stateless `2026-07-28` revision (`server/discover` plus per-request `_meta` and `Mcp-Method` headers, no session), which is what current Claude Code releases use.
 
@@ -129,9 +133,9 @@ Root settings shape:
 
 ```json
 {
-  "softwareVersion": "0.3.0",
+  "softwareVersion": "0.4.0",
   "tempo": {
-    "endpoint": "http://localhost:8901",
+    "endpoint": "http://127.0.0.1:8901",
     "timeoutMs": 30000,
     "defaultTenantId": "ten_example",
     "token": null,
@@ -225,7 +229,7 @@ For HTTP trigger invocation, run metadata such as `x-worker-id`, `x-run-id`, `x-
 | Tool | Arguments | Purpose |
 | --- | --- | --- |
 | `tempo_health` | none | Calls `GET /v1.0/api/health` |
-| `tempo_me` | none | Calls `GET /v1.0/me` |
+| `tempo_me` | none | Calls `GET /v1.0/me`. With the global admin API key the principal is `{ "type": "adminApiKey", "id": "admin-api-key", "isAdmin": true }` |
 | `tempo_settings_meta` | none | Calls `GET /v1.0/settings/meta` |
 | `tempo_request` | `method`, `path`, optional `body` | Generic REST call for endpoints not covered by typed tools |
 

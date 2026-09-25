@@ -15,6 +15,8 @@ namespace Tempo.McpServer
     /// </summary>
     public static class Bootstrapper
     {
+        private const string ServerName = "Tempo.McpServer";
+
         /// <summary>Run the MCP server.</summary>
         /// <param name="args">Command-line arguments.</param>
         public static async Task RunAsync(string[] args)
@@ -98,40 +100,57 @@ namespace Tempo.McpServer
         {
             if (settings.Http.Enabled)
             {
-                McpHttpServer httpServer = new McpHttpServer(settings.Http.Hostname, settings.Http.Port, settings.Http.RpcPath, settings.Http.EventsPath, includeDefaultMethods: true);
-                httpServer.ServerName = "Tempo.McpServer";
-                httpServer.ServerVersion = Constants.Version;
+                McpHttpServer httpServer = CreateHttpServer(settings.Http, client);
                 httpServer.Log += (sender, message) => Console.WriteLine("[HTTP] " + message);
-                TempoToolRegistrar.Register(httpServer, client);
                 servers.Add(httpServer);
                 tasks.Add(httpServer.StartAsync(token));
-                Console.WriteLine("HTTP MCP (Streamable HTTP, use this for MCP clients): " + TempoMcpInstaller.BuildClientUrl(settings.Http));
-                Console.WriteLine("HTTP JSON-RPC (legacy): http://" + settings.Http.Hostname + ":" + settings.Http.Port + settings.Http.RpcPath);
+                Console.WriteLine("HTTP MCP (Streamable HTTP, use this for MCP clients): " + McpEndpointUrls.HttpClientUrl(settings.Http));
+                Console.WriteLine("HTTP JSON-RPC (legacy): " + McpEndpointUrls.HttpLegacyRpcUrl(settings.Http));
             }
 
             if (settings.Tcp.Enabled)
             {
-                IPAddress tcpAddress = ResolveTcpAddress(settings.Tcp.Address);
-                McpTcpServer tcpServer = new McpTcpServer(tcpAddress, settings.Tcp.Port, includeDefaultMethods: true);
-                tcpServer.ServerName = "Tempo.McpServer";
-                tcpServer.ServerVersion = Constants.Version;
-                TempoToolRegistrar.Register(tcpServer, client);
+                McpTcpServer tcpServer = CreateTcpServer(settings.Tcp, client);
                 servers.Add(tcpServer);
                 tasks.Add(tcpServer.StartAsync(token));
-                Console.WriteLine("TCP MCP: tcp://" + tcpAddress + ":" + settings.Tcp.Port);
+                Console.WriteLine("TCP MCP: " + McpEndpointUrls.TcpClientUrl(settings.Tcp));
             }
 
             if (settings.WebSocket.Enabled)
             {
-                McpWebsocketsServer webSocketServer = new McpWebsocketsServer(settings.WebSocket.Hostname, settings.WebSocket.Port, settings.WebSocket.Path, includeDefaultMethods: true);
-                webSocketServer.ServerName = "Tempo.McpServer";
-                webSocketServer.ServerVersion = Constants.Version;
+                McpWebsocketsServer webSocketServer = CreateWebSocketServer(settings.WebSocket, client);
                 webSocketServer.Log += (sender, message) => Console.WriteLine("[WS] " + message);
-                TempoToolRegistrar.Register(webSocketServer, client);
                 servers.Add(webSocketServer);
                 tasks.Add(webSocketServer.StartAsync(token));
-                Console.WriteLine("WebSocket MCP: ws://" + settings.WebSocket.Hostname + ":" + settings.WebSocket.Port + settings.WebSocket.Path);
+                Console.WriteLine("WebSocket MCP: " + McpEndpointUrls.WebSocketClientUrl(settings.WebSocket));
             }
+        }
+
+        internal static McpHttpServer CreateHttpServer(McpHttpSettings settings, TempoApiClient client)
+        {
+            McpHttpServer server = new McpHttpServer(settings.Hostname, settings.Port, settings.RpcPath, settings.EventsPath);
+            server.ServerName = ServerName;
+            server.ServerVersion = Constants.Version;
+            TempoToolRegistrar.Register(server, client);
+            return server;
+        }
+
+        internal static McpTcpServer CreateTcpServer(McpTcpSettings settings, TempoApiClient client)
+        {
+            McpTcpServer server = new McpTcpServer(ResolveTcpAddress(settings.Address), settings.Port);
+            server.ServerName = ServerName;
+            server.ServerVersion = Constants.Version;
+            TempoToolRegistrar.Register(server, client);
+            return server;
+        }
+
+        internal static McpWebsocketsServer CreateWebSocketServer(McpWebSocketSettings settings, TempoApiClient client)
+        {
+            McpWebsocketsServer server = new McpWebsocketsServer(settings.Hostname, settings.Port, settings.Path);
+            server.ServerName = ServerName;
+            server.ServerVersion = Constants.Version;
+            TempoToolRegistrar.Register(server, client);
+            return server;
         }
 
         private static IPAddress ResolveTcpAddress(string address)

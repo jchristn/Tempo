@@ -32,23 +32,306 @@ namespace Test.Shared.Suites
                 cases: new List<TestCaseDescriptor>
                 {
                     new TestCaseDescriptor("McpTransport", "InstallerTargetsStreamableHttpEndpoint", "The Claude Code installer points clients at the Streamable HTTP /mcp endpoint rather than the legacy /rpc endpoint", InstallerTargetsStreamableHttpEndpointAsync),
+                    new TestCaseDescriptor("McpTransport", "EndpointUrlsMapWildcardBindHosts", "Client URLs replace wildcard bind hosts (*, +, 0.0.0.0, ::) with 127.0.0.1 and bracket IPv6 literals", EndpointUrlsMapWildcardBindHostsAsync),
+                    new TestCaseDescriptor("McpTransport", "ServerReportsBuildVersion", "Every transport advertises the built assembly version in serverInfo instead of a hard-coded constant", ServerReportsBuildVersionAsync),
+                    new TestCaseDescriptor("McpTransport", "MeReportsAdminApiKeyPrincipal", "tempo_me identifies the admin API key principal instead of reporting anonymous", MeReportsAdminApiKeyPrincipalAsync),
+                    new TestCaseDescriptor("McpTransport", "LocalhostEndpointAvoidsIpv6Fallback", "A localhost Tempo endpoint connects over IPv4 loopback first, so tool calls do not pay a refused-IPv6 delay", LocalhostEndpointAvoidsIpv6FallbackAsync),
+                    new TestCaseDescriptor("McpTransport", "ToolFailuresReturnIsErrorResults", "Tool execution failures (invalid argument values, Tempo.Server unreachable) return isError results with a readable message instead of JSON-RPC -32603", ToolFailuresReturnIsErrorResultsAsync),
                     new TestCaseDescriptor("McpTransport", "HttpHandshakeCapsProtocolVersion", "HTTP initialize never agrees to the stateless 2026-07-28 revision and negotiates 2025-11-25 instead", HttpHandshakeCapsProtocolVersionAsync),
                     new TestCaseDescriptor("McpTransport", "HttpSessionListsAndCallsTools", "HTTP session clients discover Tempo tools through tools/list and call them through tools/call", HttpSessionListsAndCallsToolsAsync),
                     new TestCaseDescriptor("McpTransport", "HttpSessionRejectsMissingRequiredArgument", "HTTP tools/call with a missing required argument returns JSON-RPC -32602 instead of calling Tempo.Server", HttpSessionRejectsMissingRequiredArgumentAsync),
                     new TestCaseDescriptor("McpTransport", "HttpStatelessListsAndCallsTools", "Stateless 2026-07-28 clients see every Tempo tool with resultType/ttlMs/cacheScope and can call tools without a session", HttpStatelessListsAndCallsToolsAsync),
                     new TestCaseDescriptor("McpTransport", "TcpListsAndCallsTools", "TCP clients discover Tempo tools through tools/list, call them through tools/call, and can still invoke them as direct methods", TcpListsAndCallsToolsAsync),
-                    new TestCaseDescriptor("McpTransport", "WebSocketListsAndCallsTools", "WebSocket clients discover Tempo tools through tools/list, call them through tools/call, and can still invoke them as direct methods", WebSocketListsAndCallsToolsAsync)
+                    new TestCaseDescriptor("McpTransport", "WebSocketListsAndCallsTools", "WebSocket clients discover Tempo tools through tools/list, call them through tools/call, and can still invoke them as direct methods", WebSocketListsAndCallsToolsAsync),
+                    new TestCaseDescriptor("McpTransport", "ToolsListContainsOnlyTempoTools", "Every transport lists exactly the Tempo tools; Voltaic's demo tools (ping, echo, getTime, getSessions, getClients) are not published", ToolsListContainsOnlyTempoToolsAsync),
+                    new TestCaseDescriptor("McpTransport", "PingReturnsEmptyResult", "The MCP protocol ping returns an empty result ({} or resultType-only under 2026-07-28) on every transport instead of \"pong\"", PingReturnsEmptyResultAsync),
+                    new TestCaseDescriptor("McpTransport", "DemoToolsAreNotCallable", "tools/call for a Voltaic demo tool name fails with -32602 not found, and bare demo method calls fail with -32601 on TCP and WebSocket", DemoToolsAreNotCallableAsync),
+                    new TestCaseDescriptor("McpTransport", "HttpRejectsBareToolMethodCalls", "HTTP clients cannot bypass tools/call by sending a Tempo tool name as a bare JSON-RPC method (-32601)", HttpRejectsBareToolMethodCallsAsync)
                 });
+        }
+
+        private static readonly string[] _VoltaicDemoTools = new[] { "ping", "echo", "getTime", "getSessions", "getClients" };
+
+        private static async Task ToolsListContainsOnlyTempoToolsAsync(CancellationToken ct)
+        {
+            await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
+            List<string> expected = Tempo.McpServer.Tools.TempoToolRegistrar.CreateDefinitions(harness.ApiClient).Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+            using HttpClient http = CreateHttpClient();
+            string url = harness.HttpBaseUrl + McpTransportHarness.McpPath;
+            Dictionary<string, string> headers = await OpenSessionAsync(http, url, ct).ConfigureAwait(false);
+            using JsonDocument sessionList = await PostJsonAsync(http, url, Request(2, "tools/list", new { }), headers, ct).ConfigureAwait(false);
+            AssertExactToolSet(RequireResult(sessionList, "session tools/list"), expected, "HTTP session");
+
+            using JsonDocument statelessList = await PostStatelessAsync(http, url, 3, "tools/list", null, new Dictionary<string, object>(), ct).ConfigureAwait(false);
+            AssertExactToolSet(RequireResult(statelessList, "stateless tools/list"), expected, "HTTP stateless");
+
+            using McpTcpClient tcp = new McpTcpClient();
+            Assert2.True(await tcp.ConnectAsync("127.0.0.1", harness.TcpPort, ct).ConfigureAwait(false), "TCP client connects");
+            await tcp.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
+            AssertExactToolSet(await tcp.CallAsync<JsonElement>("tools/list", new { }, 15000, ct).ConfigureAwait(false), expected, "TCP");
+
+            using McpWebsocketsClient ws = new McpWebsocketsClient();
+            Assert2.True(await ws.ConnectAsync(harness.WebSocketUrl, ct).ConfigureAwait(false), "WebSocket client connects");
+            await ws.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
+            AssertExactToolSet(await ws.CallAsync<JsonElement>("tools/list", new { }, 15000, ct).ConfigureAwait(false), expected, "WebSocket");
+        }
+
+        private static async Task PingReturnsEmptyResultAsync(CancellationToken ct)
+        {
+            await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
+            using HttpClient http = CreateHttpClient();
+            string url = harness.HttpBaseUrl + McpTransportHarness.McpPath;
+
+            Dictionary<string, string> headers = await OpenSessionAsync(http, url, ct).ConfigureAwait(false);
+            using JsonDocument sessionPing = await PostJsonAsync(http, url, Request(2, "ping", new { }), headers, ct).ConfigureAwait(false);
+            AssertEmptyObject(RequireResult(sessionPing, "session ping"), Array.Empty<string>(), "HTTP session ping");
+
+            using JsonDocument statelessPing = await PostStatelessAsync(http, url, 3, "ping", null, new Dictionary<string, object>(), ct).ConfigureAwait(false);
+            JsonElement statelessResult = RequireResult(statelessPing, "stateless ping");
+            AssertEmptyObject(statelessResult, new[] { "resultType" }, "HTTP stateless ping");
+            Assert2.Equal("complete", statelessResult.GetProperty("resultType").GetString()!, "stateless ping carries resultType complete");
+
+            using McpTcpClient tcp = new McpTcpClient();
+            Assert2.True(await tcp.ConnectAsync("127.0.0.1", harness.TcpPort, ct).ConfigureAwait(false), "TCP client connects");
+            AssertEmptyObject(await tcp.CallAsync<JsonElement>("ping", new { }, 15000, ct).ConfigureAwait(false), Array.Empty<string>(), "TCP ping");
+
+            using McpWebsocketsClient ws = new McpWebsocketsClient();
+            Assert2.True(await ws.ConnectAsync(harness.WebSocketUrl, ct).ConfigureAwait(false), "WebSocket client connects");
+            await ws.PingAsync(15000, ct).ConfigureAwait(false);
+            AssertEmptyObject(await ws.CallAsync<JsonElement>("ping", new { }, 15000, ct).ConfigureAwait(false), Array.Empty<string>(), "WebSocket ping");
+        }
+
+        private static async Task DemoToolsAreNotCallableAsync(CancellationToken ct)
+        {
+            await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
+            using HttpClient http = CreateHttpClient();
+            string url = harness.HttpBaseUrl + McpTransportHarness.McpPath;
+            Dictionary<string, string> headers = await OpenSessionAsync(http, url, ct).ConfigureAwait(false);
+
+            int id = 10;
+            foreach (string name in _VoltaicDemoTools)
+            {
+                using JsonDocument call = await PostJsonAsync(http, url, Request(id++, "tools/call", new { name = name, arguments = new { } }), headers, ct).ConfigureAwait(false);
+                Assert2.True(call.RootElement.TryGetProperty("error", out JsonElement error), "HTTP tools/call " + name + " is rejected");
+                Assert2.Equal(-32602, error.GetProperty("code").GetInt32(), "HTTP tools/call " + name + " error code");
+                Assert2.True(error.GetProperty("message").GetString()!.Contains("not found", StringComparison.Ordinal), "HTTP tools/call " + name + " reports the tool was not found");
+            }
+
+            using McpTcpClient tcp = new McpTcpClient();
+            Assert2.True(await tcp.ConnectAsync("127.0.0.1", harness.TcpPort, ct).ConfigureAwait(false), "TCP client connects");
+            using McpWebsocketsClient ws = new McpWebsocketsClient();
+            Assert2.True(await ws.ConnectAsync(harness.WebSocketUrl, ct).ConfigureAwait(false), "WebSocket client connects");
+
+            foreach (string name in new[] { "echo", "getTime", "getClients" })
+            {
+                string tcpError = await CaptureRpcErrorAsync(() => tcp.CallAsync<JsonElement>(name, new { message = "hi" }, 15000, ct)).ConfigureAwait(false);
+                Assert2.True(tcpError.Contains("-32601", StringComparison.Ordinal), "TCP bare " + name + " is method-not-found: " + tcpError);
+
+                string wsError = await CaptureRpcErrorAsync(() => ws.CallAsync<JsonElement>(name, new { message = "hi" }, 15000, ct)).ConfigureAwait(false);
+                Assert2.True(wsError.Contains("-32601", StringComparison.Ordinal), "WebSocket bare " + name + " is method-not-found: " + wsError);
+            }
+        }
+
+        private static async Task HttpRejectsBareToolMethodCallsAsync(CancellationToken ct)
+        {
+            await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
+            using HttpClient http = CreateHttpClient();
+            string url = harness.HttpBaseUrl + McpTransportHarness.McpPath;
+            Dictionary<string, string> headers = await OpenSessionAsync(http, url, ct).ConfigureAwait(false);
+
+            using JsonDocument bare = await PostJsonAsync(http, url, Request(2, "tempo_health", new { }), headers, ct).ConfigureAwait(false);
+            Assert2.True(bare.RootElement.TryGetProperty("error", out JsonElement error), "bare tool method call is rejected");
+            Assert2.Equal(-32601, error.GetProperty("code").GetInt32(), "bare tool method call is method-not-found");
+            Assert2.False(bare.RootElement.TryGetProperty("result", out _), "bare tool method call does not reach Tempo.Server");
+
+            using JsonDocument viaToolsCall = await PostJsonAsync(http, url, Request(3, "tools/call", new { name = "tempo_health", arguments = new { } }), headers, ct).ConfigureAwait(false);
+            AssertSuccessfulTempoCall(RequireResult(viaToolsCall, "tools/call tempo_health"), "same tool through tools/call");
+        }
+
+        private static void AssertExactToolSet(JsonElement listResult, List<string> expected, string transport)
+        {
+            List<string> actual = listResult.GetProperty("tools").EnumerateArray()
+                .Select(t => t.GetProperty("name").GetString() ?? string.Empty)
+                .OrderBy(n => n, StringComparer.Ordinal)
+                .ToList();
+
+            foreach (string demo in _VoltaicDemoTools)
+            {
+                Assert2.False(actual.Contains(demo), transport + " tools/list does not publish Voltaic demo tool " + demo);
+            }
+
+            Assert2.Equal(string.Join(",", expected), string.Join(",", actual), transport + " tools/list contains exactly the Tempo tools");
+        }
+
+        private static void AssertEmptyObject(JsonElement result, string[] allowedProperties, string context)
+        {
+            Assert2.Equal(JsonValueKind.Object, result.ValueKind, context + " returns a JSON object, not \"pong\"");
+            foreach (JsonProperty property in result.EnumerateObject())
+            {
+                Assert2.True(allowedProperties.Contains(property.Name), context + " result has no unexpected property " + property.Name);
+            }
+        }
+
+        private static async Task<string> CaptureRpcErrorAsync(Func<Task<JsonElement>> call)
+        {
+            try
+            {
+                JsonElement unexpected = await call().ConfigureAwait(false);
+                return "no error; result " + unexpected.GetRawText();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return ex.Message;
+            }
         }
 
         private static async Task InstallerTargetsStreamableHttpEndpointAsync(CancellationToken ct)
         {
             await Task.CompletedTask;
-            Assert2.Equal("http://127.0.0.1:8910/mcp", TempoMcpInstaller.BuildClientUrl(new McpHttpSettings()), "default settings produce the /mcp URL");
+            Assert2.Equal("http://127.0.0.1:8910/mcp", McpEndpointUrls.HttpClientUrl(new McpHttpSettings()), "default settings produce the /mcp URL");
 
             McpHttpSettings custom = new McpHttpSettings { Hostname = "mcp.example.local", Port = 9443, RpcPath = "/custom-rpc" };
-            Assert2.Equal("http://mcp.example.local:9443/mcp", TempoMcpInstaller.BuildClientUrl(custom), "hostname and port honored, rpcPath ignored");
-            Assert2.Throws<ArgumentNullException>(() => TempoMcpInstaller.BuildClientUrl(null!), "null settings rejected");
+            Assert2.Equal("http://mcp.example.local:9443/mcp", McpEndpointUrls.HttpClientUrl(custom), "hostname and port honored, rpcPath ignored");
+            Assert2.Throws<ArgumentNullException>(() => McpEndpointUrls.HttpClientUrl(null!), "null settings rejected");
+        }
+
+        private static async Task EndpointUrlsMapWildcardBindHostsAsync(CancellationToken ct)
+        {
+            await Task.CompletedTask;
+            foreach (string wildcard in new[] { "*", "+", "0.0.0.0", "::", "[::]", "", "  " })
+            {
+                Assert2.Equal("http://127.0.0.1:8910/mcp", McpEndpointUrls.HttpClientUrl(new McpHttpSettings { Hostname = wildcard }), "HTTP wildcard '" + wildcard + "' maps to loopback");
+            }
+
+            Assert2.Equal("http://[::1]:8910/mcp", McpEndpointUrls.HttpClientUrl(new McpHttpSettings { Hostname = "::1" }), "IPv6 literal bracketed");
+            Assert2.Equal("http://127.0.0.1:8910/rpc", McpEndpointUrls.HttpLegacyRpcUrl(new McpHttpSettings { Hostname = "*" }), "legacy RPC URL uses rpcPath");
+            Assert2.Equal("tcp://127.0.0.1:8911", McpEndpointUrls.TcpClientUrl(new McpTcpSettings { Address = "0.0.0.0" }), "TCP wildcard maps to loopback");
+            Assert2.Equal("ws://127.0.0.1:8912/mcp", McpEndpointUrls.WebSocketClientUrl(new McpWebSocketSettings { Hostname = "*" }), "WebSocket wildcard maps to loopback");
+            Assert2.Equal("ws://mcp.example.local:8912/mcp", McpEndpointUrls.WebSocketClientUrl(new McpWebSocketSettings { Hostname = "mcp.example.local" }), "named host preserved");
+        }
+
+        private static async Task ServerReportsBuildVersionAsync(CancellationToken ct)
+        {
+            string expected = typeof(McpEndpointUrls).Assembly.GetName().Version!.ToString(3);
+            Assert2.Equal(expected, Tempo.McpServer.Constants.Version, "Constants.Version matches the assembly version");
+
+            await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
+            using HttpClient http = CreateHttpClient();
+            using JsonDocument init = await PostJsonAsync(http, harness.HttpBaseUrl + McpTransportHarness.McpPath, InitializeRequest(HandshakeProtocolVersion), null, ct).ConfigureAwait(false);
+            Assert2.Equal(expected, RequireResult(init, "initialize").GetProperty("serverInfo").GetProperty("version").GetString()!, "HTTP serverInfo.version");
+
+            using McpTcpClient tcp = new McpTcpClient();
+            Assert2.True(await tcp.ConnectAsync("127.0.0.1", harness.TcpPort, ct).ConfigureAwait(false), "TCP client connects");
+            JsonElement tcpInit = await tcp.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
+            Assert2.Equal(expected, tcpInit.GetProperty("serverInfo").GetProperty("version").GetString()!, "TCP serverInfo.version");
+
+            using McpWebsocketsClient ws = new McpWebsocketsClient();
+            Assert2.True(await ws.ConnectAsync(harness.WebSocketUrl, ct).ConfigureAwait(false), "WebSocket client connects");
+            JsonElement wsInit = await ws.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
+            Assert2.Equal(expected, wsInit.GetProperty("serverInfo").GetProperty("version").GetString()!, "WebSocket serverInfo.version");
+        }
+
+        private static async Task MeReportsAdminApiKeyPrincipalAsync(CancellationToken ct)
+        {
+            await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
+            using HttpClient http = CreateHttpClient();
+            string url = harness.HttpBaseUrl + McpTransportHarness.McpPath;
+            Dictionary<string, string> headers = await OpenSessionAsync(http, url, ct).ConfigureAwait(false);
+
+            using JsonDocument call = await PostJsonAsync(http, url, Request(2, "tools/call", new { name = "tempo_me", arguments = new { } }), headers, ct).ConfigureAwait(false);
+            JsonElement result = RequireResult(call, "tools/call tempo_me");
+            AssertSuccessfulTempoCall(result, "tempo_me");
+
+            using JsonDocument response = JsonDocument.Parse(result.GetProperty("content")[0].GetProperty("text").GetString()!);
+            JsonElement body = response.RootElement.GetProperty("Body");
+            Assert2.Equal("adminApiKey", body.GetProperty("type").GetString()!, "principal type identifies the admin API key");
+            Assert2.Equal(McpTransportHarness.AdminApiKeyPrincipal, body.GetProperty("id").GetString()!, "principal id names the admin API key");
+            Assert2.True(body.GetProperty("isAdmin").GetBoolean(), "admin API key principal is an administrator");
+        }
+
+        private static async Task LocalhostEndpointAvoidsIpv6FallbackAsync(CancellationToken ct)
+        {
+            await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
+            await harness.ApiClient.GetAsync("/v1.0/api/health", ct).ConfigureAwait(false);
+
+            // Tempo.Server closes each connection, so every call reconnects. With ::1 tried first this took about
+            // 2 seconds per call on Windows; IPv4-first loopback takes milliseconds. 5 calls in 3 seconds leaves wide margin.
+            System.Diagnostics.Stopwatch stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < 5; i++)
+            {
+                Tempo.McpServer.Services.TempoApiResponse response = await harness.ApiClient.GetAsync("/v1.0/api/health", ct).ConfigureAwait(false);
+                Assert2.Equal(200, response.StatusCode, "health call " + i + " succeeds over localhost");
+            }
+
+            Assert2.True(stopwatch.ElapsedMilliseconds < 3000, "5 localhost calls completed in " + stopwatch.ElapsedMilliseconds + "ms (expected well under 3000ms)");
+        }
+
+        private static async Task ToolFailuresReturnIsErrorResultsAsync(CancellationToken ct)
+        {
+            await using (McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false))
+            {
+                using HttpClient http = CreateHttpClient();
+                string url = harness.HttpBaseUrl + McpTransportHarness.McpPath;
+                Dictionary<string, string> headers = await OpenSessionAsync(http, url, ct).ConfigureAwait(false);
+
+                using JsonDocument emptyId = await PostJsonAsync(http, url, Request(2, "tools/call", new { name = "readWorker", arguments = new { id = "" } }), headers, ct).ConfigureAwait(false);
+                AssertToolError(RequireResult(emptyId, "readWorker with empty id"), "invalid arguments: id is required", "empty id");
+
+                using JsonDocument badPath = await PostJsonAsync(http, url, Request(3, "tools/call", new { name = "tempo_request", arguments = new { method = "GET", path = "/etc/passwd" } }), headers, ct).ConfigureAwait(false);
+                AssertToolError(RequireResult(badPath, "tempo_request outside /v1.0"), "API path must be / or start with /v1.0/", "path outside the API");
+            }
+
+            int deadPort = FreePort();
+            int httpPort = FreePort();
+            using Tempo.McpServer.Services.TempoApiClient deadClient = new Tempo.McpServer.Services.TempoApiClient(new TempoEndpointSettings { Endpoint = "http://127.0.0.1:" + deadPort, TimeoutMs = 5000 });
+            using McpHttpServer server = Tempo.McpServer.Bootstrapper.CreateHttpServer(new McpHttpSettings { Hostname = "127.0.0.1", Port = httpPort }, deadClient);
+            using CancellationTokenSource serverToken = new CancellationTokenSource();
+            _ = server.StartAsync(serverToken.Token);
+            try
+            {
+                using HttpClient http = CreateHttpClient();
+                string url = "http://127.0.0.1:" + httpPort + McpTransportHarness.McpPath;
+                Dictionary<string, string> headers = await OpenSessionWithRetryAsync(http, url, ct).ConfigureAwait(false);
+                using JsonDocument call = await PostJsonAsync(http, url, Request(4, "tools/call", new { name = "tempo_health", arguments = new { } }), headers, ct).ConfigureAwait(false);
+                AssertToolError(RequireResult(call, "tempo_health with Tempo.Server down"), "could not reach Tempo.Server at http://127.0.0.1:" + deadPort, "unreachable backend");
+            }
+            finally
+            {
+                serverToken.Cancel();
+                try { server.Stop(); } catch { /* ignore */ }
+            }
+        }
+
+        private static void AssertToolError(JsonElement callResult, string expectedText, string context)
+        {
+            Assert2.True(callResult.TryGetProperty("isError", out JsonElement isError) && isError.GetBoolean(), context + " is reported as an isError tool result");
+            string text = callResult.GetProperty("content")[0].GetProperty("text").GetString() ?? string.Empty;
+            Assert2.True(text.Contains(expectedText, StringComparison.Ordinal), context + " message explains the failure: " + text);
+        }
+
+        private static async Task<Dictionary<string, string>> OpenSessionWithRetryAsync(HttpClient http, string url, CancellationToken ct)
+        {
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    return await OpenSessionAsync(http, url, ct).ConfigureAwait(false);
+                }
+                catch (HttpRequestException) when (attempt < 100)
+                {
+                    await Task.Delay(50, ct).ConfigureAwait(false);
+                }
+            }
+        }
+
+        private static int FreePort()
+        {
+            System.Net.Sockets.TcpListener listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            listener.Stop();
+            return port;
         }
 
         private static async Task HttpHandshakeCapsProtocolVersionAsync(CancellationToken ct)
@@ -96,7 +379,7 @@ namespace Test.Shared.Suites
         {
             await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
             using HttpClient http = CreateHttpClient();
-            string url = TempoMcpInstaller.BuildClientUrl(new McpHttpSettings { Hostname = "127.0.0.1", Port = harness.HttpPort });
+            string url = McpEndpointUrls.HttpClientUrl(new McpHttpSettings { Hostname = "127.0.0.1", Port = harness.HttpPort });
 
             using JsonDocument discover = await PostStatelessAsync(http, url, 1, "server/discover", null, new Dictionary<string, object>(), ct).ConfigureAwait(false);
             JsonElement discoverResult = RequireResult(discover, "server/discover");

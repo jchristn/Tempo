@@ -132,6 +132,7 @@ namespace Tempo.Server.Routes
             object? principal = null;
             if (rc.User != null) principal = new { type = "user", id = rc.User.Id, email = rc.User.Email, tenantId = rc.User.TenantId, isAdmin = rc.IsAdmin, isTenantAdmin = rc.IsTenantAdmin };
             else if (rc.Administrator != null) principal = new { type = "administrator", id = rc.Administrator.Id, email = rc.Administrator.Email };
+            else if (rc.IsAdmin) principal = new { type = "adminApiKey", id = rc.PrincipalName, isAdmin = true };
             else principal = new { type = "anonymous" };
             await RouteHelpers.JsonAsync(ctx, 200, principal);
         }

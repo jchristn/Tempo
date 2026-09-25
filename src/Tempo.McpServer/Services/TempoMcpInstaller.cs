@@ -11,19 +11,6 @@ namespace Tempo.McpServer.Services
     /// </summary>
     public static class TempoMcpInstaller
     {
-        /// <summary>
-        /// Build the URL MCP clients should be configured with: the Streamable HTTP endpoint
-        /// (<see cref="Constants.StreamableHttpPath"/>) on the configured HTTP hostname and port.
-        /// </summary>
-        /// <param name="http">HTTP transport settings.</param>
-        /// <returns>Client URL, for example <c>http://127.0.0.1:8910/mcp</c>.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when http is null.</exception>
-        public static string BuildClientUrl(McpHttpSettings http)
-        {
-            if (http == null) throw new ArgumentNullException(nameof(http));
-            return "http://" + http.Hostname + ":" + http.Port + Constants.StreamableHttpPath;
-        }
-
         /// <summary>Install or preview Claude configuration.</summary>
         /// <param name="settings">Settings.</param>
         /// <param name="dryRun">True to preview only.</param>
@@ -31,7 +18,7 @@ namespace Tempo.McpServer.Services
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
 
-            string mcpUrl = BuildClientUrl(settings.Http);
+            string mcpUrl = McpEndpointUrls.HttpClientUrl(settings.Http);
             string homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             string claudeJsonPath = Path.Combine(homeDirectory, ".claude.json");
 

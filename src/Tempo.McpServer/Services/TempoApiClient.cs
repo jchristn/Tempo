@@ -2,7 +2,11 @@ namespace Tempo.McpServer.Services
 {
     using System;
     using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using System.Net;
     using System.Net.Http;
+    using System.Net.Sockets;
     using System.Text;
     using System.Text.Json.Nodes;
     using System.Threading;
@@ -28,7 +32,8 @@ namespace Tempo.McpServer.Services
         public TempoApiClient(TempoEndpointSettings settings)
         {
             _Settings = settings ?? throw new ArgumentNullException(nameof(settings));
-            _HttpClient = new HttpClient();
+            SocketsHttpHandler handler = new SocketsHttpHandler { ConnectCallback = ConnectAsync };
+            _HttpClient = new HttpClient(handler, disposeHandler: true);
             _HttpClient.BaseAddress = new Uri(NormalizeEndpoint(settings.Endpoint), UriKind.Absolute);
             _HttpClient.Timeout = TimeSpan.FromMilliseconds(Math.Max(1000, settings.TimeoutMs));
         }
@@ -148,6 +153,38 @@ namespace Tempo.McpServer.Services
         public void Dispose()
         {
             _HttpClient.Dispose();
+        }
+
+        private static async ValueTask<Stream> ConnectAsync(SocketsHttpConnectionContext context, CancellationToken token)
+        {
+            // Tempo.Server binds IPv4 loopback by default and replies with Connection: close, so letting "localhost"
+            // resolve to ::1 first costs a refused IPv6 attempt (about 2 seconds on Windows) on every tool call.
+            IPAddress[] addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, token).ConfigureAwait(false);
+            if (addresses.Length > 0 && addresses.All(IPAddress.IsLoopback))
+                addresses = addresses.OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1).ToArray();
+
+            SocketException? lastError = null;
+            foreach (IPAddress address in addresses)
+            {
+                Socket socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                try
+                {
+                    await socket.ConnectAsync(new IPEndPoint(address, context.DnsEndPoint.Port), token).ConfigureAwait(false);
+                    return new NetworkStream(socket, ownsSocket: true);
+                }
+                catch (SocketException ex)
+                {
+                    socket.Dispose();
+                    lastError = ex;
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            }
+
+            throw lastError ?? new SocketException((int)SocketError.HostNotFound);
         }
 
         private static string NormalizeEndpoint(string endpoint)

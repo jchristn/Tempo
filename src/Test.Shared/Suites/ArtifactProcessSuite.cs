@@ -208,8 +208,16 @@ namespace Test.Shared.Suites
                             ArtifactVersionRecord version = await runtime.CreateProcessArtifactAsync(tenant.Id, "cancel-tool", "1", "sleep", ct);
                             (FlowRun run, DataFlowRecord flow) = await runtime.CreateArtifactFlowRunAsync(tenant.Id, version.ArtifactId, "1", "cancel-step", ct);
                             FlowRunExecutionSnapshot snapshot = await FlowRunSnapshotBuilder.BuildAsync(runtime.Driver, run, flow, ct);
-                            using CancellationTokenSource cancel = new CancellationTokenSource(200);
-                            StepResult result = await runtime.RunExistingAsync(tenant.Id, flow, run, snapshot, cancel.Token);
+                            using CancellationTokenSource cancel = new CancellationTokenSource();
+                            Task<StepResult> running = runtime.RunExistingAsync(tenant.Id, flow, run, snapshot, cancel.Token);
+
+                            // Cancel only once the child is running. A fixed delay raced flow setup, artifact extraction,
+                            // and the capacity lease under load, so cancellation could land before any process existed.
+                            bool started = await WaitForActiveProcessAsync(runtime, running, ct);
+                            Assert2.True(started, "child process started before cancellation");
+                            cancel.Cancel();
+
+                            StepResult result = await running;
                             Assert2.Equal(StepResultTypeEnum.Exception, result.Result, "cancellation result");
                             Assert2.True(runtime.Capacity.Snapshot().ProcessKillCount >= 1, "process kill recorded");
                         }
@@ -878,6 +886,24 @@ namespace Test.Shared.Suites
                 if (File.Exists(Path.Combine(candidate, "Test.ArtifactFixture.dll"))) return candidate;
             }
             throw new FileNotFoundException("Test.ArtifactFixture.dll was not built for " + tfm + ".");
+        }
+
+        private static async Task<bool> WaitForActiveProcessAsync(TestRuntime runtime, Task running, CancellationToken token)
+        {
+            DateTime deadline = DateTime.UtcNow.AddSeconds(30);
+            while (DateTime.UtcNow < deadline && !running.IsCompleted)
+            {
+                if (runtime.Capacity.Snapshot().ActiveServerWide > 0)
+                {
+                    // The lease is taken immediately before Process.Start; allow that call to complete.
+                    await Task.Delay(500, token).ConfigureAwait(false);
+                    return !running.IsCompleted;
+                }
+
+                await Task.Delay(25, token).ConfigureAwait(false);
+            }
+
+            return false;
         }
 
         private static byte[] ZipWithEntries(Dictionary<string, byte[]> files)

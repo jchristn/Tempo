@@ -88,6 +88,14 @@ GET /v1.0/me
 Authorization: Bearer {token}
 ```
 
+The `type` field identifies the principal:
+
+| `type` | When | Other fields |
+| --- | --- | --- |
+| `user` | User token, user credential access key, or tenant email/password | `id`, `email`, `tenantId`, `isAdmin`, `isTenantAdmin` |
+| `administrator` | Administrator token or administrator email/password | `id`, `email` |
+| `adminApiKey` | Global admin API key (`x-api-key` matching `auth.adminApiKey`) | `id` (`admin-api-key`), `isAdmin` (`true`) |
+
 Health check is pre-authentication:
 
 ```http

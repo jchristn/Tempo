@@ -9,12 +9,13 @@ All notable changes to Tempo are documented in this file.
 - Dashboard internationalization across login, navigation, workspace titles/subtitles, tables, filters, buttons, modal labels, hover/help text, shared chrome, and status/enum surfaces for the supported ship locales (`en`, `es`, `zh-Hans`, `yue-Hant-HK`, `ja`, `de`, `fr`, `it`, `zh-Hant-TW`)
 - Dashboard i18n audit enforcement so extracted UI strings must be present for supported non-English locales and new raw localizable JSX text fails test coverage
 - Explicit flow-level HTTP trigger invocation modes for public versus API-authenticated data flows, centered on the `invocationAuthMode` contract (`Public` and `ApiAuthenticated`)
-- `McpTransport` test suite that boots an in-process Tempo.Server plus every Tempo.McpServer transport and drives it the way MCP clients do. It covers the handshake version cap, session and stateless (`2026-07-28`) Streamable HTTP `tools/list`/`tools/call`, invalid-argument errors, TCP and WebSocket tool discovery, and the installer URL
+- `McpTransport` test suite that boots an in-process Tempo.Server plus every Tempo.McpServer transport and drives it the way MCP clients do. It covers the handshake version cap, session and stateless (`2026-07-28`) Streamable HTTP `tools/list`/`tools/call`, invalid-argument errors, TCP and WebSocket tool discovery, and the installer URL. It also covers the reported server version, wildcard bind-host URLs, the admin API key `/me` principal, `isError` tool failures, and `localhost` connection latency. Voltaic 2.0.0 cases assert that every transport lists exactly the Tempo tools, that `ping` returns an empty result, that demo tools cannot be called, and that HTTP rejects bare tool-method calls
+- `McpEndpointUrls` helper that derives connectable client URLs for every Tempo.McpServer transport from the bind settings
 
 ### Changed
 
 - Updated NuGet dependencies solution-wide:
-  - `Voltaic` 0.6.0 to 1.1.0
+  - `Voltaic` 0.6.0 to 2.0.0 (through 1.1.0; see the Voltaic `MIGRATE_V1_TO_V2.md` guide)
   - `Watson` 7.1.0 to 7.2.0
   - `RestWrapper` 3.2.0 to 3.3.0
   - `Padlock` 1.0.4 to 1.1.0
@@ -25,13 +26,21 @@ All notable changes to Tempo are documented in this file.
   - `Microsoft.NET.Test.Sdk` 18.9.0 to 18.10.1
   - `NUnit3TestAdapter` 6.2.0 to 6.3.0
 - Tempo.McpServer inherits Voltaic 1.1.0 protocol behavior: `initialize` negotiates at most `2025-11-25` on every transport, and stateless `2026-07-28` results carry `resultType` (plus `ttlMs`/`cacheScope` on list results)
+- Tempo.McpServer inherits Voltaic 2.0.0 behavior. `tools/list` now returns only Tempo tools: Voltaic's demo tools (`ping`, `echo`, `getTime`, `getSessions`, `getClients`) are no longer published, which also removes `getSessions`, a tool that exposed every client's `Mcp-Session-Id`. The protocol `ping` returns `{}` instead of `"pong"`. On the HTTP transport a Tempo tool is reachable only through `tools/call`, so a bare JSON-RPC call to a tool name returns `-32601`. The TCP and WebSocket transports still register each tool as a direct method on purpose. The servers are constructed without the removed `includeDefaultMethods` argument
 - Tempo MCP tool handlers now run asynchronously and honor transport cancellation instead of blocking on the Tempo REST call
 - The Tempo.McpServer startup banner now prints the Streamable HTTP client URL (`/mcp`) and labels `/rpc` as legacy
+- Tempo.McpServer's default Tempo endpoint is now `http://127.0.0.1:8901`, matching Tempo.Server's default IPv4 loopback bind and Tempo.Worker's default
+- `GET /v1.0/me` now returns `{ "type": "adminApiKey", "id": "admin-api-key", "isAdmin": true }` for the global admin API key; it used to return `{ "type": "anonymous" }`
 
 ### Fixed
 
 - Claude Code (2.1.x, stateless `2026-07-28` MCP revision) listed zero Tempo tools. The `install` command now configures `http://<host>:<port>/mcp`, the Streamable HTTP endpoint, instead of the legacy `/rpc` endpoint, which does not return the stateless result shape. Existing installs should re-run `install` or change the URL to `/mcp`
 - The TCP and WebSocket MCP transports registered Tempo tools only as raw JSON-RPC methods, so standard MCP clients saw no Tempo tools in `tools/list` and `tools/call` failed with "tool not found". Tools are now registered as MCP tools on every transport, and direct method invocation still works
+- Tempo.McpServer reported a stale hard-coded version (`0.3.0`) in `serverInfo.version` and `softwareVersion`. The version is now read from the built assembly, so it always matches the project `Version`
+- Every MCP tool call took about 2 seconds on Windows when the Tempo endpoint used `localhost`: the connection tried `::1` first, was refused, and fell back to IPv4, and Tempo.Server's `Connection: close` repeated that on every call. The API client now connects to loopback hosts over IPv4 first (about 2,000 ms to 60-150 ms per call)
+- Tool execution failures (Tempo.Server unreachable, timeouts, invalid argument values) surfaced as opaque JSON-RPC `-32603 Internal error` responses. They now return MCP `isError` tool results with an actionable message; direct JSON-RPC method calls on TCP/WebSocket still return JSON-RPC errors
+- Client URLs from `install` and the startup banner were unusable for wildcard bind hosts, for example `http://*:8910/mcp` with the Docker config. Wildcards now map to `127.0.0.1` and IPv6 literals are bracketed
+- `ArtifactProcess` "kills the child process when execution is cancelled" test was flaky under load: its fixed 200 ms cancellation could fire before the child process was spawned. It now cancels only after the process holds its capacity lease
 
 ### Documentation
 
@@ -40,6 +49,8 @@ All notable changes to Tempo are documented in this file.
 - Changelog coverage for the `invocationAuthMode` model so public and API-authenticated flow behavior is called out alongside other platform capabilities
 - Archived the working `I18N.md` and `SCALE.md` planning documents under `archive/`
 - `docs/MCP_API.md` and README now point MCP clients at the Streamable HTTP `/mcp` endpoint, list `/rpc` as legacy, and describe per-transport tool exposure and protocol-version negotiation
+- `docs/REST_API.md` documents the `/v1.0/me` principal types; `docs/MCP_API.md` documents the `127.0.0.1` default endpoint, wildcard-host handling, the legacy `/events` path, and the `tempo_me` admin API key principal
+- README now states that the compose file is pinned to the latest published images (`v0.3.0`); it previously claimed `v0.4.0`, which has not been published
 
 ## [0.3.0] - 2026-04-21
 

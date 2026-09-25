@@ -9,9 +9,9 @@ namespace Test.Shared
     using SyslogLogging;
     using Tempo.Core.Database.Sqlite;
     using Tempo.Core.Settings;
+    using McpBootstrapper = Tempo.McpServer.Bootstrapper;
     using Tempo.McpServer.Services;
     using Tempo.McpServer.Settings;
-    using Tempo.McpServer.Tools;
     using Tempo.Server;
     using Voltaic.Mcp;
 
@@ -29,6 +29,12 @@ namespace Test.Shared
 
         /// <summary>WebSocket MCP endpoint path.</summary>
         public const string WebSocketPath = "/mcp";
+
+        /// <summary>Admin API key principal name reported by Tempo.Server.</summary>
+        public const string AdminApiKeyPrincipal = "admin-api-key";
+
+        /// <summary>Tempo API client the MCP transports forward tool calls through.</summary>
+        public TempoApiClient ApiClient => _ApiClient ?? throw new InvalidOperationException("Harness has not started.");
 
         /// <summary>Base URL of the HTTP MCP transport, for example <c>http://127.0.0.1:50123</c>.</summary>
         public string HttpBaseUrl => "http://127.0.0.1:" + _HttpPort;
@@ -113,30 +119,27 @@ namespace Test.Shared
             _TempoServer = new TempoServer(settings, logging, _Driver, new Tempo.StepManager());
             await _TempoServer.StartAsync().ConfigureAwait(false);
 
+            // "localhost" on purpose: Tempo.Server binds IPv4 loopback only, which is the configuration where resolving
+            // ::1 first used to add about 2 seconds to every MCP tool call on Windows.
             TempoEndpointSettings endpoint = new TempoEndpointSettings
             {
-                Endpoint = "http://127.0.0.1:" + tempoPort,
+                Endpoint = "http://localhost:" + tempoPort,
                 ApiKey = AdminApiKey,
                 TimeoutMs = 15000
             };
             _ApiClient = new TempoApiClient(endpoint);
 
+            // Built through the same factories Tempo.McpServer uses at startup so name, version, and tool wiring match production.
             _HttpPort = FreePort();
-            _HttpServer = new McpHttpServer("127.0.0.1", _HttpPort, "/rpc", "/events", includeDefaultMethods: true);
-            _HttpServer.ServerName = "Tempo.McpServer";
-            TempoToolRegistrar.Register(_HttpServer, _ApiClient);
+            _HttpServer = McpBootstrapper.CreateHttpServer(new McpHttpSettings { Hostname = "127.0.0.1", Port = _HttpPort }, _ApiClient);
             _ = _HttpServer.StartAsync(_TokenSource.Token);
 
             _TcpPort = FreePort();
-            _TcpServer = new McpTcpServer(IPAddress.Loopback, _TcpPort, includeDefaultMethods: true);
-            _TcpServer.ServerName = "Tempo.McpServer";
-            TempoToolRegistrar.Register(_TcpServer, _ApiClient);
+            _TcpServer = McpBootstrapper.CreateTcpServer(new McpTcpSettings { Address = "127.0.0.1", Port = _TcpPort }, _ApiClient);
             _ = _TcpServer.StartAsync(_TokenSource.Token);
 
             _WebSocketPort = FreePort();
-            _WebSocketServer = new McpWebsocketsServer("127.0.0.1", _WebSocketPort, WebSocketPath, includeDefaultMethods: true);
-            _WebSocketServer.ServerName = "Tempo.McpServer";
-            TempoToolRegistrar.Register(_WebSocketServer, _ApiClient);
+            _WebSocketServer = McpBootstrapper.CreateWebSocketServer(new McpWebSocketSettings { Hostname = "127.0.0.1", Port = _WebSocketPort, Path = WebSocketPath }, _ApiClient);
             _ = _WebSocketServer.StartAsync(_TokenSource.Token);
 
             await WaitForListenerAsync(_HttpPort, token).ConfigureAwait(false);
