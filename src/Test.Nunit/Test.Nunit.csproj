@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>    <IsPackable>false</IsPackable>
     <AssemblyName>Test.Nunit</AssemblyName>
     <RootNamespace>Test.Nunit</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

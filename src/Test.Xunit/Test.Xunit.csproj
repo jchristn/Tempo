@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>    <IsPackable>false</IsPackable>
     <AssemblyName>Test.Xunit</AssemblyName>
     <RootNamespace>Test.Xunit</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

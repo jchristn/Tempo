@@ -34,6 +34,7 @@ namespace Test.Shared.Suites
                     new TestCaseDescriptor("McpTransport", "InstallerTargetsStreamableHttpEndpoint", "The Claude Code installer points clients at the Streamable HTTP /mcp endpoint rather than the legacy /rpc endpoint", InstallerTargetsStreamableHttpEndpointAsync),
                     new TestCaseDescriptor("McpTransport", "EndpointUrlsMapWildcardBindHosts", "Client URLs replace wildcard bind hosts (*, +, 0.0.0.0, ::) with 127.0.0.1 and bracket IPv6 literals", EndpointUrlsMapWildcardBindHostsAsync),
                     new TestCaseDescriptor("McpTransport", "ServerReportsBuildVersion", "Every transport advertises the built assembly version in serverInfo instead of a hard-coded constant", ServerReportsBuildVersionAsync),
+                    new TestCaseDescriptor("McpTransport", "ComponentVersionsAgree", "Tempo, Tempo.Core, Tempo.Server, Tempo.Worker, and Tempo.McpServer share one version, and Tempo.Server's GET / reports it instead of a hard-coded value", ComponentVersionsAgreeAsync),
                     new TestCaseDescriptor("McpTransport", "MeReportsAdminApiKeyPrincipal", "tempo_me identifies the admin API key principal instead of reporting anonymous", MeReportsAdminApiKeyPrincipalAsync),
                     new TestCaseDescriptor("McpTransport", "LocalhostEndpointAvoidsIpv6Fallback", "A localhost Tempo endpoint connects over IPv4 loopback first, so tool calls do not pay a refused-IPv6 delay", LocalhostEndpointAvoidsIpv6FallbackAsync),
                     new TestCaseDescriptor("McpTransport", "ToolFailuresReturnIsErrorResults", "Tool execution failures (invalid argument values, Tempo.Server unreachable) return isError results with a readable message instead of JSON-RPC -32603", ToolFailuresReturnIsErrorResultsAsync),
@@ -230,6 +231,29 @@ namespace Test.Shared.Suites
             Assert2.True(await ws.ConnectAsync(harness.WebSocketUrl, ct).ConfigureAwait(false), "WebSocket client connects");
             JsonElement wsInit = await ws.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
             Assert2.Equal(expected, wsInit.GetProperty("serverInfo").GetProperty("version").GetString()!, "WebSocket serverInfo.version");
+        }
+
+        private static async Task ComponentVersionsAgreeAsync(CancellationToken ct)
+        {
+            string expected = typeof(Tempo.Server.TempoServer).Assembly.GetName().Version!.ToString(3);
+            Type[] components = new[]
+            {
+                typeof(Tempo.StepManager),
+                typeof(Tempo.Core.Settings.Settings),
+                typeof(Tempo.Worker.WorkerNode),
+                typeof(McpEndpointUrls)
+            };
+
+            foreach (Type component in components)
+            {
+                Assert2.Equal(expected, component.Assembly.GetName().Version!.ToString(3), component.Assembly.GetName().Name + " version matches Tempo.Server");
+            }
+
+            await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
+            TempoApiResponse root = await harness.ApiClient.GetAsync("/", ct).ConfigureAwait(false);
+            Assert2.Equal(200, root.StatusCode, "GET / succeeds");
+            using JsonDocument body = JsonDocument.Parse(root.Body?.ToJsonString() ?? "{}");
+            Assert2.Equal(expected, body.RootElement.GetProperty("version").GetString()!, "GET / reports the Tempo.Server assembly version");
         }
 
         private static async Task MeReportsAdminApiKeyPrincipalAsync(CancellationToken ct)

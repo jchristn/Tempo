@@ -278,7 +278,7 @@ GET /v1.0/steps/registered
     "declaringType": "Tempo.Server.Runtime.StartupSampleSteps",
     "methodName": "Echo",
     "assemblyName": "Tempo.Server",
-    "assemblyVersion": "0.1.0",
+    "assemblyVersion": "0.3.0.0",
     "signatureHash": "..."
   }
 }

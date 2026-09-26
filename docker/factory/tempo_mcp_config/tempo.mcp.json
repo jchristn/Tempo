@@ -1,6 +1,6 @@
 {
   "createdUtc": "2026-04-20T00:00:00.000Z",
-  "softwareVersion": "0.4.0",
+  "softwareVersion": "0.3.0",
   "node": {
     "name": "tempo-mcp",
     "lastStartUtc": "2026-04-20T00:00:00.000Z"

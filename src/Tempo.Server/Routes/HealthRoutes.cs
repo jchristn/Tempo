@@ -9,6 +9,8 @@ namespace Tempo.Server.Routes
     /// <summary>Health-check route registrar.</summary>
     public class HealthRoutes
     {
+        private static readonly string _Version = typeof(HealthRoutes).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
         /// <summary>Register routes.</summary>
         public void Register(Webserver server)
         {
@@ -28,7 +30,7 @@ namespace Tempo.Server.Routes
 
         private static async Task RootAsync(HttpContextBase ctx)
         {
-            await RouteHelpers.JsonAsync(ctx, 200, new { name = "Tempo Server", version = "0.1.0" });
+            await RouteHelpers.JsonAsync(ctx, 200, new { name = "Tempo Server", version = _Version });
         }
     }
 }

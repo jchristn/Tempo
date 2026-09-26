@@ -5,7 +5,7 @@
 # Tempo
 
 > **Note**  
-> v0.4.0 - Tempo is in ALPHA - API surface and data structures subject to change
+> v0.3.0 - Tempo is in ALPHA - API surface and data structures subject to change
 
 [![NuGet](https://img.shields.io/nuget/v/Tempo.svg)](https://www.nuget.org/packages/Tempo/)
 [![NuGet Tempo.Sdk](https://img.shields.io/nuget/v/Tempo.Sdk.svg)](https://www.nuget.org/packages/Tempo.Sdk/)
@@ -68,11 +68,11 @@ Default seeded credentials on an empty database:
 - Password: `password`
 - Local admin API key: `tempo-local-admin-api-key`
 
-Compose bind-mounts `docker/tempo.server.json` and `docker/tempo.worker.json` so first-run deployments use the intended control-plane and worker settings without depending on pre-seeded config volumes. Persistent named volumes remain in place for the server database, server artifact blob storage, server logs/runtime cache/scratch, shared worker logs, shared run logs, dashboard logs, and MCP configuration. Worker runtime-cache and scratch paths remain container-local anonymous volumes so scaled workers do not share mutable runtime state, while worker log files are written to a shared named volume that `Tempo.Server` mounts read-only for the admin log viewer. Per-run logs are written to a separate shared volume mounted read-write by the server and workers so run logs survive container restarts and remain visible through the `Runs` view and tenant-scoped run-log APIs. The service images in the compose file are pinned to `v0.3.0`, the most recent published images; `v0.4.0` images have not been published yet.
+Compose bind-mounts `docker/tempo.server.json` and `docker/tempo.worker.json` so first-run deployments use the intended control-plane and worker settings without depending on pre-seeded config volumes. Persistent named volumes remain in place for the server database, server artifact blob storage, server logs/runtime cache/scratch, shared worker logs, shared run logs, dashboard logs, and MCP configuration. Worker runtime-cache and scratch paths remain container-local anonymous volumes so scaled workers do not share mutable runtime state, while worker log files are written to a shared named volume that `Tempo.Server` mounts read-only for the admin log viewer. Per-run logs are written to a separate shared volume mounted read-write by the server and workers so run logs survive container restarts and remain visible through the `Runs` view and tenant-scoped run-log APIs. The service images in the compose file are pinned to `v0.3.0`, the current Tempo version.
 
 ### Distributed Execution Model
 
-Tempo v0.4.0 splits the platform into:
+Tempo v0.3.0 splits the platform into:
 
 - `Tempo.Server` as the control plane for REST, MCP, scheduling, persistence, worker management, and authenticated artifact download
 - `Tempo.Worker` as the execution plane for assigned flow runs
@@ -107,11 +107,11 @@ npm run dev
 
 Helper scripts at the repository root:
 
-- `build-all.bat v0.4.0`
-- `build-server.bat v0.4.0`
-- `build-worker.bat v0.4.0`
-- `build-mcp.bat v0.4.0`
-- `build-dashboard.bat v0.4.0`
+- `build-all.bat v0.3.0`
+- `build-server.bat v0.3.0`
+- `build-worker.bat v0.3.0`
+- `build-mcp.bat v0.3.0`
+- `build-dashboard.bat v0.3.0`
 - `publish-nuget.bat <nuget-api-key>`
 
 ## Core Concepts

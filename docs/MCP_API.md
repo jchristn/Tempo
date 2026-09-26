@@ -133,7 +133,7 @@ Root settings shape:
 
 ```json
 {
-  "softwareVersion": "0.4.0",
+  "softwareVersion": "0.3.0",
   "tempo": {
     "endpoint": "http://127.0.0.1:8901",
     "timeoutMs": 30000,
