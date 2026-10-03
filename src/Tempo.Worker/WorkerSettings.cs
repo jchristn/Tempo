@@ -1,4 +1,4 @@
-namespace Tempo.Worker
+﻿namespace Tempo.Worker
 {
     using System;
     using System.Collections.Generic;
@@ -98,6 +98,14 @@ namespace Tempo.Worker
             set => _RunLogs = value ?? throw new ArgumentNullException(nameof(RunLogs));
         }
 
+        /// <summary>Telemetry export configuration for the worker (OTLP, Prometheus, logs). Never null.</summary>
+        /// <exception cref="ArgumentNullException">Thrown when set to null.</exception>
+        public TelemetrySettings Telemetry
+        {
+            get => _Telemetry;
+            set => _Telemetry = value ?? throw new ArgumentNullException(nameof(Telemetry));
+        }
+
         private string _ServerEndpoint = "http://127.0.0.1:8901";
         private string _WorkerId = "wrk_worker_1";
         private string _Name = Environment.MachineName;
@@ -108,6 +116,7 @@ namespace Tempo.Worker
         private int _RequestTimeoutMs = 30000;
         private LoggingSettings _Logging = new LoggingSettings();
         private RuntimeSettings _Runtimes = new RuntimeSettings();
+        private TelemetrySettings _Telemetry = new TelemetrySettings();
         private RunLogSettings _RunLogs = new RunLogSettings();
     }
 }

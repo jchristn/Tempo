@@ -1,7 +1,9 @@
-namespace Tempo.Server.Services
+﻿namespace Tempo.Server.Services
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Net.WebSockets;
     using System.Threading;
@@ -15,6 +17,7 @@ namespace Tempo.Server.Services
     using Tempo.Core.Runtime;
     using Tempo.Core.Services;
     using Tempo.Core.Workers;
+    using Tempo.Telemetry;
     using WatsonWebserver.Core.WebSockets;
 
     /// <summary>
@@ -38,9 +41,14 @@ namespace Tempo.Server.Services
             Version = typeof(RunDispatchCoordinator).Assembly.GetName().Version?.ToString()
         };
         private readonly string _Header = "[RunDispatchCoordinator] ";
+        private readonly ConcurrentDictionary<string, string> _PendingTraceParents = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+        private const int MaxPendingTraceParents = 10000;
+        private const string DispatchPipeline = "dispatch";
+        private const string GateLimiter = "dispatch_gate";
         private Task? _Loop;
         private bool _Disposed = false;
         private bool _SchedulerSuppressed = false;
+        private DateTime _LastQueueDepthSampleUtc = DateTime.MinValue;
 
         /// <summary>Instantiate.</summary>
         public RunDispatchCoordinator(
@@ -115,12 +123,40 @@ namespace Tempo.Server.Services
             string? sourceIp = null,
             CancellationToken token = default)
         {
+            string source = string.IsNullOrWhiteSpace(triggerId) ? "api" : "trigger";
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanDispatchEnqueue, ActivityKind.Producer);
+            activity?.SetTag(TelemetryConstants.AttrTenantId, tenantId);
+            activity?.SetTag(TelemetryConstants.AttrDataFlowId, dataFlowId);
+            activity?.SetTag(TelemetryConstants.AttrSource, source);
+
             if (!_Settings.AllowDuplicateScheduler && _SchedulerSuppressed)
             {
+                TempoTelemetry.RecordEnqueue(source, "rejected");
+                TempoTelemetry.SetError(activity, "scheduler_suppressed");
                 throw new InvalidOperationException("Scheduling is disabled on this server because another active scheduler was detected.");
             }
 
-            FlowRun run = await _DispatchService.EnqueueAsync(tenantId, dataFlowId, inputData, triggeredByUserId, triggerId, sourceIp, token).ConfigureAwait(false);
+            FlowRun run;
+            try
+            {
+                run = await _DispatchService.EnqueueAsync(tenantId, dataFlowId, inputData, triggeredByUserId, triggerId, sourceIp, token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordEnqueue(source, "rejected");
+                TempoTelemetry.RecordException(activity, ex);
+                throw;
+            }
+
+            TempoTelemetry.RecordEnqueue(source, "accepted");
+            activity?.SetTag(TelemetryConstants.AttrFlowRunId, run.Id);
+            TempoTelemetry.SetOk(activity);
+            string? traceParent = TempoTelemetry.TraceParentOf(activity);
+            if (traceParent != null && _PendingTraceParents.Count < MaxPendingTraceParents)
+            {
+                _PendingTraceParents[run.Id] = traceParent;
+            }
+
             if (_Settings.QueueEnabled)
             {
                 _ = Task.Run(() => TryScheduleNextAsync(CancellationToken.None));
@@ -131,7 +167,7 @@ namespace Tempo.Server.Services
         /// <inheritdoc/>
         public async Task<bool> CancelQueuedAsync(string tenantId, string flowRunId, CancellationToken token = default)
         {
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 return await _Assignments.CancelQueuedAsync(tenantId, flowRunId, token).ConfigureAwait(false);
@@ -145,11 +181,41 @@ namespace Tempo.Server.Services
         /// <inheritdoc/>
         public async Task HandleCompletionAsync(RunCompletionReport completion, CancellationToken token = default)
         {
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            if (completion == null) throw new ArgumentNullException(nameof(completion));
+
+            long start = Stopwatch.GetTimestamp();
+            string nodeKind = NodeKindOf(completion.WorkerId);
+            string state = completion.FinalState.ToString().ToLowerInvariant();
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanDispatchComplete, ActivityKind.Consumer, completion.TraceParent, completion.TraceState);
+            activity?.SetTag(TelemetryConstants.AttrFlowRunId, completion.FlowRunId);
+            activity?.SetTag(TelemetryConstants.AttrAssignmentId, completion.RunAssignmentId);
+            activity?.SetTag(TelemetryConstants.AttrWorkerId, completion.WorkerId);
+            activity?.SetTag(TelemetryConstants.AttrNodeKind, nodeKind);
+            activity?.SetTag(TelemetryConstants.AttrState, state);
+
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
-                bool applied = await _Assignments.CompleteAssignmentAsync(completion, token).ConfigureAwait(false);
+                bool applied;
+                try
+                {
+                    applied = await _Assignments.CompleteAssignmentAsync(completion, token).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    TempoTelemetry.RecordException(activity, ex);
+                    TempoTelemetry.RecordCompletion(nodeKind, state, "failed");
+                    TempoTelemetry.RecordStage(DispatchPipeline, "complete", TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(start));
+                    TempoTelemetry.RecordError("dispatch", ex);
+                    throw;
+                }
+
                 CompleteWorkerAssignment(completion.WorkerSessionId, completion.RunAssignmentId);
+                TempoTelemetry.RecordCompletion(nodeKind, state, applied ? "applied" : "stale");
+                TempoTelemetry.RecordStage(DispatchPipeline, "complete", applied ? TelemetryConstants.OutcomeSuccess : "stale", TempoTelemetry.SecondsSince(start));
+                if (applied && completion.FinalState == FlowRunStateEnum.Succeeded) TempoTelemetry.MarkSuccess("dispatch");
+                if (applied) TempoTelemetry.SetOk(activity);
+                else TempoTelemetry.SetError(activity, "stale_completion");
 
                 if (!applied)
                 {
@@ -183,10 +249,12 @@ namespace Tempo.Server.Services
         /// <inheritdoc/>
         public async Task<int> HandleLeaseExpiryAsync(CancellationToken token = default)
         {
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
-                return await _Assignments.RecoverExpiredAssignmentsAsync(DateTime.UtcNow, token).ConfigureAwait(false);
+                int recovered = await _Assignments.RecoverExpiredAssignmentsAsync(DateTime.UtcNow, token).ConfigureAwait(false);
+                TempoTelemetry.RecordRecoveries("lease_expired", recovered);
+                return recovered;
             }
             finally
             {
@@ -197,7 +265,7 @@ namespace Tempo.Server.Services
         /// <inheritdoc/>
         public async Task<bool> TryScheduleNextAsync(CancellationToken token = default)
         {
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 return await TryScheduleNextInternalAsync(token).ConfigureAwait(false);
@@ -261,10 +329,14 @@ namespace Tempo.Server.Services
                 throw new InvalidOperationException("Authenticated worker id does not match hello frame.");
             }
 
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanWorkerRegister);
+            activity?.SetTag(TelemetryConstants.AttrWorkerId, authenticatedWorker.Id);
+
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 string workerSessionId = IdGenerator.GenerateWorkerSessionId();
+                activity?.SetTag(TelemetryConstants.AttrWorkerSessionId, workerSessionId);
                 RunExecutorDescriptor descriptor = new RunExecutorDescriptor
                 {
                     WorkerId = authenticatedWorker.Id,
@@ -295,10 +367,12 @@ namespace Tempo.Server.Services
 
                 foreach (RemoteWorkerRunExecutor existing in replaced)
                 {
+                    TempoTelemetry.RecordWorkerSession("superseded");
                     await _Assignments.MarkWorkerDisconnectedAsync(existing.Descriptor, "superseded_session", token).ConfigureAwait(false);
                     if (_AssignmentStore != null)
                     {
-                        await _AssignmentStore.RecoverAssignmentsForWorkerSessionAsync(existing.Descriptor.WorkerId, existing.Descriptor.WorkerSessionId, DateTime.UtcNow, token).ConfigureAwait(false);
+                        int recovered = await _AssignmentStore.RecoverAssignmentsForWorkerSessionAsync(existing.Descriptor.WorkerId, existing.Descriptor.WorkerSessionId, DateTime.UtcNow, token).ConfigureAwait(false);
+                        TempoTelemetry.RecordRecoveries("superseded_session", recovered);
                     }
                     try { await existing.SendDrainAsync("superseded_session", token).ConfigureAwait(false); } catch { /* ignore */ }
                 }
@@ -312,6 +386,10 @@ namespace Tempo.Server.Services
                 {
                     _RemoteExecutors[workerSessionId] = executor;
                 }
+
+                TempoTelemetry.RecordWorkerSession("connected");
+                TempoTelemetry.SetOk(activity);
+                PublishPoolGauges();
 
                 if (_AssignmentStore != null)
                 {
@@ -347,7 +425,7 @@ namespace Tempo.Server.Services
         {
             if (heartbeat == null) throw new ArgumentNullException(nameof(heartbeat));
 
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 if (!_RemoteExecutors.TryGetValue(heartbeat.WorkerSessionId, out RemoteWorkerRunExecutor? executor)) return false;
@@ -368,7 +446,7 @@ namespace Tempo.Server.Services
         {
             if (ack == null) throw new ArgumentNullException(nameof(ack));
 
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 if (!_RemoteExecutors.TryGetValue(ack.WorkerSessionId, out RemoteWorkerRunExecutor? executor)) return false;
@@ -401,17 +479,21 @@ namespace Tempo.Server.Services
         {
             if (string.IsNullOrWhiteSpace(workerSessionId)) return false;
 
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 if (!_RemoteExecutors.TryGetValue(workerSessionId, out RemoteWorkerRunExecutor? executor)) return false;
                 _RemoteExecutors.Remove(workerSessionId);
+                TempoTelemetry.RecordWorkerSession("disconnected");
 
                 await _Assignments.MarkWorkerDisconnectedAsync(executor.Descriptor, reason, token).ConfigureAwait(false);
                 if (_AssignmentStore != null)
                 {
-                    await _AssignmentStore.RecoverAssignmentsForWorkerSessionAsync(executor.Descriptor.WorkerId, executor.Descriptor.WorkerSessionId, DateTime.UtcNow, token).ConfigureAwait(false);
+                    int recovered = await _AssignmentStore.RecoverAssignmentsForWorkerSessionAsync(executor.Descriptor.WorkerId, executor.Descriptor.WorkerSessionId, DateTime.UtcNow, token).ConfigureAwait(false);
+                    TempoTelemetry.RecordRecoveries("disconnected", recovered);
                 }
+
+                PublishPoolGauges();
                 return true;
             }
             finally
@@ -468,7 +550,7 @@ namespace Tempo.Server.Services
             bool exists = await RequireConcreteStore().SetWorkerDrainModeAsync(workerId, drainMode, token).ConfigureAwait(false);
             if (!exists) return false;
 
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 if (_LocalExecutor != null && string.Equals(_LocalExecutor.Descriptor.WorkerId, workerId, StringComparison.Ordinal))
@@ -505,7 +587,7 @@ namespace Tempo.Server.Services
 
             RemoteWorkerRunExecutor? live = null;
 
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 if (_LocalExecutor != null && string.Equals(_LocalExecutor.Descriptor.WorkerId, workerId, StringComparison.Ordinal))
@@ -579,6 +661,8 @@ namespace Tempo.Server.Services
                 try
                 {
                     DateTime now = await PrimeCoordinatorStateAsync(token).ConfigureAwait(false);
+                    PublishPoolGauges();
+                    await SampleQueueDepthAsync(now, token).ConfigureAwait(false);
 
                     int staleWorkers = await HandleRemoteWorkerTimeoutsAsync(now, token).ConfigureAwait(false);
                     progressed = staleWorkers > 0;
@@ -610,6 +694,7 @@ namespace Tempo.Server.Services
                 }
                 catch (Exception ex)
                 {
+                    TempoTelemetry.RecordError("dispatch", ex);
                     _Logging?.Warn(_Header + "loop error: " + ex.Message);
                     try { await Task.Delay(_Settings.PollIntervalMs, CancellationToken.None).ConfigureAwait(false); } catch { /* ignore */ }
                 }
@@ -620,7 +705,7 @@ namespace Tempo.Server.Services
         {
             List<RemoteWorkerRunExecutor> stale = new List<RemoteWorkerRunExecutor>();
 
-            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            await WaitGateAsync(token).ConfigureAwait(false);
             try
             {
                 foreach (RemoteWorkerRunExecutor worker in _RemoteExecutors.Values.ToList())
@@ -637,10 +722,16 @@ namespace Tempo.Server.Services
 
             foreach (RemoteWorkerRunExecutor worker in stale)
             {
+                TempoTelemetry.RecordWorkerSession("heartbeat_timeout");
                 try { await _Assignments.MarkWorkerDisconnectedAsync(worker.Descriptor, "heartbeat_timeout", token).ConfigureAwait(false); } catch { /* ignore */ }
                 if (_AssignmentStore != null)
                 {
-                    try { await _AssignmentStore.RecoverAssignmentsForWorkerSessionAsync(worker.Descriptor.WorkerId, worker.Descriptor.WorkerSessionId, utcNow, token).ConfigureAwait(false); } catch { /* ignore */ }
+                    try
+                    {
+                        int recovered = await _AssignmentStore.RecoverAssignmentsForWorkerSessionAsync(worker.Descriptor.WorkerId, worker.Descriptor.WorkerSessionId, utcNow, token).ConfigureAwait(false);
+                        TempoTelemetry.RecordRecoveries("heartbeat_timeout", recovered);
+                    }
+                    catch { /* ignore */ }
                 }
                 try { await worker.SendDrainAsync("heartbeat_timeout", token).ConfigureAwait(false); } catch { /* ignore */ }
             }
@@ -653,6 +744,12 @@ namespace Tempo.Server.Services
             FlowRun? run = await _Assignments.ReadNextPendingAsync(token).ConfigureAwait(false);
             if (run == null) return false;
 
+            // A scheduling attempt that finds no free executor is retried on the next poll, so its spans are only
+            // emitted (retroactively) once the attempt reaches a terminal decision. Metrics are always recorded.
+            DateTimeOffset attemptStart = DateTimeOffset.UtcNow;
+            long planStart = Stopwatch.GetTimestamp();
+            _PendingTraceParents.TryGetValue(run.Id, out string? enqueueTraceParent);
+
             FlowRunExecutionPlan plan;
             try
             {
@@ -660,41 +757,227 @@ namespace Tempo.Server.Services
             }
             catch (Exception ex)
             {
+                DateTimeOffset failedAt = DateTimeOffset.UtcNow;
+                TempoTelemetry.RecordStage(DispatchPipeline, "plan", TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(planStart));
+                TempoTelemetry.RecordAssignment("none", "plan_failed");
+                TempoTelemetry.RecordError("dispatch", ex);
+                using (Activity? scheduleActivity = StartScheduleActivity(run, attemptStart, enqueueTraceParent))
+                {
+                    Activity? planActivity = TempoTelemetry.StartActivityAt(TelemetryConstants.SpanStagePrefix + "plan", attemptStart);
+                    TempoTelemetry.RecordException(planActivity, ex);
+                    TempoTelemetry.StopActivityAt(planActivity, failedAt);
+                    TempoTelemetry.SetError(scheduleActivity, "plan_failed", ex.Message);
+                }
+
+                _PendingTraceParents.TryRemove(run.Id, out _);
                 _Logging?.Warn(_Header + "run " + run.Id + " failed before assignment: " + ex.Message);
                 await _Assignments.FailPendingRunAsync(run, FlowRunStateEnum.Failed, ex.Message, token).ConfigureAwait(false);
                 return true;
             }
 
+            DateTimeOffset planEnd = DateTimeOffset.UtcNow;
+            double planSeconds = TempoTelemetry.SecondsSince(planStart);
             IRunExecutor? executor = await SelectExecutorAsync(plan, token).ConfigureAwait(false);
+            DateTimeOffset selectEnd = DateTimeOffset.UtcNow;
             if (executor == null)
             {
                 if (HasAnyLiveExecutor() && !HasPotentialExecutorForPlan(plan))
                 {
                     string message = "No eligible worker was available for run " + run.Id;
+                    TempoTelemetry.RecordStage(DispatchPipeline, "plan", TelemetryConstants.OutcomeSuccess, planSeconds);
+                    TempoTelemetry.RecordAssignment("none", "no_eligible_worker");
+                    using (Activity? scheduleActivity = StartScheduleActivity(run, attemptStart, enqueueTraceParent))
+                    {
+                        RecordRetroStage("plan", attemptStart, planEnd, null);
+                        RecordRetroStage("select", planEnd, selectEnd, "no_eligible_worker");
+                        TempoTelemetry.SetError(scheduleActivity, "no_eligible_worker", message);
+                    }
+
+                    _PendingTraceParents.TryRemove(run.Id, out _);
                     _Logging?.Warn(_Header + "no_eligible_worker: " + message);
                     await _Assignments.FailPendingRunAsync(run, FlowRunStateEnum.Failed, message, token).ConfigureAwait(false);
                     return true;
                 }
 
+                TempoTelemetry.RecordAssignment("none", "no_executor");
                 return false;
             }
 
-            RunAssignmentRecord assignment = await _Assignments.CreateAssignmentAsync(run, executor.Descriptor, plan, token).ConfigureAwait(false);
-            StampBudget(plan, assignment);
-            _ = ExecuteAssignmentAsync(executor, assignment, plan);
-            return true;
+            string nodeKind = NodeKindOf(executor.Descriptor);
+            TempoTelemetry.RecordStage(DispatchPipeline, "plan", TelemetryConstants.OutcomeSuccess, planSeconds);
+            TempoTelemetry.RecordStage(DispatchPipeline, "queued", TelemetryConstants.OutcomeSuccess, Math.Max(0, (DateTime.UtcNow - run.CreatedUtc).TotalSeconds));
+            _PendingTraceParents.TryRemove(run.Id, out _);
+
+            Activity? schedule = StartScheduleActivity(run, attemptStart, enqueueTraceParent);
+            try
+            {
+                schedule?.SetTag(TelemetryConstants.AttrNodeKind, nodeKind);
+                schedule?.SetTag(TelemetryConstants.AttrWorkerId, executor.Descriptor.WorkerId);
+                RecordRetroStage("plan", attemptStart, planEnd, null);
+                RecordRetroStage("select", planEnd, selectEnd, null);
+
+                long assignStart = Stopwatch.GetTimestamp();
+                RunAssignmentRecord assignment;
+                using (Activity? assignActivity = TempoTelemetry.StartStage(DispatchPipeline, "assign"))
+                {
+                    try
+                    {
+                        assignment = await _Assignments.CreateAssignmentAsync(run, executor.Descriptor, plan, token).ConfigureAwait(false);
+                        assignActivity?.SetTag(TelemetryConstants.AttrAssignmentId, assignment.Id);
+                        assignActivity?.SetTag(TelemetryConstants.AttrAttempt, assignment.AttemptNumber);
+                        TempoTelemetry.SetOk(assignActivity);
+                        TempoTelemetry.RecordStage(DispatchPipeline, "assign", TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(assignStart));
+                    }
+                    catch (Exception ex)
+                    {
+                        TempoTelemetry.RecordException(assignActivity, ex);
+                        TempoTelemetry.RecordStage(DispatchPipeline, "assign", TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(assignStart));
+                        TempoTelemetry.RecordAssignment(nodeKind, "assign_failed");
+                        TempoTelemetry.RecordException(schedule, ex);
+                        throw;
+                    }
+                }
+
+                StampBudget(plan, assignment);
+                TempoTelemetry.RecordAssignment(nodeKind, "assigned");
+                schedule?.SetTag(TelemetryConstants.AttrAssignmentId, assignment.Id);
+                TempoTelemetry.SetOk(schedule);
+                _ = ExecuteAssignmentAsync(executor, assignment, plan);
+                return true;
+            }
+            finally
+            {
+                schedule?.Dispose();
+            }
+        }
+
+        private Activity? StartScheduleActivity(FlowRun run, DateTimeOffset startTime, string? enqueueTraceParent)
+        {
+            Activity? activity;
+            if (enqueueTraceParent != null)
+            {
+                activity = TempoTelemetry.StartActivityAt(TelemetryConstants.SpanDispatchSchedule, startTime, ActivityKind.Internal, enqueueTraceParent);
+            }
+            else
+            {
+                Activity? previous = Activity.Current;
+                Activity.Current = null;
+                activity = TempoTelemetry.StartActivityAt(TelemetryConstants.SpanDispatchSchedule, startTime);
+                if (activity == null) Activity.Current = previous;
+            }
+
+            activity?.SetTag(TelemetryConstants.AttrFlowRunId, run.Id);
+            activity?.SetTag(TelemetryConstants.AttrTenantId, run.TenantId);
+            activity?.SetTag(TelemetryConstants.AttrDataFlowId, run.DataFlowId);
+            return activity;
+        }
+
+        private static void RecordRetroStage(string stage, DateTimeOffset start, DateTimeOffset end, string? errorType)
+        {
+            Activity? activity = TempoTelemetry.StartActivityAt(TelemetryConstants.SpanStagePrefix + stage, start);
+            activity?.SetTag(TelemetryConstants.AttrPipeline, DispatchPipeline);
+            activity?.SetTag(TelemetryConstants.AttrStage, stage);
+            if (errorType == null) TempoTelemetry.SetOk(activity);
+            else TempoTelemetry.SetError(activity, errorType);
+            TempoTelemetry.StopActivityAt(activity, end);
+        }
+
+        private async Task WaitGateAsync(CancellationToken token)
+        {
+            long start = Stopwatch.GetTimestamp();
+            await _Gate.WaitAsync(token).ConfigureAwait(false);
+            TempoTelemetry.RecordLimiterWait(GateLimiter, TempoTelemetry.SecondsSince(start));
+        }
+
+        private static string NodeKindOf(RunExecutorDescriptor descriptor)
+        {
+            return descriptor.NodeKind == ExecutionNodeKindEnum.Server ? "server" : "worker";
+        }
+
+        private static string NodeKindOf(string? workerId)
+        {
+            if (string.IsNullOrWhiteSpace(workerId)) return "unknown";
+            return string.Equals(workerId, LocalServerRunExecutor.WorkerId, StringComparison.Ordinal) ? "server" : "worker";
+        }
+
+        private void PublishPoolGauges()
+        {
+            try
+            {
+                TempoTelemetry.SetSchedulerActive(SchedulingEnabled);
+                if (_LocalExecutor != null)
+                {
+                    RunExecutorDescriptor local = _LocalExecutor.Descriptor;
+                    bool available = local.Enabled && !local.DrainMode;
+                    TempoTelemetry.SetWorkerPool("server", available ? 1 : 0, available ? local.MaxConcurrentRuns : 0, local.CurrentRunCount);
+                }
+
+                long connected = 0;
+                long capacity = 0;
+                long inUse = 0;
+                lock (_RemoteExecutors)
+                {
+                    foreach (RemoteWorkerRunExecutor worker in _RemoteExecutors.Values)
+                    {
+                        if (!worker.IsConnected) continue;
+                        inUse += worker.Descriptor.CurrentRunCount;
+                        if (!worker.Descriptor.Enabled || worker.Descriptor.DrainMode) continue;
+                        connected++;
+                        capacity += worker.Descriptor.MaxConcurrentRuns;
+                    }
+                }
+
+                TempoTelemetry.SetWorkerPool("worker", connected, capacity, inUse);
+            }
+            catch (Exception)
+            {
+                // Gauge publication is best-effort.
+            }
+        }
+
+        private async Task SampleQueueDepthAsync(DateTime utcNow, CancellationToken token)
+        {
+            if (_AssignmentStore == null) return;
+            if ((utcNow - _LastQueueDepthSampleUtc).TotalMilliseconds < _Settings.QueueDepthSampleIntervalMs) return;
+            _LastQueueDepthSampleUtc = utcNow;
+
+            try
+            {
+                TempoTelemetry.SetQueueDepth(await _AssignmentStore.CountPendingAsync(token).ConfigureAwait(false));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordError("dispatch", ex);
+            }
         }
 
         private async Task ExecuteAssignmentAsync(IRunExecutor executor, RunAssignmentRecord assignment, FlowRunExecutionPlan plan)
         {
             RunCompletionReport? completion;
+            string nodeKind = NodeKindOf(executor.Descriptor);
+            long executeStart = Stopwatch.GetTimestamp();
+            Activity? executeActivity = TempoTelemetry.StartStage(DispatchPipeline, nodeKind == "server" ? "execute" : "handoff");
+            executeActivity?.SetTag(TelemetryConstants.AttrAssignmentId, assignment.Id);
+            executeActivity?.SetTag(TelemetryConstants.AttrNodeKind, nodeKind);
             try
             {
                 completion = await executor.ExecuteAsync(assignment, plan, _Cts.Token).ConfigureAwait(false);
+                TempoTelemetry.SetOk(executeActivity);
+                TempoTelemetry.RecordStage(DispatchPipeline, nodeKind == "server" ? "execute" : "handoff", TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(executeStart));
+                executeActivity?.Dispose();
+                executeActivity = null;
                 if (completion == null) return;
             }
             catch (OperationCanceledException)
             {
+                TempoTelemetry.SetError(executeActivity, TelemetryConstants.OutcomeCancelled);
+                TempoTelemetry.RecordStage(DispatchPipeline, nodeKind == "server" ? "execute" : "handoff", TelemetryConstants.OutcomeCancelled, TempoTelemetry.SecondsSince(executeStart));
+                executeActivity?.Dispose();
+                executeActivity = null;
                 completion = new RunCompletionReport
                 {
                     FlowRunId = assignment.FlowRunId,
@@ -709,6 +992,11 @@ namespace Tempo.Server.Services
             }
             catch (Exception ex)
             {
+                TempoTelemetry.RecordException(executeActivity, ex);
+                TempoTelemetry.RecordStage(DispatchPipeline, nodeKind == "server" ? "execute" : "handoff", TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(executeStart));
+                TempoTelemetry.RecordAssignment(nodeKind, "send_failed");
+                executeActivity?.Dispose();
+                executeActivity = null;
                 completion = new RunCompletionReport
                 {
                     FlowRunId = assignment.FlowRunId,

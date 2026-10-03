@@ -1,10 +1,12 @@
-namespace Tempo.Core.Runtime
+﻿namespace Tempo.Core.Runtime
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Threading;
     using System.Threading.Tasks;
     using Tempo.Core.Settings;
+    using Tempo.Telemetry;
 
     /// <summary>Coordinates server-wide and per-tenant slots for process-backed runtimes.</summary>
     public class ExternalRuntimeCapacityManager
@@ -42,6 +44,10 @@ namespace Tempo.Core.Runtime
             bool tenantAcquired = false;
             bool serverQueued = false;
             bool serverAcquired = false;
+            long waitStart = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanCapacityAcquire);
+            activity?.SetTag(TelemetryConstants.AttrStepRunId, normalizedStepRunId);
+            TempoTelemetry.AddCapacity(0, 1);
 
             try
             {
@@ -84,10 +90,19 @@ namespace Tempo.Core.Runtime
                     _TotalCapacityWaitMs += lease.CapacityWaitMs;
                 }
 
+                TempoTelemetry.AddCapacity(1, -1);
+                TempoTelemetry.RecordCapacityWait("acquired", TempoTelemetry.SecondsSince(waitStart));
+                activity?.SetTag(TelemetryConstants.AttrCapacityTenantQueued, tenantQueued);
+                activity?.SetTag(TelemetryConstants.AttrCapacityServerQueued, serverQueued);
+                TempoTelemetry.SetOk(activity);
                 return lease;
             }
-            catch
+            catch (Exception ex)
             {
+                TempoTelemetry.AddCapacity(0, -1);
+                TempoTelemetry.RecordCapacityWait(ex is OperationCanceledException ? TelemetryConstants.OutcomeCancelled : TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(waitStart));
+                TempoTelemetry.RecordException(activity, ex);
+
                 if (serverAcquired)
                 {
                     _ServerSlots.Release();
@@ -159,6 +174,7 @@ namespace Tempo.Core.Runtime
 
             _ServerSlots.Release();
             tenant.Slots.Release();
+            TempoTelemetry.AddCapacity(-1, 0);
         }
 
         private TenantCapacity GetTenant(string tenantId)

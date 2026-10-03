@@ -1,4 +1,4 @@
-namespace Tempo.Core.Workers
+﻿namespace Tempo.Core.Workers
 {
     using System;
     using System.Collections.Generic;
@@ -184,6 +184,15 @@ namespace Tempo.Core.Workers
 
         /// <summary>The execution plan for the assigned flow run.</summary>
         public FlowRunExecutionPlan Plan { get; set; } = new FlowRunExecutionPlan();
+
+        /// <summary>
+        /// Optional W3C traceparent of the server-side dispatch span, so the worker's execution joins the same trace.
+        /// Null when the server is not tracing. Workers that predate this field ignore it.
+        /// </summary>
+        public string? TraceParent { get; set; } = null;
+
+        /// <summary>Optional W3C tracestate accompanying <see cref="TraceParent"/>. Null when absent.</summary>
+        public string? TraceState { get; set; } = null;
     }
 
     /// <summary>

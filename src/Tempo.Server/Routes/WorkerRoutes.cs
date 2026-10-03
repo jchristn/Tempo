@@ -1,7 +1,8 @@
-namespace Tempo.Server.Routes
+﻿namespace Tempo.Server.Routes
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Net.WebSockets;
     using System.Text.Json;
@@ -12,6 +13,7 @@ namespace Tempo.Server.Routes
     using Tempo.Core.Responses;
     using Tempo.Core.Security;
     using Tempo.Core.Workers;
+    using Tempo.Telemetry;
     using WatsonWebserver;
     using WatsonWebserver.Core;
     using WatsonWebserver.Core.OpenApi;
@@ -282,13 +284,17 @@ namespace Tempo.Server.Routes
                 WorkerRecord? worker = await AuthenticateWorkerAsync(ctx).ConfigureAwait(false);
                 if (worker == null)
                 {
+                    TempoTelemetry.RecordWorkerSession("auth_failed");
+                    TempoTelemetry.RecordAuthentication("worker_token", "invalid");
                     await session.CloseAsync(WebSocketCloseStatus.PolicyViolation, "worker authentication failed", CancellationToken.None).ConfigureAwait(false);
                     return;
                 }
 
+                TempoTelemetry.RecordAuthentication("worker_token", "success");
                 WebSocketMessage? helloFrame = await session.ReceiveAsync(CancellationToken.None).ConfigureAwait(false);
                 if (helloFrame == null || helloFrame.MessageType != WebSocketMessageType.Text)
                 {
+                    TempoTelemetry.RecordWorkerSession("protocol_error");
                     await session.CloseAsync(WebSocketCloseStatus.InvalidMessageType, "expected hello frame", CancellationToken.None).ConfigureAwait(false);
                     return;
                 }
@@ -296,6 +302,7 @@ namespace Tempo.Server.Routes
                 WorkerHelloMessage? hello = TryDeserialize<WorkerHelloMessage>(helloFrame.Text);
                 if (hello == null || !string.Equals(hello.Type, WorkerFrameTypes.Hello, StringComparison.Ordinal))
                 {
+                    TempoTelemetry.RecordWorkerSession("protocol_error");
                     await session.CloseAsync(WebSocketCloseStatus.InvalidPayloadData, "invalid hello frame", CancellationToken.None).ConfigureAwait(false);
                     return;
                 }
@@ -303,6 +310,8 @@ namespace Tempo.Server.Routes
                 WorkerHelloAckMessage ack = await _Host.DispatchCoordinator.RegisterWorkerAsync(worker, hello, session).ConfigureAwait(false);
                 workerSessionId = ack.WorkerSessionId;
                 registered = true;
+                TempoTelemetry.RecordWorkerFrame("in", WorkerFrameTypes.Hello);
+                TempoTelemetry.RecordWorkerFrame("out", WorkerFrameTypes.HelloAck);
                 await session.SendTextAsync(JsonSerializer.Serialize(ack, WorkerProtocolSerialization.Options), CancellationToken.None).ConfigureAwait(false);
 
                 await foreach (WebSocketMessage frame in session.ReadMessagesAsync(CancellationToken.None).ConfigureAwait(false))
@@ -310,6 +319,7 @@ namespace Tempo.Server.Routes
                     if (frame == null || frame.MessageType != WebSocketMessageType.Text) continue;
                     if (!await HandleWorkerFrameAsync(frame.Text).ConfigureAwait(false))
                     {
+                        TempoTelemetry.RecordWorkerSession("protocol_error");
                         await session.CloseAsync(WebSocketCloseStatus.InvalidPayloadData, "invalid worker frame", CancellationToken.None).ConfigureAwait(false);
                         return;
                     }
@@ -321,6 +331,7 @@ namespace Tempo.Server.Routes
             }
             catch (Exception ex)
             {
+                TempoTelemetry.RecordError("worker_session", ex);
                 _Host.Logger.Warn("[WorkerRoutes] worker websocket failed: " + ex.Message);
                 try
                 {
@@ -354,11 +365,17 @@ namespace Tempo.Server.Routes
         {
             if (string.IsNullOrWhiteSpace(json)) return false;
 
+            // Frames arrive for the whole life of the worker session, all inside Watson's span for the websocket
+            // upgrade request. Detach so heartbeats do not accumulate in one never-ending trace; completions
+            // re-parent on the traceparent carried in the frame.
+            Activity.Current = null;
+
             try
             {
                 using JsonDocument document = JsonDocument.Parse(json);
                 if (!document.RootElement.TryGetProperty("type", out JsonElement typeElement)) return false;
                 string? type = typeElement.GetString();
+                TempoTelemetry.RecordWorkerFrame("in", type == WorkerFrameTypes.Heartbeat || type == WorkerFrameTypes.AssignAck || type == WorkerFrameTypes.RunCompleted ? type : "unknown");
 
                 switch (type)
                 {

@@ -1,7 +1,8 @@
-namespace Tempo.McpServer.Services
+﻿namespace Tempo.McpServer.Services
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.IO;
     using System.Linq;
     using System.Net;
@@ -12,6 +13,7 @@ namespace Tempo.McpServer.Services
     using System.Threading;
     using System.Threading.Tasks;
     using Tempo.McpServer.Settings;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Lightweight REST client used by MCP tools to call Tempo.Server.
@@ -94,7 +96,29 @@ namespace Tempo.McpServer.Services
                 request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json");
             }
 
-            using HttpResponseMessage response = await _HttpClient.SendAsync(request, token).ConfigureAwait(false);
+            long start = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartIntegration(IntegrationService, method.Method);
+            activity?.SetTag(TelemetryConstants.AttrHttpMethod, method.Method);
+            activity?.SetTag(TelemetryConstants.AttrServerAddress, _HttpClient.BaseAddress?.Host);
+            activity?.SetTag(TelemetryConstants.AttrServerPort, _HttpClient.BaseAddress?.Port);
+            HttpResponseMessage sent;
+            try
+            {
+                sent = await _HttpClient.SendAsync(request, token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordIntegration(IntegrationService, method.Method, ex is OperationCanceledException ? TelemetryConstants.OutcomeCancelled : TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(start));
+                throw;
+            }
+
+            using HttpResponseMessage response = sent;
+            int statusCode = (int)response.StatusCode;
+            activity?.SetTag(TelemetryConstants.AttrHttpStatusCode, statusCode);
+            if (response.IsSuccessStatusCode) TempoTelemetry.SetOk(activity);
+            else TempoTelemetry.SetError(activity, statusCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            TempoTelemetry.RecordIntegration(IntegrationService, method.Method, response.IsSuccessStatusCode ? TelemetryConstants.OutcomeSuccess : (statusCode >= 500 ? TelemetryConstants.OutcomeException : TelemetryConstants.OutcomeError), TempoTelemetry.SecondsSince(start));
             string content = response.Content == null ? string.Empty : await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
             TempoApiResponse apiResponse = new TempoApiResponse
             {
@@ -119,6 +143,8 @@ namespace Tempo.McpServer.Services
             ApplyBody(apiResponse, content);
             return apiResponse;
         }
+
+        private const string IntegrationService = "tempo-server";
 
         /// <summary>Add query-string values to a path.</summary>
         /// <param name="path">Base path.</param>
@@ -210,7 +236,10 @@ namespace Tempo.McpServer.Services
         private static string NormalizeApiPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("API path is required", nameof(path));
-            if (Uri.TryCreate(path, UriKind.Absolute, out Uri? absoluteUri) && absoluteUri != null)
+            // On Unix, Uri.TryCreate treats a rooted path such as "/v1.0/x" as an absolute file:// URI,
+            // so only reject absolute URIs that are not already a rooted relative path.
+            bool rooted = path.StartsWith("/", StringComparison.Ordinal) && !path.StartsWith("//", StringComparison.Ordinal);
+            if (!rooted && Uri.TryCreate(path, UriKind.Absolute, out Uri? absoluteUri) && absoluteUri != null)
                 throw new ArgumentException("API path must be relative", nameof(path));
             if (!path.StartsWith("/", StringComparison.Ordinal)) path = "/" + path;
             if (path.Contains("\\", StringComparison.Ordinal)) throw new ArgumentException("API path cannot contain backslashes", nameof(path));

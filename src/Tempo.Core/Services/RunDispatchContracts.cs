@@ -1,4 +1,4 @@
-namespace Tempo.Core.Services
+﻿namespace Tempo.Core.Services
 {
     using System;
     using System.Collections.Generic;
@@ -96,6 +96,15 @@ namespace Tempo.Core.Services
 
         /// <summary>Completion timestamp in UTC.</summary>
         public DateTime CompletedUtc { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Optional W3C traceparent of the executor-side span that produced this completion, so the coordinator's
+        /// completion handling joins the run's trace. Null when the executor is not tracing.
+        /// </summary>
+        public string? TraceParent { get; set; } = null;
+
+        /// <summary>Optional W3C tracestate accompanying <see cref="TraceParent"/>. Null when absent.</summary>
+        public string? TraceState { get; set; } = null;
     }
 
     /// <summary>

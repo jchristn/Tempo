@@ -1,6 +1,7 @@
-namespace Tempo.Server
+﻿namespace Tempo.Server
 {
     using System;
+    using System.Diagnostics;
     using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
@@ -17,6 +18,7 @@ namespace Tempo.Server
     using Tempo.Core.Runtime;
     using Tempo.Server.Helpers;
     using Tempo.Server.Routes;
+    using Tempo.Telemetry;
     using WatsonWebserver;
     using WatsonWebserver.Core;
     using WatsonWebserver.Core.OpenApi;
@@ -141,6 +143,13 @@ namespace Tempo.Server
             ws.Ssl.Enable = _Settings.Rest.Ssl;
             ws.WebSockets.Enable = true;
 
+            // Watson emits the HTTP layer (request metrics and one server span per request) on the "Watson"
+            // meter and activity source; the Tempo telemetry host subscribes to both. Confirm it explicitly.
+            ws.Telemetry.Enable = true;
+            ws.Telemetry.EnableMetrics = true;
+            ws.Telemetry.EnableTraces = true;
+            ws.Telemetry.PropagateContext = true;
+
             _Server = new Webserver(ws, DefaultRouteAsync);
 
             _Server.Routes.AuthenticateRequest = AuthenticateRequestAsync;
@@ -244,6 +253,13 @@ namespace Tempo.Server
                 containsUnsupportedSecretKeyHeader: containsUnsupportedSecretKeyHeader).ConfigureAwait(false);
 
             ctx.Metadata = rc;
+
+            string method = !string.IsNullOrEmpty(apiKey) ? "api_key"
+                : !string.IsNullOrEmpty(bearerToken) || !string.IsNullOrEmpty(tokenHeader) ? "token"
+                : !string.IsNullOrEmpty(accessKey) ? "access_key"
+                : !string.IsNullOrEmpty(email) || !string.IsNullOrEmpty(password) ? "password"
+                : "none";
+            TempoTelemetry.RecordAuthentication(method, rc.AuthenticationResult.ToString().ToLowerInvariant());
         }
 
         private async Task PreflightAsync(HttpContextBase ctx)
@@ -281,6 +297,7 @@ namespace Tempo.Server
 
         private async Task ExceptionRouteAsync(HttpContextBase ctx, Exception ex)
         {
+            TempoTelemetry.RecordError("http", ex);
             _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "unhandled exception: " + ex.Message));
             await RouteHelpers.ErrorAsync(ctx, 500, "InternalError", ex.Message).ConfigureAwait(false);
         }
@@ -416,9 +433,13 @@ namespace Tempo.Server
                 try
                 {
                     await Task.Delay(TimeSpan.FromMinutes(_Settings.RequestHistory.PruneIntervalMinutes), token).ConfigureAwait(false);
-                    DateTime cutoff = DateTime.UtcNow.AddDays(-_Settings.RequestHistory.RetentionDays);
-                    int deleted = await _Database.RequestHistory.PruneAsync(cutoff, token).ConfigureAwait(false);
-                    if (deleted > 0) _Logging.Debug(_Header + "pruned " + deleted + " request history rows older than " + cutoff.ToString("o"));
+                    await RunTaskAsync(RequestHistoryPruneTask, async () =>
+                    {
+                        DateTime cutoff = DateTime.UtcNow.AddDays(-_Settings.RequestHistory.RetentionDays);
+                        int deleted = await _Database.RequestHistory.PruneAsync(cutoff, token).ConfigureAwait(false);
+                        TempoTelemetry.RecordTaskItems(RequestHistoryPruneTask, "deleted", deleted);
+                        if (deleted > 0) _Logging.Debug(_Header + "pruned " + deleted + " request history rows older than " + cutoff.ToString("o"));
+                    }).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "prune loop error: " + ex.Message)); }
@@ -432,13 +453,21 @@ namespace Tempo.Server
                 try
                 {
                     await Task.Delay(TimeSpan.FromMinutes(_Settings.Artifacts.GcIntervalMinutes), token).ConfigureAwait(false);
-                    ArtifactGcResult result = await _ArtifactRetention.RunOnceAsync(DateTime.UtcNow, token).ConfigureAwait(false);
-                    if (result.VersionsMarked > 0 || result.VersionsDeleted > 0 || result.BlobsDeleted > 0 || result.Errors.Count > 0)
+                    await RunTaskAsync(ArtifactGcTask, async () =>
                     {
-                        _Logging.Debug(_Header + "artifact GC scanned " + result.VersionsScanned + " version(s), marked " + result.VersionsMarked +
-                            ", deleted " + result.VersionsDeleted + ", blobs " + result.BlobsDeleted + ", bytes " + result.BytesDeleted +
-                            ", errors " + result.Errors.Count);
-                    }
+                        ArtifactGcResult result = await _ArtifactRetention.RunOnceAsync(DateTime.UtcNow, token).ConfigureAwait(false);
+                        TempoTelemetry.RecordTaskItems(ArtifactGcTask, "scanned", result.VersionsScanned);
+                        TempoTelemetry.RecordTaskItems(ArtifactGcTask, "marked", result.VersionsMarked);
+                        TempoTelemetry.RecordTaskItems(ArtifactGcTask, "deleted", result.VersionsDeleted);
+                        TempoTelemetry.RecordTaskItems(ArtifactGcTask, "blobs_deleted", result.BlobsDeleted);
+                        TempoTelemetry.RecordTaskItems(ArtifactGcTask, "errors", result.Errors.Count);
+                        if (result.VersionsMarked > 0 || result.VersionsDeleted > 0 || result.BlobsDeleted > 0 || result.Errors.Count > 0)
+                        {
+                            _Logging.Debug(_Header + "artifact GC scanned " + result.VersionsScanned + " version(s), marked " + result.VersionsMarked +
+                                ", deleted " + result.VersionsDeleted + ", blobs " + result.BlobsDeleted + ", bytes " + result.BytesDeleted +
+                                ", errors " + result.Errors.Count);
+                        }
+                    }).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "artifact GC loop error: " + ex.Message)); }
@@ -452,15 +481,47 @@ namespace Tempo.Server
                 try
                 {
                     await Task.Delay(TimeSpan.FromMinutes(_Settings.RunLogs.PruneIntervalMinutes), token).ConfigureAwait(false);
-                    int deleted = await PruneRunLogsOnceAsync(token).ConfigureAwait(false);
-                    if (deleted > 0)
+                    await RunTaskAsync(RunLogPruneTask, async () =>
                     {
-                        DateTime cutoff = DateTime.UtcNow.AddDays(-_Settings.RunLogs.RetentionDays);
-                        _Logging.Debug(_Header + "pruned " + deleted + " run-log director" + (deleted == 1 ? "y" : "ies") + " older than " + cutoff.ToString("o"));
-                    }
+                        int deleted = await PruneRunLogsOnceAsync(token).ConfigureAwait(false);
+                        TempoTelemetry.RecordTaskItems(RunLogPruneTask, "deleted", deleted);
+                        if (deleted > 0)
+                        {
+                            DateTime cutoff = DateTime.UtcNow.AddDays(-_Settings.RunLogs.RetentionDays);
+                            _Logging.Debug(_Header + "pruned " + deleted + " run-log director" + (deleted == 1 ? "y" : "ies") + " older than " + cutoff.ToString("o"));
+                        }
+                    }).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex) { _Logging.Warn(LogMessages.WithoutTerminalPeriod(_Header + "run-log prune loop error: " + ex.Message)); }
+            }
+        }
+
+        private const string RequestHistoryPruneTask = "request_history_prune";
+        private const string ArtifactGcTask = "artifact_gc";
+        private const string RunLogPruneTask = "run_log_prune";
+
+        private static async Task RunTaskAsync(string task, Func<Task> work)
+        {
+            long start = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartTask(task);
+            try
+            {
+                await work().ConfigureAwait(false);
+                TempoTelemetry.SetOk(activity);
+                TempoTelemetry.RecordTask(task, TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(start));
+            }
+            catch (OperationCanceledException)
+            {
+                TempoTelemetry.RecordTask(task, TelemetryConstants.OutcomeCancelled, TempoTelemetry.SecondsSince(start));
+                throw;
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordTask(task, TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(start));
+                TempoTelemetry.RecordError(task, ex);
+                throw;
             }
         }
 

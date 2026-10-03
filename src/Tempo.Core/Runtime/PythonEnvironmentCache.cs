@@ -1,4 +1,4 @@
-namespace Tempo.Core.Runtime
+﻿namespace Tempo.Core.Runtime
 {
     using System;
     using System.Diagnostics;
@@ -10,6 +10,7 @@ namespace Tempo.Core.Runtime
     using Tempo.Core.Artifacts;
     using Tempo.Core.Models;
     using Tempo.Core.Settings;
+    using Tempo.Telemetry;
 
     /// <summary>Builds and reuses Artifact.Python virtual environments when dependencies are declared.</summary>
     public class PythonEnvironmentCache
@@ -48,15 +49,35 @@ namespace Tempo.Core.Runtime
             string venv = VenvPath(plan.Artifact.Sha256, pythonVersion);
             string python = VenvPython(venv);
             string marker = Path.Combine(venv, ".tempo-venv-ready");
-            if (File.Exists(marker) && File.Exists(python)) return python;
+            long start = Stopwatch.GetTimestamp();
+            if (File.Exists(marker) && File.Exists(python))
+            {
+                TempoTelemetry.RecordCache(CacheName, "hit", TempoTelemetry.SecondsSince(start));
+                return python;
+            }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(venv)!);
-            if (Directory.Exists(venv)) Directory.Delete(venv, recursive: true);
-            await RunAsync(basePython, new[] { "-m", "venv", venv }, plan.ArtifactRoot, token).ConfigureAwait(false);
-            await RunAsync(python, new[] { "-m", "pip", "install", "-r", requirements }, plan.ArtifactRoot, token).ConfigureAwait(false);
-            File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
-            return python;
+            using Activity? activity = TempoTelemetry.StartActivity(CacheName + " fill");
+            activity?.SetTag(TelemetryConstants.AttrCache, CacheName);
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(venv)!);
+                if (Directory.Exists(venv)) Directory.Delete(venv, recursive: true);
+                await RunAsync(basePython, new[] { "-m", "venv", venv }, plan.ArtifactRoot, token).ConfigureAwait(false);
+                await RunAsync(python, new[] { "-m", "pip", "install", "-r", requirements }, plan.ArtifactRoot, token).ConfigureAwait(false);
+                File.WriteAllText(marker, DateTime.UtcNow.ToString("o"));
+                TempoTelemetry.SetOk(activity);
+                TempoTelemetry.RecordCache(CacheName, "miss", TempoTelemetry.SecondsSince(start));
+                return python;
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordCache(CacheName, "error", TempoTelemetry.SecondsSince(start));
+                throw;
+            }
         }
+
+        private const string CacheName = "python_env";
 
         /// <summary>
         /// Deletes the cached virtual environments for the specified artifact content hash.

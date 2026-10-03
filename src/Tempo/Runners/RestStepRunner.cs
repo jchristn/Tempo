@@ -1,8 +1,9 @@
-namespace Tempo.Runners
+﻿namespace Tempo.Runners
 {
     using System;
     using System.Collections.Generic;
     using System.Collections.Specialized;
+    using System.Diagnostics;
     using System.Linq;
     using System.Net.Http;
     using System.Text;
@@ -11,6 +12,7 @@ namespace Tempo.Runners
     using RestWrapper;
     using Tempo.Enums;
     using Tempo.Logs;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Step runner for REST API calls using RestWrapper.
@@ -23,6 +25,7 @@ namespace Tempo.Runners
 #pragma warning disable CS8602 // Dereference of a possibly null reference.
 #pragma warning disable CS8604 // Possible null reference argument.
 
+        private const string IntegrationService = "http";
         private readonly HttpMethod _HttpMethod;
         private readonly string _UrlTemplate;
         private readonly NameValueCollection _DefaultHeaders;
@@ -170,18 +173,40 @@ namespace Tempo.Runners
                 );
 
                 RestResponse restResponse;
-
-                if (requestBody != null && requestBody.Length > 0)
+                string operation = _HttpMethod.Method;
+                long callStart = Stopwatch.GetTimestamp();
+                using Activity? activity = TempoTelemetry.StartIntegration(IntegrationService, operation);
+                activity?.SetTag(TelemetryConstants.AttrHttpMethod, operation);
+                if (activity != null && Uri.TryCreate(finalUrl, UriKind.Absolute, out Uri? target))
                 {
-                    restResponse = await restRequest.SendAsync(requestBody).ConfigureAwait(false);
+                    activity.SetTag(TelemetryConstants.AttrServerAddress, target.Host);
+                    activity.SetTag(TelemetryConstants.AttrServerPort, target.Port);
                 }
-                else
+
+                try
                 {
-                    restResponse = await restRequest.SendAsync().ConfigureAwait(false);
+                    if (requestBody != null && requestBody.Length > 0)
+                    {
+                        restResponse = await restRequest.SendAsync(requestBody, token).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        restResponse = await restRequest.SendAsync(token).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    TempoTelemetry.RecordException(activity, ex);
+                    TempoTelemetry.RecordIntegration(IntegrationService, operation, ex is OperationCanceledException ? TelemetryConstants.OutcomeCancelled : TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(callStart));
+                    throw;
                 }
 
                 // Map HTTP status to StepResult
                 StepResultTypeEnum resultType = MapStatusCodeToResult(restResponse.StatusCode);
+                activity?.SetTag(TelemetryConstants.AttrHttpStatusCode, restResponse.StatusCode);
+                if (resultType == StepResultTypeEnum.Success) TempoTelemetry.SetOk(activity);
+                else TempoTelemetry.SetError(activity, restResponse.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                TempoTelemetry.RecordIntegration(IntegrationService, operation, TempoTelemetry.OutcomeOf(resultType), TempoTelemetry.SecondsSince(callStart));
 
                 // Convert response headers to Dictionary
                 Dictionary<string, string> responseHeaders = new Dictionary<string, string>();

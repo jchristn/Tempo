@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Text;
     using System.Threading.Tasks;
@@ -9,6 +10,7 @@
     using Tempo.Logs;
     using Tempo.Metrics;
     using Tempo.Protocol;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Data flow runner.
@@ -55,6 +57,47 @@
         {
             ArgumentNullException.ThrowIfNull(flow);
             ArgumentNullException.ThrowIfNull(req);
+
+            long startTimestamp = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanFlowRun);
+            activity?.SetTag(TelemetryConstants.AttrRunner, FlowRunnerLabel);
+            activity?.SetTag(TelemetryConstants.AttrTenantId, flow.TenantId);
+            activity?.SetTag(TelemetryConstants.AttrDataFlowId, flow.Identifier);
+            activity?.SetTag(TelemetryConstants.AttrFlowRunId, req.FlowRunId ?? req.RequestId);
+            TempoTelemetry.AddActiveFlow(FlowRunnerLabel, 1);
+            string outcome = TelemetryConstants.OutcomeException;
+
+            try
+            {
+                StepResult result = await RunInternal(flow, req, token).ConfigureAwait(false);
+                outcome = TempoTelemetry.OutcomeOf(result.Result);
+                if (result.Result == StepResultTypeEnum.Success) TempoTelemetry.SetOk(activity);
+                else TempoTelemetry.SetError(activity, outcome, result.ExceptionMessage);
+                return result;
+            }
+            catch (OperationCanceledException ex)
+            {
+                outcome = TelemetryConstants.OutcomeCancelled;
+                TempoTelemetry.RecordException(activity, ex);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordError("flow", ex);
+                throw;
+            }
+            finally
+            {
+                TempoTelemetry.AddActiveFlow(FlowRunnerLabel, -1);
+                TempoTelemetry.RecordFlowRun(FlowRunnerLabel, outcome, TempoTelemetry.SecondsSince(startTimestamp));
+            }
+        }
+
+        private const string FlowRunnerLabel = "engine";
+
+        private async Task<StepResult> RunInternal(DataFlow flow, StepRequest req, CancellationToken token)
+        {
             req.ProtocolVersion = ProtocolVersions.Normalize(req.ProtocolVersion);
             req.TenantId = flow.TenantId;
             req.FlowRunId ??= req.RequestId;
@@ -185,6 +228,7 @@
                 // Process result and update for next step
                 bool isException = lastResult.Result == StepResultTypeEnum.Exception || lastResult.Exception != null;
                 currentStepId = ProcessStepResult(lastResult, stepTransition, req, stepRunDetails, isException);
+                TempoTelemetry.RecordTransition(lastResult.Result, isException, currentStepId);
 
                 // Write step run to metrics store if configured
                 await WriteStepRunDetailsAsync(stepRunDetails).ConfigureAwait(false);

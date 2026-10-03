@@ -1,7 +1,8 @@
-namespace Tempo.Core.Services
+﻿namespace Tempo.Core.Services
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Text;
     using System.Threading.Tasks;
@@ -10,6 +11,7 @@ namespace Tempo.Core.Services
     using Tempo.Core.Helpers;
     using Tempo.Core.Models;
     using Tempo.Core.Settings;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Captures HTTP request/response pairs asynchronously (fire-and-forget).
@@ -21,6 +23,7 @@ namespace Tempo.Core.Services
         private readonly RequestHistorySettings _Settings;
         private readonly LoggingModule? _Logging;
         private readonly string _Header = "[RequestHistoryCapture] ";
+        private const string CaptureTask = "request_history_capture";
 
         private static readonly HashSet<string> _RedactHeaderSuffixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -50,15 +53,24 @@ namespace Tempo.Core.Services
             RedactHeaders(entry.ResponseHeaders);
             TruncateBody(entry);
 
+            TempoTelemetry.AddTaskPending(CaptureTask, 1);
             _ = Task.Run(async () =>
             {
+                long start = Stopwatch.GetTimestamp();
                 try
                 {
                     await _Database.RequestHistory.CreateAsync(entry).ConfigureAwait(false);
+                    TempoTelemetry.RecordTask(CaptureTask, TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(start));
                 }
                 catch (Exception ex)
                 {
+                    TempoTelemetry.RecordTask(CaptureTask, TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(start));
+                    TempoTelemetry.RecordError(CaptureTask, ex);
                     _Logging?.Warn(LogMessages.WithoutTerminalPeriod(_Header + "capture failed: " + ex.Message));
+                }
+                finally
+                {
+                    TempoTelemetry.AddTaskPending(CaptureTask, -1);
                 }
             });
         }

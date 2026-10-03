@@ -1,4 +1,4 @@
-namespace Tempo.Core.Settings
+﻿namespace Tempo.Core.Settings
 {
     using System;
 
@@ -164,6 +164,21 @@ namespace Tempo.Core.Settings
             }
         }
 
+        /// <summary>Telemetry export settings (OTLP, Prometheus, logs). Never null.</summary>
+        /// <exception cref="ArgumentNullException">Thrown when set to null.</exception>
+        public TelemetrySettings Telemetry
+        {
+            get
+            {
+                return _Telemetry;
+            }
+            set
+            {
+                if (value == null) throw new ArgumentNullException(nameof(Telemetry));
+                _Telemetry = value;
+            }
+        }
+
         private RestSettings _Rest = new RestSettings();
         private DatabaseSettings _Database = new DatabaseSettings();
         private LoggingSettings _Logging = new LoggingSettings();
@@ -173,6 +188,7 @@ namespace Tempo.Core.Settings
         private HydrationSettings _Hydration = new HydrationSettings();
         private ArtifactSettings _Artifacts = new ArtifactSettings();
         private RuntimeSettings _Runtimes = new RuntimeSettings();
+        private TelemetrySettings _Telemetry = new TelemetrySettings();
         private LogViewerSettings _LogViewer = new LogViewerSettings();
         private RunLogSettings _RunLogs = new RunLogSettings();
     }

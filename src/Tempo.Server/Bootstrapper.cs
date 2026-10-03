@@ -1,6 +1,7 @@
-namespace Tempo.Server
+﻿namespace Tempo.Server
 {
     using System;
+    using System.Diagnostics;
     using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
@@ -11,6 +12,8 @@ namespace Tempo.Server
     using Tempo.Core.Runtime;
     using Tempo.Core.Services;
     using Tempo.Core.Settings;
+    using Tempo.Hosting;
+    using Tempo.Telemetry;
     using TempoStepManager = Tempo.StepManager;
 
     /// <summary>
@@ -54,23 +57,35 @@ namespace Tempo.Server
             LoggingModule logging = CreateLogger(settings.Logging);
             logging.Info("[Bootstrapper] starting Tempo Server");
 
+            TelemetryHost telemetry = TelemetryHost.Start(settings.Telemetry, "tempo-server", "server", logging);
+            PublishConfiguration(settings);
+
             DatabaseDriverBase database;
-            try
+            long databaseStart = Stopwatch.GetTimestamp();
+            using (Activity? databaseActivity = TempoTelemetry.StartTask("database_init"))
             {
-                database = await DatabaseDriverFactory.CreateAndInitializeAsync(settings.Database).ConfigureAwait(false);
-                logging.Info("[Bootstrapper] database initialized (" + settings.Database.Type + ")");
-            }
-            catch (Exception ex)
-            {
-                logging.Alert(LogMessages.WithoutTerminalPeriod("[Bootstrapper] database initialization failed: " + ex.Message));
-                return;
+                try
+                {
+                    database = await DatabaseDriverFactory.CreateAndInitializeAsync(settings.Database).ConfigureAwait(false);
+                    TempoTelemetry.SetOk(databaseActivity);
+                    TempoTelemetry.RecordTask("database_init", TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(databaseStart));
+                    logging.Info("[Bootstrapper] database initialized (" + settings.Database.Type + ")");
+                }
+                catch (Exception ex)
+                {
+                    TempoTelemetry.RecordException(databaseActivity, ex);
+                    TempoTelemetry.RecordTask("database_init", TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(databaseStart));
+                    logging.Alert(LogMessages.WithoutTerminalPeriod("[Bootstrapper] database initialization failed: " + ex.Message));
+                    telemetry.Dispose();
+                    return;
+                }
             }
 
             TempoStepManager stepManager = new TempoStepManager();
             try { stepManager.Add(new Tempo.Server.Runtime.StartupSampleClassStep()); } catch { /* sample already registered */ }
             try { stepManager.ScanEntryAssembly(); } catch { /* no attribute steps */ }
 
-            try
+            await RunStartupTaskAsync("hydration", logging, "hydration error", async () =>
             {
                 HydrationService hydration = new HydrationService(database, settings.Hydration, logging, settings.Artifacts, settings.Runtimes, stepManager, restSettings: settings.Rest);
                 await hydration.HydrateAsync().ConfigureAwait(false);
@@ -78,33 +93,28 @@ namespace Tempo.Server
                 {
                     logging.Info("[Bootstrapper] default credential: " + hydration.DefaultCredential.AccessKey);
                 }
-            }
-            catch (Exception ex)
-            {
-                logging.Warn(LogMessages.WithoutTerminalPeriod("[Bootstrapper] hydration error: " + ex.Message));
-            }
+            }).ConfigureAwait(false);
 
-            try
+            // Bridge logs to the telemetry pipeline only after the default credential line above, so that secret
+            // never leaves the host's own console and log file.
+            telemetry.BridgeLogs(logging);
+
+            await RunStartupTaskAsync("inline_rest_migration", logging, "inline REST migration error", async () =>
             {
                 StepCompatibilityMigrator migrator = new StepCompatibilityMigrator(database);
                 StepCompatibilityMigrationResult migration = await migrator.MigrateAllTenantsAsync().ConfigureAwait(false);
+                TempoTelemetry.RecordTaskItems("inline_rest_migration", "flows_updated", migration.FlowsUpdated);
                 logging.Info("[Bootstrapper] inline REST migration scanned " + migration.FlowsScanned + " flow(s), updated " + migration.FlowsUpdated + ", created " + migration.StepsCreated + " step(s)");
-            }
-            catch (Exception ex)
-            {
-                logging.Warn(LogMessages.WithoutTerminalPeriod("[Bootstrapper] inline REST migration error: " + ex.Message));
-            }
+            }).ConfigureAwait(false);
 
-            try
+            await RunStartupTaskAsync("builtin_reconciliation", logging, "built-in step reconciliation error", async () =>
             {
                 BuiltinStepReconciler reconciler = new BuiltinStepReconciler(database, stepManager);
                 BuiltinStepReconciliationResult reconciliation = await reconciler.ReconcileAllTenantsAsync().ConfigureAwait(false);
+                TempoTelemetry.RecordTaskItems("builtin_reconciliation", "ambiguous", reconciliation.Ambiguous);
+                TempoTelemetry.RecordTaskItems("builtin_reconciliation", "orphaned", reconciliation.Orphaned);
                 logging.Info("[Bootstrapper] built-in step reconciliation scanned " + reconciliation.Scanned + " step(s), resolved " + reconciliation.Resolved + ", ambiguous " + reconciliation.Ambiguous + ", orphaned " + reconciliation.Orphaned);
-            }
-            catch (Exception ex)
-            {
-                logging.Warn(LogMessages.WithoutTerminalPeriod("[Bootstrapper] built-in step reconciliation error: " + ex.Message));
-            }
+            }).ConfigureAwait(false);
 
             string resolvedPath = settingsPath ?? Constants.DefaultSettingsFile;
             Tempo.Server.Services.SettingsStore settingsStore = new Tempo.Server.Services.SettingsStore(settings, resolvedPath);
@@ -147,8 +157,46 @@ namespace Tempo.Server
                 try { Console.CancelKeyPress -= cancelHandler; } catch { /* ignore */ }
                 try { AppDomain.CurrentDomain.ProcessExit -= exitHandler; } catch { /* ignore */ }
                 try { shutdownCts.Dispose(); } catch { /* ignore */ }
+                try { telemetry.Dispose(); } catch { /* ignore */ }
                 try { logging.Dispose(); } catch { /* ignore */ }
             }
+        }
+
+        private static async Task RunStartupTaskAsync(string task, LoggingModule logging, string failureLabel, Func<Task> work)
+        {
+            long start = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartTask(task);
+            try
+            {
+                await work().ConfigureAwait(false);
+                TempoTelemetry.SetOk(activity);
+                TempoTelemetry.RecordTask(task, TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(start));
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordTask(task, TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(start));
+                TempoTelemetry.RecordError(task, ex);
+                logging.Warn(LogMessages.WithoutTerminalPeriod("[Bootstrapper] " + failureLabel + ": " + ex.Message));
+            }
+        }
+
+        private static void PublishConfiguration(Settings settings)
+        {
+            TempoTelemetry.SetConfig("engine.max_concurrent_runs", settings.Engine.MaxConcurrentRuns);
+            TempoTelemetry.SetConfig("engine.poll_interval_ms", settings.Engine.PollIntervalMs);
+            TempoTelemetry.SetConfig("engine.lease_duration_ms", settings.Engine.LeaseDurationMs);
+            TempoTelemetry.SetConfig("engine.worker_heartbeat_timeout_ms", settings.Engine.WorkerHeartbeatTimeoutMs);
+            TempoTelemetry.SetConfig("engine.max_assignment_attempts", settings.Engine.MaxAssignmentAttempts);
+            TempoTelemetry.SetConfig("engine.queue_enabled", settings.Engine.QueueEnabled ? 1 : 0);
+            TempoTelemetry.SetConfig("engine.server_can_execute_workload", settings.Engine.ServerCanExecuteWorkload ? 1 : 0);
+            TempoTelemetry.SetConfig("external.max_processes_server_wide", settings.Runtimes.ExternalExecution.MaxConcurrentProcessesServerWide);
+            TempoTelemetry.SetConfig("external.max_processes_per_tenant", settings.Runtimes.ExternalExecution.MaxConcurrentProcessesPerTenant);
+            TempoTelemetry.SetConfig("request_history.enabled", settings.RequestHistory.Enabled ? 1 : 0);
+            TempoTelemetry.SetConfig("request_history.retention_days", settings.RequestHistory.RetentionDays);
+            TempoTelemetry.SetConfig("run_logs.enabled", settings.RunLogs.Enabled ? 1 : 0);
+            TempoTelemetry.SetConfig("run_logs.retention_days", settings.RunLogs.RetentionDays);
+            TempoTelemetry.SetConfig("telemetry.sampling_ratio", settings.Telemetry.SamplingRatio);
         }
 
         private static LoggingModule CreateLogger(Tempo.Core.Settings.LoggingSettings settings)

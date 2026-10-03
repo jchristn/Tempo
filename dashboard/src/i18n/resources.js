@@ -288,7 +288,23 @@ const en = {
     home: {
       title: 'Home',
       subtitle: 'Monitor request activity, runtime pressure, and recent health at a glance.',
-      serverLogs: 'Server logs'
+      serverLogs: 'Server logs',
+      externalServices: {
+        title: 'External services',
+        subtitle: 'Observability tools bundled with the Docker Compose deployment. Credentials shown are local development defaults; change them before any shared deployment.',
+        service: 'Service',
+        url: 'URL',
+        credentials: 'Credentials',
+        status: 'Status',
+        grafanaPurpose: 'Dashboards for metrics, traces, and logs',
+        prometheusPurpose: 'Metrics storage and queries',
+        tracesPurpose: 'Trace storage and search',
+        lokiPurpose: 'Log aggregation and search',
+        noLogin: 'No login required',
+        reachable: 'Reachable',
+        unreachable: 'Not reachable',
+        checking: 'Checking'
+      }
     },
     requestHistory: {
       title: 'Request History',

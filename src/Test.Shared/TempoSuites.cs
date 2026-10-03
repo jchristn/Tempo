@@ -44,7 +44,8 @@ namespace Test.Shared
                     RequestHistorySuite.Build(),
                     HydrationSuite.Build(),
                     McpToolRegistrarSuite.Build(),
-                    McpTransportSuite.Build()
+                    McpTransportSuite.Build(),
+                    TelemetrySuite.Build()
                 };
             }
         }

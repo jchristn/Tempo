@@ -5,14 +5,14 @@
 # Tempo
 
 > **Note**  
-> v0.3.0 - Tempo is in ALPHA - API surface and data structures subject to change
+> v0.5.0 - Tempo is in ALPHA - API surface and data structures subject to change
 
 [![NuGet](https://img.shields.io/nuget/v/Tempo.svg)](https://www.nuget.org/packages/Tempo/)
 [![NuGet Tempo.Sdk](https://img.shields.io/nuget/v/Tempo.Sdk.svg)](https://www.nuget.org/packages/Tempo.Sdk/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET](https://img.shields.io/badge/.NET-10.0-blue.svg)](https://dotnet.microsoft.com/download/dotnet/10.0)
 
-Tempo is a workflow automation platform for building, running, and monitoring tenant-scoped data flows. A flow is made of reusable steps, invoked through triggers, persisted with artifacts, and observed through run history, request history, OpenAPI, and MCP.
+Tempo is a workflow automation platform for building, running, and monitoring tenant-scoped data flows. A flow is made of reusable steps, invoked through triggers, persisted with artifacts, and observed through run history, request history, OpenAPI, MCP, and built-in OpenTelemetry metrics, traces, and logs.
 
 Tempo ships as:
 
@@ -26,6 +26,7 @@ Tempo ships as:
 
 ## Highlights
 
+- Built-in observability: every component emits metrics and traces on the `Tempo` meter and activity source, a run is one trace from the HTTP request through the worker to the failing outbound call, and the compose stack ships Prometheus, Grafana Tempo, Loki, and seven provisioned Grafana dashboards (see [TELEMETRY.md](TELEMETRY.md))
 - Tenant-scoped CRUD for data flows, steps, triggers, runs, artifacts, users, credentials, roles, and permissions
 - Flow-level invocation auth modes so HTTP-triggered data flows can be public bearer-capability endpoints or require normal Tempo API authentication (`Public` vs `ApiAuthenticated`)
 - Runtime model that supports `Builtin.Class`, `Builtin.Method`, `External.Rest`, `Artifact.Process`, `Artifact.Python`, `Artifact.JavaScript`, `Artifact.DotnetProcess`, and `Host.Executable`
@@ -61,6 +62,11 @@ Default endpoints:
 - Tempo.McpServer HTTP JSON-RPC (legacy): `http://127.0.0.1:8910/rpc`
 - Tempo.McpServer TCP: `127.0.0.1:8911`
 - Tempo.McpServer WebSocket: `ws://127.0.0.1:8912/mcp`
+- Grafana: `http://localhost:3001` (`admin` / `admin` for local development; set `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` for anything shared)
+- Prometheus: `http://localhost:9090`
+- Grafana Tempo (traces): `http://localhost:3200`
+- Loki (logs): `http://localhost:3100`
+- OpenTelemetry Collector (OTLP): `localhost:4317` (gRPC) and `localhost:4318` (HTTP)
 
 Default seeded credentials on an empty database:
 
@@ -68,7 +74,7 @@ Default seeded credentials on an empty database:
 - Password: `password`
 - Local admin API key: `tempo-local-admin-api-key`
 
-Compose bind-mounts `docker/tempo.server.json` and `docker/tempo.worker.json` so first-run deployments use the intended control-plane and worker settings without depending on pre-seeded config volumes. Persistent named volumes remain in place for the server database, server artifact blob storage, server logs/runtime cache/scratch, shared worker logs, shared run logs, dashboard logs, and MCP configuration. Worker runtime-cache and scratch paths remain container-local anonymous volumes so scaled workers do not share mutable runtime state, while worker log files are written to a shared named volume that `Tempo.Server` mounts read-only for the admin log viewer. Per-run logs are written to a separate shared volume mounted read-write by the server and workers so run logs survive container restarts and remain visible through the `Runs` view and tenant-scoped run-log APIs. The service images in the compose file are pinned to `v0.3.0`, the current Tempo version.
+Compose bind-mounts `docker/tempo.server.json` and `docker/tempo.worker.json` so first-run deployments use the intended control-plane and worker settings without depending on pre-seeded config volumes. Persistent named volumes remain in place for the server database, server artifact blob storage, server logs/runtime cache/scratch, shared worker logs, shared run logs, dashboard logs, and MCP configuration. Worker runtime-cache and scratch paths remain container-local anonymous volumes so scaled workers do not share mutable runtime state, while worker log files are written to a shared named volume that `Tempo.Server` mounts read-only for the admin log viewer. Per-run logs are written to a separate shared volume mounted read-write by the server and workers so run logs survive container restarts and remain visible through the `Runs` view and tenant-scoped run-log APIs. The Tempo service images in the compose file are pinned to the `v0.3.0` image tag, which is rebuilt in place for this release. The observability images are pinned to known-good versions.
 
 ### Distributed Execution Model
 
@@ -113,6 +119,19 @@ Helper scripts at the repository root:
 - `build-mcp.bat v0.3.0`
 - `build-dashboard.bat v0.3.0`
 - `publish-nuget.bat <nuget-api-key>`
+
+Each `build-*.bat` has an equivalent `build-*.sh` for macOS and Linux (for example `./build-all.sh v0.3.0`) with the same tags and behavior.
+
+## Observability
+
+Tempo is observable out of the box. The `Tempo` and `Tempo.Core` libraries emit through `System.Diagnostics` only (the `Tempo` meter and activity source, no exporter dependency). `Tempo.Server`, `Tempo.Worker`, and `Tempo.McpServer` each host one telemetry pipeline that pushes OTLP to `http://127.0.0.1:4317` by default and also subscribes to Watson's built-in HTTP telemetry.
+
+- **Metrics:** flows and steps by runner and outcome, every dispatch pipeline stage (including the time a run spends queued), executor and worker pools, external-process capacity, caches, internal limiters, every outbound integration (database, REST targets, subprocesses, server calls), background tasks, authentication, MCP tools, build info, safe configuration, and .NET runtime health.
+- **Traces:** one trace per run, from the HTTP request that enqueued it through scheduling, the websocket hand-off to a worker, the flow and each step, down to database calls, HTTP calls, and artifact subprocesses (which receive `TRACEPARENT`). The worker's completion joins the same trace.
+- **Logs:** server and worker log lines are exported to Loki, stamped with the trace and span that wrote them.
+- **Dashboards:** the Grafana folder **Tempo** holds Overview, HTTP, Dispatch Pipeline, Flows & Steps, Workers & Capacity, Integrations, and Background Tasks & Runtime. The Tempo dashboard's home page links to Grafana, Prometheus, Grafana Tempo, and Loki in an **External services** card.
+
+Configure export with the `telemetry` block in each settings file or the `TEMPO_TELEMETRY_*` environment variables (for example `TEMPO_TELEMETRY_OTLP_ENDPOINT` or `TEMPO_TELEMETRY_ENABLED=false`). To observe the engine inside your own application, subscribe to the `Tempo` meter and activity source. [TELEMETRY.md](TELEMETRY.md) has the full metric and span catalog, configuration keys, propagation details, dashboard map, and recommended PromQL alerts.
 
 ## Core Concepts
 
@@ -266,6 +285,7 @@ For artifact-backed runtimes and manifests, see [docs/ARTIFACT_MANIFEST.md](docs
 
 Primary reference material:
 
+- [TELEMETRY.md](TELEMETRY.md)
 - [docs/REST_API.md](docs/REST_API.md)
 - [docs/MCP_API.md](docs/MCP_API.md)
 - [docs/BEST_PRACTICES.md](docs/BEST_PRACTICES.md)
@@ -329,6 +349,8 @@ That script packs and pushes:
 - `Tempo.Sdk`
 - their matching `.snupkg` symbol packages
 
+`Tempo.Core` is also published to NuGet (`dotnet pack .\src\Tempo.Core\Tempo.Core.csproj -c Release`).
+
 ## Repository Layout
 
 | Path | Purpose |
@@ -338,11 +360,13 @@ That script packs and pushes:
 | `src/Tempo.Server` | REST API host |
 | `src/Tempo.Worker` | Worker daemon for distributed execution |
 | `src/Tempo.McpServer` | MCP bridge over Tempo.Server |
+| `src/Tempo.Hosting` | Telemetry host (Radiant) shared by the server, worker, and MCP server |
 | `dashboard` | React/Vite operator UI |
 | `sdk/csharp` | C# SDK and test app |
 | `sdk/js` | JavaScript SDK and test app |
 | `sdk/python` | Python SDK and test app |
-| `docker` | Compose file and container config |
+| `docker` | Compose file, container config, and observability stack config (collector, Prometheus, Grafana Tempo, Grafana provisioning) |
+| `assets/grafana` | Grafana dashboard JSON (provisioned into the `Tempo` folder) |
 | `docs` | Focused operator and developer guides |
 | `archive` | Superseded planning notes and archived implementation docs |
 
@@ -364,6 +388,8 @@ That script packs and pushes:
 | [PrettyId](https://www.nuget.org/packages/PrettyId/) | K-sortable ID generation for Tempo resource identifiers |
 | [RestWrapper](https://www.nuget.org/packages/RestWrapper/) | Outbound HTTP execution support for REST-backed steps |
 | [SyslogLogging](https://www.nuget.org/packages/SyslogLogging/) | Structured logging used across the server-side projects |
+| [Radiant](https://www.nuget.org/packages/Radiant/) and [OpenTelemetry](https://opentelemetry.io/) | Telemetry host in `Tempo.Server`, `Tempo.Worker`, and `Tempo.McpServer`: OTLP export, optional Prometheus endpoint, runtime metrics, log export. The libraries themselves emit only through `System.Diagnostics` |
+| [Prometheus](https://prometheus.io/), [Grafana Tempo](https://grafana.com/oss/tempo/), [Loki](https://grafana.com/oss/loki/), [Grafana](https://grafana.com/oss/grafana/) | Bundled observability stack in `docker/compose.yaml`, behind an OpenTelemetry Collector |
 
 ## Contributing
 

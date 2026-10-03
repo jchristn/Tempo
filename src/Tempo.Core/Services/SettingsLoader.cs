@@ -1,4 +1,4 @@
-namespace Tempo.Core.Services
+﻿namespace Tempo.Core.Services
 {
     using System;
     using System.IO;
@@ -162,6 +162,8 @@ namespace Tempo.Core.Services
 
             v = Environment.GetEnvironmentVariable(EnvExternalExecutionDotnetExecutable);
             if (!string.IsNullOrEmpty(v)) settings.Runtimes.ExternalExecution.DotnetExecutable = v;
+
+            settings.Telemetry.ApplyEnvironmentOverrides();
         }
     }
 }

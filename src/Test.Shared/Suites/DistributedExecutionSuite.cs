@@ -1,4 +1,4 @@
-namespace Test.Shared.Suites
+﻿namespace Test.Shared.Suites
 {
     using System;
     using System.Collections.Generic;
@@ -967,7 +967,7 @@ namespace Test.Shared.Suites
             }
         }
 
-        private static Settings CreateServerSettings(
+        internal static Settings CreateServerSettings(
             string root,
             int port,
             bool serverCanExecuteWorkload,
@@ -1011,7 +1011,7 @@ namespace Test.Shared.Suites
             };
         }
 
-        private static WorkerSettings CreateWorkerSettings(string root, int port, string workerId, string workerToken, int maxTaskTimeoutMs = 30000, params string[] labels)
+        internal static WorkerSettings CreateWorkerSettings(string root, int port, string workerId, string workerToken, int maxTaskTimeoutMs = 30000, params string[] labels)
         {
             WorkerSettings settings = new WorkerSettings
             {
@@ -1039,7 +1039,7 @@ namespace Test.Shared.Suites
             return settings;
         }
 
-        private static async Task<DataFlowRecord> CreateRestFlowAsync(
+        internal static async Task<DataFlowRecord> CreateRestFlowAsync(
             SqliteDatabaseDriver driver,
             string tenantId,
             string url,
@@ -1074,7 +1074,7 @@ namespace Test.Shared.Suites
             }, token).ConfigureAwait(false);
         }
 
-        private static (CancellationTokenSource, Task) StartWorkerTask(WorkerSettings settings, CancellationToken token)
+        internal static (CancellationTokenSource, Task) StartWorkerTask(WorkerSettings settings, CancellationToken token)
         {
             CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             WorkerNode worker = new WorkerNode(settings, SilentLogger());
@@ -1082,7 +1082,7 @@ namespace Test.Shared.Suites
             return (cts, task);
         }
 
-        private static async Task StopWorkerTaskAsync(CancellationTokenSource? cts, Task? task)
+        internal static async Task StopWorkerTaskAsync(CancellationTokenSource? cts, Task? task)
         {
             if (cts != null)
             {
@@ -1097,7 +1097,7 @@ namespace Test.Shared.Suites
             cts?.Dispose();
         }
 
-        private static async Task WaitForWorkerOnlineAsync(RunDispatchCoordinator coordinator, string workerId, CancellationToken token)
+        internal static async Task WaitForWorkerOnlineAsync(RunDispatchCoordinator coordinator, string workerId, CancellationToken token)
         {
             await WaitForWorkerAsync(
                 coordinator,
@@ -1182,7 +1182,7 @@ namespace Test.Shared.Suites
             return JsonDocument.Parse(content);
         }
 
-        private static async Task<FlowRun> WaitForTerminalAsync(SqliteDatabaseDriver driver, string tenantId, string runId, CancellationToken token)
+        internal static async Task<FlowRun> WaitForTerminalAsync(SqliteDatabaseDriver driver, string tenantId, string runId, CancellationToken token)
         {
             DateTime deadline = DateTime.UtcNow.AddSeconds(10);
             FlowRun? latest = null;
@@ -1201,14 +1201,14 @@ namespace Test.Shared.Suites
             throw new TimeoutException("Run '" + runId + "' did not complete in time. Last state: " + (latest?.State.ToString() ?? "missing"));
         }
 
-        private static LoggingModule SilentLogger()
+        internal static LoggingModule SilentLogger()
         {
             LoggingModule logging = new LoggingModule();
             logging.Settings.EnableConsole = false;
             return logging;
         }
 
-        private static int FreePort()
+        internal static int FreePort()
         {
             TcpListener listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
@@ -1217,14 +1217,14 @@ namespace Test.Shared.Suites
             return port;
         }
 
-        private static string NewTempRoot(string prefix)
+        internal static string NewTempRoot(string prefix)
         {
             string path = Path.Combine(Path.GetTempPath(), prefix + "-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(path);
             return path;
         }
 
-        private static void DeleteDirectory(string path)
+        internal static void DeleteDirectory(string path)
         {
             try
             {
@@ -1268,7 +1268,7 @@ namespace Test.Shared.Suites
             }
         }
 
-        private sealed class OneShotHttpServer : IDisposable
+        internal sealed class OneShotHttpServer : IDisposable
         {
             private readonly TcpListener _Listener;
             private readonly string _ResponseBody;
@@ -1285,11 +1285,13 @@ namespace Test.Shared.Suites
 
             public string Url { get; }
 
+            public List<string> RequestHeaderLines { get; } = new List<string>();
+
             public async Task ServeOnceAsync(CancellationToken token)
             {
                 using TcpClient client = await _Listener.AcceptTcpClientAsync(token).ConfigureAwait(false);
                 await using NetworkStream stream = client.GetStream();
-                await DrainRequestHeadersAsync(stream, token).ConfigureAwait(false);
+                await DrainRequestHeadersAsync(stream, RequestHeaderLines, token).ConfigureAwait(false);
                 if (_ResponseDelayMs > 0)
                 {
                     await Task.Delay(_ResponseDelayMs, token).ConfigureAwait(false);
@@ -1304,7 +1306,7 @@ namespace Test.Shared.Suites
                 await stream.WriteAsync(body.AsMemory(0, body.Length), token).ConfigureAwait(false);
             }
 
-            private static async Task DrainRequestHeadersAsync(NetworkStream stream, CancellationToken token)
+            private static async Task DrainRequestHeadersAsync(NetworkStream stream, List<string> headerLines, CancellationToken token)
             {
                 using StreamReader reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
                 try
@@ -1313,6 +1315,7 @@ namespace Test.Shared.Suites
                     {
                         string? line = await reader.ReadLineAsync(token).ConfigureAwait(false);
                         if (string.IsNullOrEmpty(line)) break;
+                        lock (headerLines) { headerLines.Add(line); }
                     }
                 }
                 catch

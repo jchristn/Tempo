@@ -1,12 +1,14 @@
-namespace Tempo.Worker
+﻿namespace Tempo.Worker
 {
     using System;
+    using System.Diagnostics;
     using System.IO;
     using System.Net.Http;
     using System.Threading;
     using System.Threading.Tasks;
     using Tempo.Core;
     using Tempo.Core.Artifacts;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Read-only artifact blob store that downloads artifact packages from Tempo.Server for one active assignment.
@@ -60,6 +62,33 @@ namespace Tempo.Worker
         /// <inheritdoc />
         public async Task<Stream> OpenReadAsync(string tenantId, string sha256, CancellationToken token = default)
         {
+            long start = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartIntegration(IntegrationService, DownloadOperation);
+            activity?.SetTag(TelemetryConstants.AttrHttpMethod, "GET");
+            activity?.SetTag(TelemetryConstants.AttrServerAddress, _Client.BaseAddress?.Host);
+            try
+            {
+                Stream stream = await OpenReadCoreAsync(tenantId, sha256, activity, token).ConfigureAwait(false);
+                TempoTelemetry.SetOk(activity);
+                TempoTelemetry.RecordIntegration(IntegrationService, DownloadOperation, TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(start));
+                return stream;
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                string outcome = ex is OperationCanceledException ? TelemetryConstants.OutcomeCancelled
+                    : ex is FileNotFoundException ? "not_found"
+                    : TelemetryConstants.OutcomeException;
+                TempoTelemetry.RecordIntegration(IntegrationService, DownloadOperation, outcome, TempoTelemetry.SecondsSince(start));
+                throw;
+            }
+        }
+
+        private const string IntegrationService = "tempo-server";
+        private const string DownloadOperation = "artifact_download";
+
+        private async Task<Stream> OpenReadCoreAsync(string tenantId, string sha256, Activity? activity, CancellationToken token)
+        {
             string path = "v1.0/workers/artifacts/" + Uri.EscapeDataString(tenantId) + "/blobs/" + Uri.EscapeDataString(sha256) +
                 "/download?runAssignmentId=" + Uri.EscapeDataString(_RunAssignmentId) +
                 "&leaseToken=" + Uri.EscapeDataString(_LeaseToken);
@@ -69,6 +98,7 @@ namespace Tempo.Worker
             request.Headers.TryAddWithoutValidation(Constants.HeaderWorkerToken, _WorkerToken);
 
             HttpResponseMessage response = await _Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+            activity?.SetTag(TelemetryConstants.AttrHttpStatusCode, (int)response.StatusCode);
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 response.Dispose();

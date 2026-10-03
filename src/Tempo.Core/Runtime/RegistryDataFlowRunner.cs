@@ -1,7 +1,8 @@
-namespace Tempo.Core.Runtime
+﻿namespace Tempo.Core.Runtime
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Threading;
     using System.Threading.Tasks;
     using Tempo.Core.Helpers;
@@ -9,6 +10,7 @@ namespace Tempo.Core.Runtime
     using Tempo.Enums;
     using Tempo.Metrics;
     using Tempo.Runners;
+    using Tempo.Telemetry;
 
     /// <summary>Runs data flows through the runtime registry and execution resolver.</summary>
 #pragma warning disable CS8600
@@ -37,6 +39,48 @@ namespace Tempo.Core.Runtime
         {
             if (flow == null) throw new ArgumentNullException(nameof(flow));
             if (req == null) throw new ArgumentNullException(nameof(req));
+
+            long startTimestamp = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanFlowRun);
+            activity?.SetTag(TelemetryConstants.AttrRunner, FlowRunnerLabel);
+            activity?.SetTag(TelemetryConstants.AttrTenantId, flow.TenantId);
+            activity?.SetTag(TelemetryConstants.AttrDataFlowId, flow.Identifier);
+            activity?.SetTag(TelemetryConstants.AttrFlowRunId, req.FlowRunId ?? req.RequestId);
+            TempoTelemetry.AddActiveFlow(FlowRunnerLabel, 1);
+            string outcome = TelemetryConstants.OutcomeException;
+
+            try
+            {
+                StepResult result = await RunInternal(flow, req, snapshot, token).ConfigureAwait(false);
+                outcome = TempoTelemetry.OutcomeOf(result.Result);
+                if (result.Result == StepResultTypeEnum.Success) TempoTelemetry.SetOk(activity);
+                else TempoTelemetry.SetError(activity, outcome, result.ExceptionMessage);
+                return result;
+            }
+            catch (OperationCanceledException ex)
+            {
+                outcome = TelemetryConstants.OutcomeCancelled;
+                TempoTelemetry.RecordException(activity, ex);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordError("flow", ex);
+                throw;
+            }
+            finally
+            {
+                TempoTelemetry.AddActiveFlow(FlowRunnerLabel, -1);
+                TempoTelemetry.RecordFlowRun(FlowRunnerLabel, outcome, TempoTelemetry.SecondsSince(startTimestamp));
+            }
+        }
+
+        private const string FlowRunnerLabel = "registry";
+        private const string FlowPipeline = "flow";
+
+        private async Task<StepResult> RunInternal(Tempo.DataFlow flow, StepRequest req, FlowRunExecutionSnapshot? snapshot, CancellationToken token)
+        {
             req.ProtocolVersion = new ProtocolNegotiator().EnsureSupported(req.ProtocolVersion);
             req.TenantId = flow.TenantId;
             req.FlowRunId ??= req.RequestId;
@@ -115,11 +159,45 @@ namespace Tempo.Core.Runtime
                         break;
                     }
 
-                    ResolvedStepExecution resolved = await ResolveAsync(flow.TenantId, currentStepId, stepTransition, snapshot, token).ConfigureAwait(false);
+                    ResolvedStepExecution resolved;
+                    long stageStart = Stopwatch.GetTimestamp();
+                    using (Activity? resolveActivity = TempoTelemetry.StartStage(FlowPipeline, "resolve"))
+                    {
+                        resolveActivity?.SetTag(TelemetryConstants.AttrStepId, currentStepId);
+                        try
+                        {
+                            resolved = await ResolveAsync(flow.TenantId, currentStepId, stepTransition, snapshot, token).ConfigureAwait(false);
+                            TempoTelemetry.SetOk(resolveActivity);
+                            TempoTelemetry.RecordStage(FlowPipeline, "resolve", TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(stageStart));
+                        }
+                        catch (Exception ex)
+                        {
+                            TempoTelemetry.RecordException(resolveActivity, ex);
+                            TempoTelemetry.RecordStage(FlowPipeline, "resolve", TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(stageStart));
+                            throw;
+                        }
+                    }
+
                     StepRuntimeConfig config = resolved.Config ?? throw new InvalidOperationException("Step '" + currentStepId + "' has no runtime config.");
-                    StepConfigValidationResult validation = await _Registry.ValidateAsync(flow.TenantId, resolved.Step.RuntimeKey, config, token).ConfigureAwait(false);
-                    if (!validation.Valid) throw new InvalidOperationException("Step '" + currentStepId + "' runtime config is invalid: " + string.Join("; ", validation.Errors));
-                    ValidateContract(resolved.Step, req.Data, input: true);
+                    stageStart = Stopwatch.GetTimestamp();
+                    using (Activity? validateActivity = TempoTelemetry.StartStage(FlowPipeline, "validate"))
+                    {
+                        validateActivity?.SetTag(TelemetryConstants.AttrStepId, currentStepId);
+                        try
+                        {
+                            StepConfigValidationResult validation = await _Registry.ValidateAsync(flow.TenantId, resolved.Step.RuntimeKey, config, token).ConfigureAwait(false);
+                            if (!validation.Valid) throw new InvalidOperationException("Step '" + currentStepId + "' runtime config is invalid: " + string.Join("; ", validation.Errors));
+                            ValidateContract(resolved.Step, req.Data, input: true);
+                            TempoTelemetry.SetOk(validateActivity);
+                            TempoTelemetry.RecordStage(FlowPipeline, "validate", TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(stageStart));
+                        }
+                        catch (Exception ex)
+                        {
+                            TempoTelemetry.RecordException(validateActivity, ex);
+                            TempoTelemetry.RecordStage(FlowPipeline, "validate", TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(stageStart));
+                            throw;
+                        }
+                    }
 
                     StepRunDetails stepRunDetails = new StepRunDetails
                     {
@@ -143,24 +221,43 @@ namespace Tempo.Core.Runtime
                     IStepRuntimeProvider provider = _Registry.Get(resolved.Step.RuntimeKey)
                         ?? throw new InvalidOperationException("Runtime provider '" + resolved.Step.RuntimeKey + "' is not registered.");
 
-                    StepRunner stepRunner = await provider.CreateRunnerAsync(
-                        new StepExecutionContext
-                        {
-                            TenantId = flow.TenantId,
-                            ExecutionKey = currentStepId,
-                            FlowRunId = req.FlowRunId ?? snapshot.FlowRunId,
-                            StepRunId = stepRunDetails.RowId,
-                            RunAssignmentId = RunLogs?.Context.RunAssignmentId,
-                            WorkerId = RunLogs?.Context.WorkerId,
-                            AttemptNumber = RunLogs?.Context.AttemptNumber ?? 0,
-                            StepSequence = stepSequence,
-                            Snapshot = snapshot,
-                            RunLogSession = RunLogs,
-                            RunLogStep = stepLogScope
-                        },
-                        resolved.Step,
-                        config,
-                        token).ConfigureAwait(false);
+                    stageStart = Stopwatch.GetTimestamp();
+                    Activity? prepareActivity = TempoTelemetry.StartStage(FlowPipeline, "prepare");
+                    prepareActivity?.SetTag(TelemetryConstants.AttrStepId, currentStepId);
+                    StepRunner stepRunner;
+                    try
+                    {
+                        stepRunner = await provider.CreateRunnerAsync(
+                            new StepExecutionContext
+                            {
+                                TenantId = flow.TenantId,
+                                ExecutionKey = currentStepId,
+                                FlowRunId = req.FlowRunId ?? snapshot.FlowRunId,
+                                StepRunId = stepRunDetails.RowId,
+                                RunAssignmentId = RunLogs?.Context.RunAssignmentId,
+                                WorkerId = RunLogs?.Context.WorkerId,
+                                AttemptNumber = RunLogs?.Context.AttemptNumber ?? 0,
+                                StepSequence = stepSequence,
+                                Snapshot = snapshot,
+                                RunLogSession = RunLogs,
+                                RunLogStep = stepLogScope
+                            },
+                            resolved.Step,
+                            config,
+                            token).ConfigureAwait(false);
+                        TempoTelemetry.SetOk(prepareActivity);
+                        TempoTelemetry.RecordStage(FlowPipeline, "prepare", TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(stageStart));
+                    }
+                    catch (Exception ex)
+                    {
+                        TempoTelemetry.RecordException(prepareActivity, ex);
+                        TempoTelemetry.RecordStage(FlowPipeline, "prepare", TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(stageStart));
+                        throw;
+                    }
+                    finally
+                    {
+                        prepareActivity?.Dispose();
+                    }
 
                     int maxRuntimeMs = resolved.Step.MaxRuntimeMs;
                     if (maxRuntimeMs == 0 && config is ExternalRestRuntimeConfig restConfig) maxRuntimeMs = restConfig.TimeoutMs;
@@ -173,6 +270,7 @@ namespace Tempo.Core.Runtime
 
                     bool isException = lastResult.Result == StepResultTypeEnum.Exception || lastResult.Exception != null;
                     currentStepId = ProcessStepResult(lastResult, stepTransition, req, stepRunDetails, isException);
+                    TempoTelemetry.RecordTransition(lastResult.Result, isException, currentStepId);
                     ApplyArtifactDiagnostics(stepRunner, stepRunDetails);
                     await WriteStepRunDetailsAsync(stepRunDetails).ConfigureAwait(false);
 

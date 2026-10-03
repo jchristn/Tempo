@@ -1,13 +1,15 @@
-namespace Tempo.McpServer.Tools
+﻿namespace Tempo.McpServer.Tools
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Net.Http;
     using System.Text.Json;
     using System.Text.Json.Nodes;
     using System.Threading;
     using System.Threading.Tasks;
     using Tempo.McpServer.Services;
+    using Tempo.Telemetry;
     using Voltaic.Core;
     using Voltaic.Mcp;
 
@@ -71,18 +73,39 @@ namespace Tempo.McpServer.Tools
             return await tool.Handler(ToJsonElement(args), token).ConfigureAwait(false);
         }
 
-        private static async Task<object> InvokeToolAsync(TempoToolDefinition tool, TempoApiClient client, RpcParameters? args, CancellationToken token)
+        internal static async Task<object> InvokeToolAsync(TempoToolDefinition tool, TempoApiClient client, RpcParameters? args, CancellationToken token)
         {
+            long start = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanMcpToolPrefix + tool.Name, ActivityKind.Server);
+            activity?.SetTag(TelemetryConstants.AttrTool, tool.Name);
             try
             {
-                return await InvokeAsync(tool, args, token).ConfigureAwait(false);
+                object result = await InvokeAsync(tool, args, token).ConfigureAwait(false);
+                if (result is TempoApiResponse response && !response.Success)
+                {
+                    activity?.SetTag(TelemetryConstants.AttrHttpStatusCode, response.StatusCode);
+                    TempoTelemetry.SetError(activity, response.StatusCode.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    TempoTelemetry.RecordMcpTool(tool.Name, TelemetryConstants.OutcomeError, TempoTelemetry.SecondsSince(start));
+                }
+                else
+                {
+                    TempoTelemetry.SetOk(activity);
+                    TempoTelemetry.RecordMcpTool(tool.Name, TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(start));
+                }
+
+                return result;
             }
-            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            catch (OperationCanceledException ex) when (token.IsCancellationRequested)
             {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordMcpTool(tool.Name, TelemetryConstants.OutcomeCancelled, TempoTelemetry.SecondsSince(start));
                 throw;
             }
             catch (Exception ex)
             {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordMcpTool(tool.Name, TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(start));
+                TempoTelemetry.RecordError("mcp", ex);
                 // MCP reports tool execution failures as isError results so the model can read and react to them;
                 // letting them escape becomes an opaque JSON-RPC -32603 "Internal error".
                 McpToolCallResult result = McpToolCallResult.FromText(DescribeFailure(tool, client, ex));

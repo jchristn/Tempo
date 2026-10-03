@@ -95,6 +95,17 @@ All entities use the PrettyId library to generate human-readable identifiers:
 - **StepResult**: Returns `Result` (enum), `Data`, `Exception`, and `Metadata`
 - **StepResultTypeEnum**: Success, Error, or Exception
 
+## Telemetry
+
+Tempo emits metrics and traces on one `Meter` and one `ActivitySource`, both named `Tempo` (see `TELEMETRY.md` for the catalog).
+
+- All telemetry names (instruments, spans, attribute keys, outcomes) live in `src/Tempo/Telemetry/TelemetryConstants.cs`. Add new names there, never as string literals at call sites.
+- Record through the typed, best-effort helpers in `src/Tempo/Telemetry/TempoTelemetry.cs` (they never throw). Start spans with `TempoTelemetry.StartActivity` / `StartIntegration` / `StartStage` / `StartTask`, set status explicitly (`SetOk`, `SetError`, `RecordException`), and dispose them.
+- Metric labels must be bounded vocabularies. Tenant, flow, run, step, worker, and assignment ids, URLs, SQL, and payloads go on spans only (and secrets nowhere). `TelemetrySuite.MetricLabelsStayBounded` enforces this.
+- Every new outbound call gets a client span plus `RecordIntegration`. Every new pipeline stage gets `StartStage` plus `RecordStage`. Every new background loop gets `StartTask` plus `RecordTask`.
+- Libraries (`Tempo`, `Tempo.Core`) must not reference Radiant or OpenTelemetry. Only `src/Tempo.Hosting` (`TelemetryHost`) does, and only the three executables reference it.
+- Add coverage to `src/Test.Shared/Suites/TelemetrySuite.cs` using `TelemetryCapture`.
+
 ## Dependencies
 
 - **PrettyId** (v2.0.0): Identifier generation

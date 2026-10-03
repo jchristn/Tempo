@@ -8,6 +8,7 @@ WORKDIR /repo
 
 COPY src/Tempo/Tempo.csproj src/Tempo/
 COPY src/Tempo.Core/Tempo.Core.csproj src/Tempo.Core/
+COPY src/Tempo.Hosting/Tempo.Hosting.csproj src/Tempo.Hosting/
 COPY src/Tempo.Worker/Tempo.Worker.csproj src/Tempo.Worker/
 COPY README.md LICENSE.md ./
 COPY assets ./assets

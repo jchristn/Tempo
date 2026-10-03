@@ -1,4 +1,4 @@
-namespace Test.ArtifactFixture
+﻿namespace Test.ArtifactFixture
 {
     using System;
     using System.Threading;
@@ -52,7 +52,8 @@ namespace Test.ArtifactFixture
                     mode = _Mode,
                     input = request.Data,
                     protocolEnvironment = Environment.GetEnvironmentVariable(ProtocolVersions.ProtocolVersionEnvironmentVariable),
-                    supportedProtocolEnvironment = Environment.GetEnvironmentVariable(ProtocolVersions.SupportedProtocolVersionsEnvironmentVariable)
+                    supportedProtocolEnvironment = Environment.GetEnvironmentVariable(ProtocolVersions.SupportedProtocolVersionsEnvironmentVariable),
+                    traceParent = Environment.GetEnvironmentVariable("TRACEPARENT")
                 };
                 return Task.FromResult(TempoStepHost.Success(request, result, new { fixture = "artifact-process", sdk = "dotnet" }));
             }

@@ -1,13 +1,25 @@
+# Telemetry: every Tempo process pushes metrics, traces, and logs over OTLP gRPC to the collector.
+x-tempo-telemetry-env: &tempo-telemetry-env
+  TEMPO_TELEMETRY_ENABLED: "true"
+  TEMPO_TELEMETRY_OTLP_ENDPOINT: http://otel-collector:4317
+  TEMPO_TELEMETRY_OTLP_PROTOCOL: grpc
+
 x-tempo-worker-env: &tempo-worker-env
+  <<: *tempo-telemetry-env
+  TEMPO_TELEMETRY_SERVICE_NAME: tempo-worker
   TEMPO_WORKER_SETTINGS_FILE: /var/lib/tempo-worker/config/tempo.worker.json
   TEMPO_WORKER_SERVER_ENDPOINT: ${TEMPO_WORKER_SERVER_ENDPOINT:-http://tempo-server:8901}
   TEMPO_WORKER_BOOTSTRAP_ADMIN_API_KEY: ${TEMPO_WORKER_BOOTSTRAP_ADMIN_API_KEY:-tempo-local-admin-api-key}
 
 x-tempo-server-env: &tempo-server-env
+  <<: *tempo-telemetry-env
+  TEMPO_TELEMETRY_SERVICE_NAME: tempo-server
   TEMPO_AUTH_ADMIN_API_KEY: ${TEMPO_WORKER_BOOTSTRAP_ADMIN_API_KEY:-tempo-local-admin-api-key}
   TEMPO_LOG_VIEWER_WORKER_ROOT: /var/lib/tempo-server/worker-logs
 
 x-tempo-mcp-env: &tempo-mcp-env
+  <<: *tempo-telemetry-env
+  TEMPO_TELEMETRY_SERVICE_NAME: tempo-mcp
   TEMPO_ENDPOINT: http://tempo-server:8901
   TEMPO_MCP_HTTP_HOSTNAME: "*"
   TEMPO_MCP_TCP_ADDRESS: 0.0.0.0
@@ -19,6 +31,8 @@ x-tempo-worker: &tempo-worker
   depends_on:
     tempo-server:
       condition: service_healthy
+    otel-collector:
+      condition: service_started
   volumes:
     - ./tempo.worker.json:/var/lib/tempo-worker/config/tempo.worker.json:ro
     - tempo_worker_logs:/var/lib/tempo-worker/logs
@@ -30,6 +44,9 @@ services:
   tempo-server:
     image: jchristn77/tempo-server:v0.3.0
     restart: unless-stopped
+    depends_on:
+      otel-collector:
+        condition: service_started
     environment:
       <<: *tempo-server-env
     ports:
@@ -95,6 +112,8 @@ services:
     depends_on:
       tempo-server:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
     environment:
       <<: *tempo-mcp-env
     ports:
@@ -109,6 +128,112 @@ services:
       timeout: 5s
       retries: 2
 
+  # ------------------------------------------------------------------
+  # Observability: OpenTelemetry Collector -> Prometheus / Grafana Tempo / Loki -> Grafana
+  # Host ports: Grafana 3001 (the Tempo dashboard owns 3000), Prometheus 9090, Grafana Tempo 3200,
+  # Loki 3100, OTLP 4317/4318 (for Tempo processes run outside Docker).
+  # ------------------------------------------------------------------
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      grafana-tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    # The collector image is built from scratch (no shell, curl, or wget), so it cannot probe itself.
+    # Its health_check extension listens on :13133 inside the compose network for external probes.
+
+  prometheus:
+    image: prom/prometheus:v3.5.4
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      # The prometheus image ships wget, not curl.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/healthy"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 20s
+
+  grafana-tempo:
+    # Pinned: later Grafana Tempo builds reject this standard ingester/compactor config.
+    image: grafana/tempo:2.6.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    ports:
+      - "3200:3200"
+    volumes:
+      - ./grafana-tempo.yaml:/etc/tempo.yaml:ro
+      - grafana_tempo_data:/var/tempo
+    healthcheck:
+      # The tempo image ships wget, not curl. /ready returns 503 until the ingester is ready.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3200/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 40s
+
+  loki:
+    image: grafana/loki:3.2.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    healthcheck:
+      # The loki image has busybox wget but no /bin/sh, so use the exec form.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3100/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
+
+  grafana:
+    image: grafana/grafana-oss:13.0.2
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      # Local-development defaults. Override GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD out of band
+      # for any shared or hosted deployment; never commit a real password here.
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/tempo/tempo-overview.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../assets/grafana:/var/lib/grafana/dashboards/tempo:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      grafana-tempo:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 2
+      start_period: 30s
+
 volumes:
   tempo_server_db:
   tempo_server_artifacts:
@@ -119,3 +244,7 @@ volumes:
   tempo_server_scratch:
   dashboard_logs:
   tempo_mcp_config:
+  prometheus_data:
+  grafana_tempo_data:
+  loki_data:
+  grafana_data:

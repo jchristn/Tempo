@@ -1,4 +1,4 @@
-namespace Tempo.Worker
+﻿namespace Tempo.Worker
 {
     using System;
     using System.Collections.Generic;
@@ -20,6 +20,7 @@ namespace Tempo.Worker
     using Tempo.Core.Services;
     using Tempo.Core.Workers;
     using Tempo.Protocol;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Reconnecting worker daemon that executes assigned flow runs from a Tempo server.
@@ -76,6 +77,7 @@ namespace Tempo.Worker
                     _HeartbeatIntervalMs = Math.Max(1000, ack.HeartbeatIntervalMs);
                     _DrainMode = ack.DrainMode;
                     _Logging.Info(_Header + "connected as " + _Settings.WorkerId + " session " + ack.WorkerSessionId);
+                    TempoTelemetry.RecordWorkerSession("connected");
 
                     connectionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
                     heartbeatTask = Task.Run(() => HeartbeatLoopAsync(socket, connectionCts.Token), connectionCts.Token);
@@ -93,14 +95,17 @@ namespace Tempo.Worker
                 }
                 catch (WebSocketException ex)
                 {
+                    TempoTelemetry.RecordError("worker_connection", ex);
                     _Logging.Warn(_Header + "socket error: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
+                    TempoTelemetry.RecordError("worker_connection", ex);
                     _Logging.Warn(_Header + "connection loop error: " + ex.Message);
                 }
                 finally
                 {
+                    if (_WorkerSessionId != null) TempoTelemetry.RecordWorkerSession("disconnected");
                     try { connectionCts?.Cancel(); } catch { /* ignore */ }
                     CancelActiveAssignments();
                     if (heartbeatTask != null)
@@ -204,6 +209,7 @@ namespace Tempo.Worker
                 throw new InvalidOperationException("Worker frame did not include a type field.");
 
             string? type = typeElement.GetString();
+            TempoTelemetry.RecordWorkerFrame("in", type == WorkerFrameTypes.Assign || type == WorkerFrameTypes.Drain || type == WorkerFrameTypes.Resume ? type : "unknown");
             switch (type)
             {
                 case WorkerFrameTypes.Assign:
@@ -233,21 +239,32 @@ namespace Tempo.Worker
             string sessionId = _WorkerSessionId ?? string.Empty;
             bool accepted = false;
             string? rejectionMessage = null;
+            string assignmentOutcome = "accepted";
             CancellationTokenSource? assignmentCts = null;
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanWorkerAssignment, ActivityKind.Consumer, message.TraceParent, message.TraceState);
+            activity?.SetTag(TelemetryConstants.AttrAssignmentId, assignment.Id);
+            activity?.SetTag(TelemetryConstants.AttrFlowRunId, assignment.FlowRunId);
+            activity?.SetTag(TelemetryConstants.AttrAttempt, assignment.AttemptNumber);
+            activity?.SetTag(TelemetryConstants.AttrWorkerId, _Settings.WorkerId);
+            activity?.SetTag(TelemetryConstants.AttrTenantId, plan.TenantId);
+            activity?.SetTag(TelemetryConstants.AttrDataFlowId, plan.DataFlowId);
 
             try
             {
                 if (string.IsNullOrWhiteSpace(sessionId) || !string.Equals(assignment.WorkerSessionId, sessionId, StringComparison.Ordinal))
                 {
                     rejectionMessage = "Assignment was issued for a different worker session";
+                    assignmentOutcome = "rejected_session";
                 }
                 else if (_DrainMode)
                 {
                     rejectionMessage = "Worker is draining";
+                    assignmentOutcome = "rejected_draining";
                 }
                 else if (!WorkerDescriptorJson.SupportsPlan(WorkerDescriptorJson.SerializeCapabilities(BuildCapabilities()), plan))
                 {
                     rejectionMessage = "Worker capabilities do not satisfy the execution plan";
+                    assignmentOutcome = "rejected_capabilities";
                 }
                 else
                 {
@@ -256,6 +273,7 @@ namespace Tempo.Worker
                         if (_ActiveAssignments.Count >= _Settings.MaxConcurrentRuns)
                         {
                             rejectionMessage = "Worker is at max concurrency";
+                            assignmentOutcome = "rejected_capacity";
                         }
                         else
                         {
@@ -276,7 +294,12 @@ namespace Tempo.Worker
                     Message = rejectionMessage
                 }, token).ConfigureAwait(false);
 
-                if (!accepted || assignmentCts == null) return;
+                TempoTelemetry.RecordWorkerAssignment(assignmentOutcome);
+                if (!accepted || assignmentCts == null)
+                {
+                    TempoTelemetry.SetError(activity, assignmentOutcome, rejectionMessage);
+                    return;
+                }
 
                 _Logging.Info(
                     _Header +
@@ -289,6 +312,20 @@ namespace Tempo.Worker
                 Stopwatch runtime = Stopwatch.StartNew();
                 RunCompletionReport completion = await ExecuteAssignmentAsync(assignment, plan, assignmentCts.Token).ConfigureAwait(false);
                 runtime.Stop();
+                completion.TraceParent = TempoTelemetry.TraceParentOf(activity);
+                completion.TraceState = activity?.TraceStateString;
+                string state = completion.FinalState.ToString().ToLowerInvariant();
+                activity?.SetTag(TelemetryConstants.AttrState, state);
+                TempoTelemetry.RecordStage(WorkerPipeline, "execute", completion.FinalState == FlowRunStateEnum.Succeeded ? TelemetryConstants.OutcomeSuccess : state, runtime.Elapsed.TotalSeconds);
+                if (completion.FinalState == FlowRunStateEnum.Succeeded)
+                {
+                    TempoTelemetry.SetOk(activity);
+                    TempoTelemetry.MarkSuccess("worker_assignment");
+                }
+                else
+                {
+                    TempoTelemetry.SetError(activity, state, completion.ErrorMessage);
+                }
 
                 _Logging.Info(
                     _Header +
@@ -309,6 +346,8 @@ namespace Tempo.Worker
             }
             catch (Exception ex)
             {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordError("worker_assignment", ex);
                 _Logging.Warn(_Header + "assignment " + assignment.Id + " failed before completion send: " + ex.Message);
                 if (accepted && socket.State == WebSocketState.Open)
                 {
@@ -322,7 +361,9 @@ namespace Tempo.Worker
                         FinalState = FlowRunStateEnum.Exception,
                         ErrorMessage = ex.Message,
                         ExecutionSnapshotJson = FlowRunExecutionSnapshotSerializer.Serialize(plan.ExecutionSnapshot),
-                        CompletedUtc = DateTime.UtcNow
+                        CompletedUtc = DateTime.UtcNow,
+                        TraceParent = TempoTelemetry.TraceParentOf(activity),
+                        TraceState = activity?.TraceStateString
                     };
                     await SendFrameAsync(socket, new WorkerRunCompletedMessage { Completion = completion }, CancellationToken.None).ConfigureAwait(false);
                 }
@@ -570,6 +611,7 @@ namespace Tempo.Worker
                 }
                 catch (Exception ex)
                 {
+                    TempoTelemetry.RecordError("worker_heartbeat", ex);
                     _Logging.Warn(_Header + "heartbeat send failed: " + ex.Message);
                     break;
                 }
@@ -580,6 +622,7 @@ namespace Tempo.Worker
 
         private async Task SendFrameAsync(ClientWebSocket socket, object frame, CancellationToken token)
         {
+            TempoTelemetry.RecordWorkerFrame("out", FrameTypeOf(frame));
             string json = JsonSerializer.Serialize(frame, WorkerProtocolSerialization.Options);
             byte[] payload = Encoding.UTF8.GetBytes(json);
             await _SendLock.WaitAsync(token).ConfigureAwait(false);
@@ -609,6 +652,20 @@ namespace Tempo.Worker
                         throw new InvalidOperationException("Worker only supports text frames.");
                     return Encoding.UTF8.GetString(ms.ToArray());
                 }
+            }
+        }
+
+        private const string WorkerPipeline = "worker";
+
+        private static string FrameTypeOf(object frame)
+        {
+            switch (frame)
+            {
+                case WorkerHelloMessage: return WorkerFrameTypes.Hello;
+                case WorkerHeartbeatMessage: return WorkerFrameTypes.Heartbeat;
+                case WorkerAssignAckMessage: return WorkerFrameTypes.AssignAck;
+                case WorkerRunCompletedMessage: return WorkerFrameTypes.RunCompleted;
+                default: return "other";
             }
         }
 

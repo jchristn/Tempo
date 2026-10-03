@@ -171,7 +171,8 @@ export const generatedLocaleResources = {
         "toggleSidebar": "Alternar barra lateral",
         "github": "Ver tempo en GitHub",
         "authenticatedPrincipal": "Director autenticado",
-        "serverAt": "Servidor de tempo en {{serverUrl}}"
+        "serverAt": "Servidor de tempo en {{serverUrl}}",
+        "discord": "Únete al Discord de Tempo"
       },
       "login": {
         "title": "tempo",
@@ -286,7 +287,23 @@ export const generatedLocaleResources = {
           "serverLogsTitle": "Abrir los registros actuales del servidor Tempo",
           "successful": "Exitoso",
           "tenantsQueued": "Los inquilinos hicieron cola",
-          "totalRequests": "Solicitudes totales"
+          "totalRequests": "Solicitudes totales",
+          "externalServices": {
+            "title": "Servicios externos",
+            "subtitle": "Herramientas de observabilidad incluidas en el despliegue de Docker Compose. Las credenciales mostradas son valores predeterminados de desarrollo local; cámbielas antes de cualquier despliegue compartido.",
+            "service": "Servicio",
+            "url": "URL",
+            "credentials": "Credenciales",
+            "status": "Estado",
+            "grafanaPurpose": "Paneles de métricas, trazas y registros",
+            "prometheusPurpose": "Almacenamiento y consulta de métricas",
+            "tracesPurpose": "Almacenamiento y búsqueda de trazas",
+            "lokiPurpose": "Agregación y búsqueda de registros",
+            "noLogin": "No requiere inicio de sesión",
+            "reachable": "Accesible",
+            "unreachable": "No accesible",
+            "checking": "Comprobando"
+          }
         },
         "requestHistory": {
           "title": "Historial de solicitudes",
@@ -1632,7 +1649,8 @@ export const generatedLocaleResources = {
         "toggleSidebar": "切换侧边栏",
         "github": "在 GitHub 上查看 Tempo",
         "authenticatedPrincipal": "经过身份验证的委托人",
-        "serverAt": "速度服务器位于 {{serverUrl}}"
+        "serverAt": "速度服务器位于 {{serverUrl}}",
+        "discord": "加入 Tempo Discord"
       },
       "login": {
         "title": "节奏",
@@ -1747,7 +1765,23 @@ export const generatedLocaleResources = {
           "serverLogsTitle": "打开当前 Tempo Server 日志",
           "successful": "成功",
           "tenantsQueued": "租户排队",
-          "totalRequests": "请求总数"
+          "totalRequests": "请求总数",
+          "externalServices": {
+            "title": "外部服务",
+            "subtitle": "Docker Compose 部署中附带的可观测性工具。显示的凭据为本地开发默认值；在任何共享部署之前请更改它们。",
+            "service": "服务",
+            "url": "网址",
+            "credentials": "凭据",
+            "status": "状态",
+            "grafanaPurpose": "指标、链路追踪和日志的仪表板",
+            "prometheusPurpose": "指标存储与查询",
+            "tracesPurpose": "链路追踪存储与搜索",
+            "lokiPurpose": "日志聚合与搜索",
+            "noLogin": "无需登录",
+            "reachable": "可访问",
+            "unreachable": "无法访问",
+            "checking": "检查中"
+          }
         },
         "requestHistory": {
           "title": "请求历史记录",
@@ -3093,7 +3127,8 @@ export const generatedLocaleResources = {
         "toggleSidebar": "切換側邊欄",
         "github": "在 GitHub 上查看 Tempo",
         "authenticatedPrincipal": "經過身份驗證的委託人",
-        "serverAt": "速度伺服器位於 {{serverUrl}}"
+        "serverAt": "速度伺服器位於 {{serverUrl}}",
+        "discord": "加入 Tempo Discord"
       },
       "login": {
         "title": "節奏",
@@ -3208,7 +3243,23 @@ export const generatedLocaleResources = {
           "serverLogsTitle": "開啟目前 Tempo Server 日誌",
           "successful": "成功",
           "tenantsQueued": "租客排隊",
-          "totalRequests": "請求總數"
+          "totalRequests": "請求總數",
+          "externalServices": {
+            "title": "外部服務",
+            "subtitle": "Docker Compose 部署附帶嘅可觀測性工具。顯示嘅憑證係本地開發預設值；喺任何共用部署之前請更改。",
+            "service": "服務",
+            "url": "網址",
+            "credentials": "憑證",
+            "status": "狀態",
+            "grafanaPurpose": "指標、追蹤同日誌嘅儀表板",
+            "prometheusPurpose": "指標儲存同查詢",
+            "tracesPurpose": "追蹤儲存同搜尋",
+            "lokiPurpose": "日誌彙集同搜尋",
+            "noLogin": "毋須登入",
+            "reachable": "可以連接",
+            "unreachable": "無法連接",
+            "checking": "檢查緊"
+          }
         },
         "requestHistory": {
           "title": "請求歷史記錄",
@@ -4554,7 +4605,8 @@ export const generatedLocaleResources = {
         "toggleSidebar": "Toggle sidebar",
         "github": "View Tempo on GitHub",
         "authenticatedPrincipal": "認証されたプリンシパル",
-        "serverAt": "Tempo server at {{serverUrl}}"
+        "serverAt": "Tempo server at {{serverUrl}}",
+        "discord": "Tempo の Discord に参加"
       },
       "login": {
         "title": "Tempo",
@@ -4669,7 +4721,23 @@ export const generatedLocaleResources = {
           "serverLogsTitle": "Open the current Tempo Server logs",
           "successful": "Successful",
           "tenantsQueued": "Tenants queued",
-          "totalRequests": "Total requests"
+          "totalRequests": "Total requests",
+          "externalServices": {
+            "title": "外部サービス",
+            "subtitle": "Docker Compose デプロイに同梱されているオブザーバビリティツールです。表示される認証情報はローカル開発用の既定値です。共有環境にデプロイする前に変更してください。",
+            "service": "サービス",
+            "url": "URL",
+            "credentials": "認証情報",
+            "status": "ステータス",
+            "grafanaPurpose": "メトリクス、トレース、ログのダッシュボード",
+            "prometheusPurpose": "メトリクスの保存とクエリ",
+            "tracesPurpose": "トレースの保存と検索",
+            "lokiPurpose": "ログの集約と検索",
+            "noLogin": "ログイン不要",
+            "reachable": "到達可能",
+            "unreachable": "到達不可",
+            "checking": "確認中"
+          }
         },
         "requestHistory": {
           "title": "Request History",
@@ -6015,7 +6083,8 @@ export const generatedLocaleResources = {
         "toggleSidebar": "Toggle sidebar",
         "github": "View Tempo on GitHub",
         "authenticatedPrincipal": "Authenticated principal",
-        "serverAt": "Tempo server at {{serverUrl}}"
+        "serverAt": "Tempo server at {{serverUrl}}",
+        "discord": "Dem Tempo-Discord beitreten"
       },
       "login": {
         "title": "Tempo",
@@ -6130,7 +6199,23 @@ export const generatedLocaleResources = {
           "serverLogsTitle": "Open the current Tempo Server logs",
           "successful": "Successful",
           "tenantsQueued": "Tenants queued",
-          "totalRequests": "Total requests"
+          "totalRequests": "Total requests",
+          "externalServices": {
+            "title": "Externe Dienste",
+            "subtitle": "Observability-Werkzeuge, die mit der Docker-Compose-Bereitstellung ausgeliefert werden. Die angezeigten Anmeldedaten sind Standardwerte für die lokale Entwicklung; ändern Sie sie vor jeder gemeinsam genutzten Bereitstellung.",
+            "service": "Dienst",
+            "url": "URL",
+            "credentials": "Anmeldedaten",
+            "status": "Status",
+            "grafanaPurpose": "Dashboards für Metriken, Traces und Logs",
+            "prometheusPurpose": "Speicherung und Abfrage von Metriken",
+            "tracesPurpose": "Speicherung und Suche von Traces",
+            "lokiPurpose": "Aggregation und Suche von Logs",
+            "noLogin": "Keine Anmeldung erforderlich",
+            "reachable": "Erreichbar",
+            "unreachable": "Nicht erreichbar",
+            "checking": "Wird geprüft"
+          }
         },
         "requestHistory": {
           "title": "Request History",
@@ -7476,7 +7561,8 @@ export const generatedLocaleResources = {
         "toggleSidebar": "Toggle sidebar",
         "github": "View Tempo on GitHub",
         "authenticatedPrincipal": "Authenticated principal",
-        "serverAt": "Tempo server at {{serverUrl}}"
+        "serverAt": "Tempo server at {{serverUrl}}",
+        "discord": "Rejoindre le Discord de Tempo"
       },
       "login": {
         "title": "Tempo",
@@ -7591,7 +7677,23 @@ export const generatedLocaleResources = {
           "serverLogsTitle": "Open the current Tempo Server logs",
           "successful": "Successful",
           "tenantsQueued": "Tenants queued",
-          "totalRequests": "Total requests"
+          "totalRequests": "Total requests",
+          "externalServices": {
+            "title": "Services externes",
+            "subtitle": "Outils d'observabilité fournis avec le déploiement Docker Compose. Les identifiants affichés sont les valeurs par défaut du développement local ; modifiez-les avant tout déploiement partagé.",
+            "service": "Service",
+            "url": "URL",
+            "credentials": "Identifiants",
+            "status": "État",
+            "grafanaPurpose": "Tableaux de bord pour les métriques, les traces et les journaux",
+            "prometheusPurpose": "Stockage et requêtes de métriques",
+            "tracesPurpose": "Stockage et recherche de traces",
+            "lokiPurpose": "Agrégation et recherche de journaux",
+            "noLogin": "Aucune connexion requise",
+            "reachable": "Accessible",
+            "unreachable": "Inaccessible",
+            "checking": "Vérification"
+          }
         },
         "requestHistory": {
           "title": "Request History",
@@ -8937,7 +9039,8 @@ export const generatedLocaleResources = {
         "toggleSidebar": "Toggle sidebar",
         "github": "View Tempo on GitHub",
         "authenticatedPrincipal": "Authenticated principal",
-        "serverAt": "Tempo server at {{serverUrl}}"
+        "serverAt": "Tempo server at {{serverUrl}}",
+        "discord": "Unisciti al Discord di Tempo"
       },
       "login": {
         "title": "Tempo",
@@ -9052,7 +9155,23 @@ export const generatedLocaleResources = {
           "serverLogsTitle": "Open the current Tempo Server logs",
           "successful": "Successful",
           "tenantsQueued": "Tenants queued",
-          "totalRequests": "Total requests"
+          "totalRequests": "Total requests",
+          "externalServices": {
+            "title": "Servizi esterni",
+            "subtitle": "Strumenti di osservabilità inclusi nel deployment Docker Compose. Le credenziali mostrate sono valori predefiniti per lo sviluppo locale; modificale prima di qualsiasi deployment condiviso.",
+            "service": "Servizio",
+            "url": "URL",
+            "credentials": "Credenziali",
+            "status": "Stato",
+            "grafanaPurpose": "Dashboard per metriche, tracce e log",
+            "prometheusPurpose": "Archiviazione e interrogazione delle metriche",
+            "tracesPurpose": "Archiviazione e ricerca delle tracce",
+            "lokiPurpose": "Aggregazione e ricerca dei log",
+            "noLogin": "Nessun accesso richiesto",
+            "reachable": "Raggiungibile",
+            "unreachable": "Non raggiungibile",
+            "checking": "Verifica in corso"
+          }
         },
         "requestHistory": {
           "title": "Request History",
@@ -10398,7 +10517,8 @@ export const generatedLocaleResources = {
         "toggleSidebar": "切換側邊欄",
         "github": "在 GitHub 上查看 Tempo",
         "authenticatedPrincipal": "經過身份驗證的委託人",
-        "serverAt": "速度伺服器位於 {{serverUrl}}"
+        "serverAt": "速度伺服器位於 {{serverUrl}}",
+        "discord": "加入 Tempo Discord"
       },
       "login": {
         "title": "節奏",
@@ -10513,7 +10633,23 @@ export const generatedLocaleResources = {
           "serverLogsTitle": "開啟目前 Tempo Server 日誌",
           "successful": "成功",
           "tenantsQueued": "租客排隊",
-          "totalRequests": "請求總數"
+          "totalRequests": "請求總數",
+          "externalServices": {
+            "title": "外部服務",
+            "subtitle": "Docker Compose 部署中附帶的可觀測性工具。顯示的憑證為本機開發預設值；在任何共用部署之前請變更。",
+            "service": "服務",
+            "url": "網址",
+            "credentials": "憑證",
+            "status": "狀態",
+            "grafanaPurpose": "指標、追蹤與日誌的儀表板",
+            "prometheusPurpose": "指標儲存與查詢",
+            "tracesPurpose": "追蹤儲存與搜尋",
+            "lokiPurpose": "日誌彙整與搜尋",
+            "noLogin": "無需登入",
+            "reachable": "可連線",
+            "unreachable": "無法連線",
+            "checking": "檢查中"
+          }
         },
         "requestHistory": {
           "title": "請求歷史記錄",

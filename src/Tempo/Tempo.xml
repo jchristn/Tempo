@@ -1514,6 +1514,655 @@
             Step transition.
             </summary>
         </member>
+        <member name="T:Tempo.Telemetry.TelemetryConstants">
+            <summary>
+            Every telemetry name Tempo emits: meter and activity source names, metric instrument names,
+            span names, and attribute keys. These strings are a public contract consumed by collectors,
+            Prometheus queries, Grafana dashboards, and alert rules. Treat a rename as a breaking change.
+            This class is immutable and thread-safe.
+            </summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.MeterName">
+            <summary>Name of the <see cref="T:System.Diagnostics.Metrics.Meter"/> every Tempo component records into.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.ActivitySourceName">
+            <summary>Name of the <see cref="T:System.Diagnostics.ActivitySource"/> every Tempo component starts spans on.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.WatsonSourceName">
+            <summary>Name of the Watson webserver meter and activity source (HTTP server metrics and per-request spans).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.HttpClientSourceName">
+            <summary>
+            Name of the .NET HttpClient activity source. HttpClient starts a child span under any current activity and
+            propagates that span's id, so hosts subscribe to it to keep outbound HTTP traces gap-free.
+            </summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.FlowRuns">
+            <summary>Counter of completed data flow runs. Labels: runner, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.FlowDuration">
+            <summary>Histogram of data flow run duration in seconds. Labels: runner, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.FlowActive">
+            <summary>Up/down counter of data flow runs currently executing in this process. Labels: runner.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.StepExecutions">
+            <summary>Counter of step executions. Labels: runner, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.StepDuration">
+            <summary>Histogram of step execution duration in seconds. Labels: runner, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.StepTransitions">
+            <summary>Counter of step transitions taken by the flow state machine. Labels: path.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.StageEvents">
+            <summary>Counter of pipeline stage events. Labels: pipeline, stage, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.StageDuration">
+            <summary>Histogram of pipeline stage duration in seconds (includes the queued stage). Labels: pipeline, stage, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.LastSuccess">
+            <summary>Gauge of the Unix time (seconds) of the last successful completion per pipeline or task. Labels: task.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.DispatchEnqueued">
+            <summary>Counter of flow-run enqueue requests. Labels: source, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.DispatchAssignments">
+            <summary>Counter of scheduling decisions. Labels: node_kind, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.DispatchCompletions">
+            <summary>Counter of run completions reported to the coordinator. Labels: node_kind, state, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.DispatchRecoveries">
+            <summary>Counter of assignments recovered and requeued. Labels: reason.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.DispatchQueueDepth">
+            <summary>Gauge of flow runs waiting in the dispatch queue (sampled by the scheduler loop).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.DispatchSchedulerActive">
+            <summary>Gauge that is 1 when this server owns scheduling and 0 when it is suppressed.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.WorkersConnected">
+            <summary>Gauge of executors (local pseudo-worker and remote workers) that can accept work. Labels: node_kind.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.WorkersCapacity">
+            <summary>Gauge of run slots offered by connected executors. Labels: node_kind.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.WorkersInUse">
+            <summary>Gauge of run slots currently in use on connected executors. Labels: node_kind.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.WorkerSessions">
+            <summary>Counter of worker session lifecycle events. Labels: event.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.WorkerFrames">
+            <summary>Counter of worker protocol frames. Labels: direction, frame.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.WorkerAssignments">
+            <summary>Counter of assignments received by a worker. Labels: outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.CapacityInUse">
+            <summary>Up/down counter of external runtime process slots in use.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.CapacityQueued">
+            <summary>Up/down counter of step runs waiting for an external runtime process slot.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.CapacityWait">
+            <summary>Histogram of time spent waiting for an external runtime process slot, in seconds. Labels: outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.ProcessKills">
+            <summary>Counter of external runtime processes killed (timeout or cancellation). Labels: reason.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.LimiterWait">
+            <summary>Histogram of time spent waiting on an internal limiter (mutex or semaphore), in seconds. Labels: limiter.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.CacheLookups">
+            <summary>Counter of cache lookups. Labels: cache, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.CacheDuration">
+            <summary>Histogram of cache preparation (lookup plus fill on miss) duration in seconds. Labels: cache, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.IntegrationRequests">
+            <summary>Counter of outbound integration calls. Labels: service, operation, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.IntegrationDuration">
+            <summary>Histogram of outbound integration call duration in seconds. Labels: service, operation, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.TaskRuns">
+            <summary>Counter of background task iterations. Labels: task, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.TaskDuration">
+            <summary>Histogram of background task iteration duration in seconds. Labels: task, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.TaskPending">
+            <summary>Up/down counter of fire-and-forget background work items queued but not yet finished. Labels: task.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.TaskItems">
+            <summary>Counter of items processed by background tasks. Labels: task, action.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AuthAttempts">
+            <summary>Counter of authentication attempts. Labels: method, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AuthzDecisions">
+            <summary>Counter of authorization decisions. Labels: outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.McpToolCalls">
+            <summary>Counter of MCP tool invocations. Labels: tool, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.McpToolDuration">
+            <summary>Histogram of MCP tool invocation duration in seconds. Labels: tool, outcome.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.Errors">
+            <summary>Counter of handled errors. Labels: component, error.type.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.BuildInfo">
+            <summary>Gauge that is always 1, labeled with build metadata. Labels: version, component.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.ConfigSetting">
+            <summary>Gauge of safe, non-secret configuration values. Labels: setting.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanFlowRun">
+            <summary>Span covering one data flow run.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanStepPrefix">
+            <summary>Prefix of the span covering one step execution; the step identifier follows.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanStagePrefix">
+            <summary>Prefix of the span covering one pipeline stage; the stage name follows.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanTaskPrefix">
+            <summary>Prefix of the root span covering one background task iteration; the task name follows.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanDispatchEnqueue">
+            <summary>Span covering a flow-run enqueue request.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanDispatchSchedule">
+            <summary>Span covering one scheduling decision for a queued flow run.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanDispatchComplete">
+            <summary>Span covering the coordinator applying a run completion.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanWorkerAssignSend">
+            <summary>Span covering the server sending an assignment to a remote worker.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanWorkerAssignment">
+            <summary>Span covering a worker executing one assignment.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanWorkerRegister">
+            <summary>Span covering a worker websocket session registration.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanCapacityAcquire">
+            <summary>Span covering a wait for an external runtime process slot.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.SpanMcpToolPrefix">
+            <summary>Prefix of the span covering one MCP tool call; the tool name follows.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrOutcome">
+            <summary>Bounded outcome of an operation (for example success, error, exception, timeout).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrRunner">
+            <summary>Flow or step runner kind (for example registry, code, rest, artifact_python).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrPipeline">
+            <summary>Pipeline name (dispatch, flow, worker).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrStage">
+            <summary>Pipeline stage name.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrTask">
+            <summary>Background task name.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrAction">
+            <summary>Background task item action (for example deleted, marked).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrService">
+            <summary>Integration service name (for example sqlite, http, tempo-server, process).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrOperation">
+            <summary>Integration operation name (for example select, GET, artifact_download).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrPath">
+            <summary>Step transition path taken (on_success, on_failure, on_exception, terminal).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrSource">
+            <summary>Flow-run enqueue source (api, trigger).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrNodeKind">
+            <summary>Executor node kind (server, worker).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrState">
+            <summary>Flow run terminal state.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrReason">
+            <summary>Reason for a recovery, kill, or disconnect.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrEvent">
+            <summary>Lifecycle event name.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrDirection">
+            <summary>Frame direction (in, out).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrFrame">
+            <summary>Worker protocol frame type.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrLimiter">
+            <summary>Internal limiter name (for example dispatch_gate, sqlite_write).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrCache">
+            <summary>Cache name.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrMethod">
+            <summary>Authentication method (token, api_key, access_key, password, worker_token, none).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrTool">
+            <summary>MCP tool name.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrComponent">
+            <summary>Component that observed an error (for example dispatch, worker, flow).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrErrorType">
+            <summary>OpenTelemetry semantic-convention error type (exception type name or bounded code).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrVersion">
+            <summary>Build version.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrSetting">
+            <summary>Configuration setting name.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrTenantId">
+            <summary>Span attribute: tenant identifier (spans only, never a metric label).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrDataFlowId">
+            <summary>Span attribute: data flow identifier (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrFlowRunId">
+            <summary>Span attribute: flow run identifier (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrStepId">
+            <summary>Span attribute: step identifier (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrStepRunId">
+            <summary>Span attribute: step run identifier (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrStepResult">
+            <summary>Span attribute: step result (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrNextStepId">
+            <summary>Span attribute: next step selected by the transition (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrAssignmentId">
+            <summary>Span attribute: run assignment identifier (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrAttempt">
+            <summary>Span attribute: dispatch attempt number (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrWorkerId">
+            <summary>Span attribute: worker identifier (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrWorkerSessionId">
+            <summary>Span attribute: worker session identifier (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrCapacityTenantQueued">
+            <summary>Span attribute: whether the capacity request queued behind the per-tenant limit (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrCapacityServerQueued">
+            <summary>Span attribute: whether the capacity request queued behind the server-wide limit (spans only).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrDbSystem">
+            <summary>Span attribute: OpenTelemetry database system name.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrDbOperation">
+            <summary>Span attribute: OpenTelemetry database operation name.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrHttpMethod">
+            <summary>Span attribute: OpenTelemetry HTTP request method.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrHttpStatusCode">
+            <summary>Span attribute: OpenTelemetry HTTP response status code.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrServerAddress">
+            <summary>Span attribute: OpenTelemetry server address (host only, never a full URL).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrServerPort">
+            <summary>Span attribute: OpenTelemetry server port.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.AttrProcessExitCode">
+            <summary>Span attribute: OpenTelemetry process exit code.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.EnvTraceParent">
+            <summary>Environment variable carrying the W3C traceparent into child processes (OpenTelemetry environment-carrier convention).</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.EnvTraceState">
+            <summary>Environment variable carrying the W3C tracestate into child processes.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.OutcomeSuccess">
+            <summary>Outcome: the operation succeeded.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.OutcomeError">
+            <summary>Outcome: the operation returned an expected failure.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.OutcomeException">
+            <summary>Outcome: the operation threw or returned an unexpected failure.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.OutcomeTimeout">
+            <summary>Outcome: the operation exceeded its time budget.</summary>
+        </member>
+        <member name="F:Tempo.Telemetry.TelemetryConstants.OutcomeCancelled">
+            <summary>Outcome: the operation was cancelled.</summary>
+        </member>
+        <member name="T:Tempo.Telemetry.TempoTelemetry">
+            <summary>
+            Tempo's telemetry emitter. Owns the process-wide <see cref="T:System.Diagnostics.Metrics.Meter"/> and
+            <see cref="T:System.Diagnostics.ActivitySource"/> named <see cref="F:Tempo.Telemetry.TelemetryConstants.MeterName"/>, and exposes typed,
+            bounded-cardinality recording methods for every Tempo component.
+            <para>
+            Emission rides the .NET base class library only. Nothing is exported until a host subscribes to the
+            <c>Tempo</c> meter and activity source (for example with Radiant, the OpenTelemetry SDK, or
+            <c>dotnet-counters</c>); unobserved instruments cost a few nanoseconds and allocate nothing.
+            </para>
+            <para>
+            All members are thread-safe. Every recording method is best-effort: it never throws, so instrumentation
+            can never break the code path it observes. Identifiers and free-form text are only ever placed on spans,
+            never on metric labels.
+            </para>
+            </summary>
+        </member>
+        <member name="P:Tempo.Telemetry.TempoTelemetry.Meter">
+            <summary>The meter every Tempo instrument is created on. Never null.</summary>
+        </member>
+        <member name="P:Tempo.Telemetry.TempoTelemetry.ActivitySource">
+            <summary>The activity source every Tempo span is started on. Never null.</summary>
+        </member>
+        <member name="P:Tempo.Telemetry.TempoTelemetry.Version">
+            <summary>The Tempo library version reported on <see cref="F:Tempo.Telemetry.TelemetryConstants.BuildInfo"/> and on the meter. Never null.</summary>
+        </member>
+        <member name="P:Tempo.Telemetry.TempoTelemetry.Component">
+            <summary>
+            The process role reported on <see cref="F:Tempo.Telemetry.TelemetryConstants.BuildInfo"/> (for example server, worker, mcp).
+            Default: <c>library</c>. Null or whitespace resets the default. Bounded: hosts set one fixed value at startup.
+            </summary>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.StartActivity(System.String,System.Diagnostics.ActivityKind,System.String,System.String)">
+            <summary>
+            Start a span on the Tempo activity source. Returns null when no listener samples it (the common,
+            unobserved case) or when span creation fails, so callers use the null-conditional operator.
+            </summary>
+            <param name="name">Span name. Must be low-cardinality (identifiers belong in tags). Null returns null.</param>
+            <param name="kind">Span kind. Default: <see cref="F:System.Diagnostics.ActivityKind.Internal"/>.</param>
+            <param name="parentTraceParent">Optional W3C traceparent to parent the span on (used across process and queue boundaries). Null or invalid values fall back to <see cref="P:System.Diagnostics.Activity.Current"/>.</param>
+            <param name="parentTraceState">Optional W3C tracestate accompanying <paramref name="parentTraceParent"/>.</param>
+            <returns>The started span, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.StartActivityAt(System.String,System.DateTimeOffset,System.Diagnostics.ActivityKind,System.String,System.String)">
+            <summary>
+            Start a span with an explicit start time, for work whose span is only worth emitting once its outcome is
+            known (for example a scheduling attempt that may simply be retried). Pair with <see cref="M:Tempo.Telemetry.TempoTelemetry.StopActivityAt(System.Diagnostics.Activity,System.DateTimeOffset)"/>.
+            Returns null when unobserved or on failure.
+            </summary>
+            <param name="name">Span name. Must be low-cardinality.</param>
+            <param name="startTime">The span start time.</param>
+            <param name="kind">Span kind. Default: <see cref="F:System.Diagnostics.ActivityKind.Internal"/>.</param>
+            <param name="parentTraceParent">Optional W3C traceparent to parent on; falls back to <see cref="P:System.Diagnostics.Activity.Current"/>.</param>
+            <param name="parentTraceState">Optional W3C tracestate.</param>
+            <returns>The started span, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.StopActivityAt(System.Diagnostics.Activity,System.DateTimeOffset)">
+            <summary>Stop a span at an explicit end time. Null-safe and best-effort.</summary>
+            <param name="activity">Span. May be null.</param>
+            <param name="endTime">The span end time.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.StartRootActivity(System.String,System.Diagnostics.ActivityKind)">
+            <summary>
+            Start a new root span that does not inherit <see cref="P:System.Diagnostics.Activity.Current"/>, for background work that
+            begins its own unit of work (scheduler passes, maintenance tasks). Returns null when unobserved.
+            </summary>
+            <param name="name">Span name. Must be low-cardinality.</param>
+            <param name="kind">Span kind. Default: <see cref="F:System.Diagnostics.ActivityKind.Internal"/>.</param>
+            <returns>The started span, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.StartIntegration(System.String,System.String,System.Boolean,System.Diagnostics.ActivityKind)">
+            <summary>
+            Start a client span for an outbound integration call, named <c>"&lt;service&gt; &lt;operation&gt;"</c>.
+            When <paramref name="requireParent"/> is true the span is only created inside an existing trace, which
+            keeps chatty low-level calls (database polling, heartbeats) from producing orphan root traces.
+            </summary>
+            <param name="service">Bounded integration service name (for example sqlite, http, tempo-server).</param>
+            <param name="operation">Bounded operation name (for example select, GET, artifact_download).</param>
+            <param name="requireParent">Only create the span when <see cref="P:System.Diagnostics.Activity.Current"/> is set. Default: false.</param>
+            <param name="kind">Span kind. Default: <see cref="F:System.Diagnostics.ActivityKind.Client"/>.</param>
+            <returns>The started span, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.StartStage(System.String,System.String)">
+            <summary>Start a span for one pipeline stage, named <c>"stage:&lt;stage&gt;"</c>. Returns null when unobserved.</summary>
+            <param name="pipeline">Bounded pipeline name (dispatch, flow, worker).</param>
+            <param name="stage">Bounded stage name.</param>
+            <returns>The started span, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.StartTask(System.String)">
+            <summary>Start the root span for one background task iteration, named <c>"task:&lt;task&gt;"</c>. Returns null when unobserved.</summary>
+            <param name="task">Bounded task name.</param>
+            <returns>The started span, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.CurrentTraceParent">
+            <summary>The W3C traceparent of <see cref="P:System.Diagnostics.Activity.Current"/>, for propagation across queues and process boundaries. Null when no W3C activity is current.</summary>
+            <returns>The traceparent string, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.TraceParentOf(System.Diagnostics.Activity)">
+            <summary>The W3C traceparent of the supplied activity. Null when the activity is null or not in W3C format.</summary>
+            <param name="activity">Activity. May be null.</param>
+            <returns>The traceparent string, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.CurrentTraceState">
+            <summary>The W3C tracestate of <see cref="P:System.Diagnostics.Activity.Current"/>, or null.</summary>
+            <returns>The tracestate string, or null.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.SetOk(System.Diagnostics.Activity)">
+            <summary>Mark a span successful. Null-safe and best-effort.</summary>
+            <param name="activity">Span. May be null.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.SetError(System.Diagnostics.Activity,System.String,System.String)">
+            <summary>
+            Mark a span failed with a bounded error type and an optional description. Null-safe and best-effort.
+            The description is placed on the span only; it must not contain secrets or payloads.
+            </summary>
+            <param name="activity">Span. May be null.</param>
+            <param name="errorType">Bounded error type (exception type name or a code such as timeout).</param>
+            <param name="description">Optional human-readable description.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordException(System.Diagnostics.Activity,System.Exception)">
+            <summary>
+            Record an exception on a span as an OpenTelemetry <c>exception</c> event and mark the span failed.
+            Null-safe and best-effort. Only the exception type and message are recorded (no stack trace payloads beyond the message).
+            </summary>
+            <param name="activity">Span. May be null.</param>
+            <param name="exception">Exception. May be null (then only the status is set).</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.OutcomeOf(Tempo.Enums.StepResultTypeEnum)">
+            <summary>Map a step result to a bounded outcome label.</summary>
+            <param name="result">Step result type.</param>
+            <returns>success, error, exception, timeout, or max_iterations_exceeded.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RunnerLabelOf(System.Type)">
+            <summary>
+            Map a runner type to a bounded runner label: the type name with any <c>StepRunner</c> suffix removed, in snake case
+            (for example <c>RestStepRunner</c> becomes <c>rest</c> and <c>ArtifactPythonStepRunner</c> becomes <c>artifact_python</c>).
+            </summary>
+            <param name="runnerType">Runner type. Null returns <c>unknown</c>.</param>
+            <returns>The runner label.</returns>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordFlowRun(System.String,System.String,System.Double)">
+            <summary>Record a completed data flow run. Best-effort.</summary>
+            <param name="runner">Bounded flow runner label (engine, registry).</param>
+            <param name="outcome">Bounded outcome.</param>
+            <param name="seconds">Duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.AddActiveFlow(System.String,System.Int32)">
+            <summary>Adjust the count of in-flight flow runs. Best-effort.</summary>
+            <param name="runner">Bounded flow runner label.</param>
+            <param name="delta">+1 when a run starts, -1 when it ends.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordStep(System.String,System.String,System.Double)">
+            <summary>Record a completed step execution. Best-effort.</summary>
+            <param name="runner">Bounded step runner label.</param>
+            <param name="outcome">Bounded outcome.</param>
+            <param name="seconds">Duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordTransition(System.String)">
+            <summary>Record a step transition. Best-effort.</summary>
+            <param name="path">on_success, on_failure, on_exception, or terminal.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordTransition(Tempo.Enums.StepResultTypeEnum,System.Boolean,System.String)">
+            <summary>Record the transition the flow state machine took after a step. Best-effort.</summary>
+            <param name="result">The step result type.</param>
+            <param name="isException">Whether the step was routed down the exception path.</param>
+            <param name="nextStepId">The next step identifier; null or empty means the flow terminated.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordStage(System.String,System.String,System.String,System.Double)">
+            <summary>Record one pipeline stage. Best-effort.</summary>
+            <param name="pipeline">Bounded pipeline name (dispatch, flow, worker).</param>
+            <param name="stage">Bounded stage name (for example queued, plan, assign, execute, complete).</param>
+            <param name="outcome">Bounded outcome.</param>
+            <param name="seconds">Duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordIntegration(System.String,System.String,System.String,System.Double)">
+            <summary>Record an outbound integration call. Best-effort.</summary>
+            <param name="service">Bounded service name.</param>
+            <param name="operation">Bounded operation name.</param>
+            <param name="outcome">Bounded outcome.</param>
+            <param name="seconds">Duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordTask(System.String,System.String,System.Double)">
+            <summary>Record one background task iteration and, on success, stamp its last-success time. Best-effort.</summary>
+            <param name="task">Bounded task name.</param>
+            <param name="outcome">Bounded outcome.</param>
+            <param name="seconds">Duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.AddTaskPending(System.String,System.Int32)">
+            <summary>Adjust the count of pending fire-and-forget work items for a background task. Best-effort.</summary>
+            <param name="task">Bounded task name.</param>
+            <param name="delta">+1 when an item is queued, -1 when it finishes.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordTaskItems(System.String,System.String,System.Int64)">
+            <summary>Record items processed by a background task. Zero or negative counts are ignored. Best-effort.</summary>
+            <param name="task">Bounded task name.</param>
+            <param name="action">Bounded action (for example deleted, marked).</param>
+            <param name="count">Item count.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.MarkSuccess(System.String)">
+            <summary>Stamp the last-success time of a pipeline or task to now. Best-effort.</summary>
+            <param name="task">Bounded pipeline or task name.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordEnqueue(System.String,System.String)">
+            <summary>Record a flow-run enqueue request. Best-effort.</summary>
+            <param name="source">api or trigger.</param>
+            <param name="outcome">accepted or rejected.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordAssignment(System.String,System.String)">
+            <summary>Record a scheduling decision. Best-effort.</summary>
+            <param name="nodeKind">server, worker, or none.</param>
+            <param name="outcome">assigned, no_executor, no_eligible_worker, plan_failed, or send_failed.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordCompletion(System.String,System.String,System.String)">
+            <summary>Record a run completion reported to the coordinator. Best-effort.</summary>
+            <param name="nodeKind">server, worker, or unknown.</param>
+            <param name="state">Terminal flow-run state (lowercase).</param>
+            <param name="outcome">applied or stale.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordRecoveries(System.String,System.Int64)">
+            <summary>Record assignments recovered and requeued. Zero or negative counts are ignored. Best-effort.</summary>
+            <param name="reason">lease_expired, heartbeat_timeout, superseded_session, or disconnected.</param>
+            <param name="count">Recovered assignment count.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.SetQueueDepth(System.Int64)">
+            <summary>Publish the sampled dispatch queue depth. Negative values hide the series. Best-effort.</summary>
+            <param name="depth">Queued flow runs.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.SetSchedulerActive(System.Boolean)">
+            <summary>Publish whether this server currently owns scheduling. Best-effort.</summary>
+            <param name="active">True when scheduling is active.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.SetWorkerPool(System.String,System.Int64,System.Int64,System.Int64)">
+            <summary>Publish the executor pool for one node kind. Best-effort.</summary>
+            <param name="nodeKind">server or worker.</param>
+            <param name="connected">Executors that can accept work.</param>
+            <param name="capacity">Run slots offered.</param>
+            <param name="inUse">Run slots in use.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordWorkerSession(System.String)">
+            <summary>Record a worker session lifecycle event. Best-effort.</summary>
+            <param name="lifecycleEvent">connected, disconnected, heartbeat_timeout, superseded, auth_failed, or protocol_error.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordWorkerFrame(System.String,System.String)">
+            <summary>Record a worker protocol frame. Best-effort.</summary>
+            <param name="direction">in or out, from the recording process's point of view.</param>
+            <param name="frameType">Protocol frame type (bounded by the protocol).</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordWorkerAssignment(System.String)">
+            <summary>Record an assignment received by a worker. Best-effort.</summary>
+            <param name="outcome">accepted, rejected_session, rejected_draining, rejected_capabilities, or rejected_capacity.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.AddCapacity(System.Int32,System.Int32)">
+            <summary>Adjust external runtime capacity counters. Best-effort.</summary>
+            <param name="inUseDelta">Change in slots in use.</param>
+            <param name="queuedDelta">Change in queued requests.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordCapacityWait(System.String,System.Double)">
+            <summary>Record a wait for an external runtime process slot. Best-effort.</summary>
+            <param name="outcome">acquired or cancelled.</param>
+            <param name="seconds">Wait duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordProcessKill(System.String)">
+            <summary>Record an external runtime process kill. Best-effort.</summary>
+            <param name="reason">timeout or cancelled.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordLimiterWait(System.String,System.Double)">
+            <summary>Record time spent waiting on an internal limiter (mutex or semaphore). Best-effort.</summary>
+            <param name="limiter">Bounded limiter name (for example dispatch_gate, sqlite_write).</param>
+            <param name="seconds">Wait duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordCache(System.String,System.String,System.Double)">
+            <summary>Record a cache lookup and its preparation time. Best-effort.</summary>
+            <param name="cache">Bounded cache name (for example artifact_package, python_env).</param>
+            <param name="outcome">hit, miss, or error.</param>
+            <param name="seconds">Lookup plus fill duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordAuthentication(System.String,System.String)">
+            <summary>Record an authentication attempt. Best-effort.</summary>
+            <param name="method">token, api_key, access_key, password, worker_token, or none.</param>
+            <param name="outcome">Authentication result (lowercase).</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordAuthorization(System.String)">
+            <summary>Record an authorization decision. Best-effort.</summary>
+            <param name="outcome">Authorization result (lowercase).</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordMcpTool(System.String,System.String,System.Double)">
+            <summary>Record an MCP tool invocation. Best-effort.</summary>
+            <param name="tool">Registered tool name (bounded by the tool registry).</param>
+            <param name="outcome">Bounded outcome.</param>
+            <param name="seconds">Duration in seconds.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordError(System.String,System.String)">
+            <summary>Record a handled error. Best-effort.</summary>
+            <param name="component">Bounded component name.</param>
+            <param name="errorType">Bounded error type (exception type name or a code).</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.RecordError(System.String,System.Exception)">
+            <summary>Record a handled exception by its type name. Null exceptions are recorded as <c>error</c>. Best-effort.</summary>
+            <param name="component">Bounded component name.</param>
+            <param name="exception">Exception. May be null.</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.SetConfig(System.String,System.Double)">
+            <summary>
+            Publish a safe, non-secret configuration value on <see cref="F:Tempo.Telemetry.TelemetryConstants.ConfigSetting"/>.
+            Hosts call this once at startup for a fixed set of settings. Best-effort.
+            </summary>
+            <param name="setting">Bounded setting name.</param>
+            <param name="value">Numeric value (booleans as 0 or 1).</param>
+        </member>
+        <member name="M:Tempo.Telemetry.TempoTelemetry.SecondsSince(System.Int64)">
+            <summary>Elapsed seconds since a <see cref="M:System.Diagnostics.Stopwatch.GetTimestamp"/> value.</summary>
+            <param name="startTimestamp">Start timestamp.</param>
+            <returns>Elapsed seconds.</returns>
+        </member>
         <member name="T:Tempo.TempoIds">
             <summary>
             Generates Tempo identifiers in the form prefix_timestamp_random at a total length of 32 characters.

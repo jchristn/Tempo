@@ -1,4 +1,4 @@
-namespace Tempo.Core.Runtime
+﻿namespace Tempo.Core.Runtime
 {
     using System;
     using System.Collections.Generic;
@@ -18,6 +18,7 @@ namespace Tempo.Core.Runtime
     using Tempo.Enums;
     using Tempo.Protocol;
     using Tempo.Runners;
+    using Tempo.Telemetry;
 
     /// <summary>Executes an artifact-rooted process using JSON-over-stdin/stdout.</summary>
     public class ArtifactProcessStepRunner : StepRunner, IArtifactRuntimeDiagnostics
@@ -237,8 +238,38 @@ namespace Tempo.Core.Runtime
 
         private async Task<StepResult> RunProcessAsync(StepRequest req, string requestJson, string scratch, CancellationToken token)
         {
+            string runtime = TempoTelemetry.RunnerLabelOf(GetType());
+            long start = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartIntegration(ProcessIntegrationService, runtime);
+            try
+            {
+                StepResult result = await RunProcessCoreAsync(req, requestJson, scratch, activity, token).ConfigureAwait(false);
+                string outcome = TempoTelemetry.OutcomeOf(result.Result);
+                if (result.Result == StepResultTypeEnum.Success) TempoTelemetry.SetOk(activity);
+                else TempoTelemetry.SetError(activity, outcome);
+                TempoTelemetry.RecordIntegration(ProcessIntegrationService, runtime, outcome, TempoTelemetry.SecondsSince(start));
+                return result;
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordIntegration(ProcessIntegrationService, runtime, ex is OperationCanceledException ? TelemetryConstants.OutcomeCancelled : TelemetryConstants.OutcomeException, TempoTelemetry.SecondsSince(start));
+                throw;
+            }
+        }
+
+        private const string ProcessIntegrationService = "process";
+
+        private async Task<StepResult> RunProcessCoreAsync(StepRequest req, string requestJson, string scratch, Activity? activity, CancellationToken token)
+        {
             using Process process = new Process();
             process.StartInfo = BuildStartInfo(scratch);
+            string? traceParent = TempoTelemetry.TraceParentOf(activity);
+            if (traceParent != null)
+            {
+                process.StartInfo.Environment[TelemetryConstants.EnvTraceParent] = traceParent;
+                if (!string.IsNullOrEmpty(activity?.TraceStateString)) process.StartInfo.Environment[TelemetryConstants.EnvTraceState] = activity.TraceStateString;
+            }
             process.StartInfo.Environment[ProtocolVersions.ProtocolVersionEnvironmentVariable] = req.ProtocolVersion;
             process.StartInfo.Environment[ProtocolVersions.SupportedProtocolVersionsEnvironmentVariable] = string.Join(",", ProtocolVersions.Supported);
             ApplyRunLogEnvironment(process.StartInfo, req);
@@ -268,13 +299,15 @@ namespace Tempo.Core.Runtime
                 catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !token.IsCancellationRequested)
                 {
                     timedOut = true;
-                    Kill(process);
+                    Kill(process, TelemetryConstants.OutcomeTimeout);
                 }
                 catch (OperationCanceledException)
                 {
-                    Kill(process);
+                    Kill(process, TelemetryConstants.OutcomeCancelled);
                     throw;
                 }
+
+                if (process.HasExited) activity?.SetTag(TelemetryConstants.AttrProcessExitCode, process.ExitCode);
 
                 string stdout = await stdoutTask.ConfigureAwait(false);
                 string stderr = Redact(await stderrTask.ConfigureAwait(false), process.StartInfo.Environment);
@@ -400,7 +433,7 @@ namespace Tempo.Core.Runtime
             return sb.ToString();
         }
 
-        private void Kill(Process process)
+        private void Kill(Process process, string reason)
         {
             try
             {
@@ -409,6 +442,7 @@ namespace Tempo.Core.Runtime
                     if (_UseLinuxProcessGroupKill) TryKillLinuxProcessGroup(process.Id);
                     process.Kill(_Settings.KillProcessTreeOnCancel);
                     _Capacity.RecordProcessKilled();
+                    TempoTelemetry.RecordProcessKill(reason);
                 }
             }
             catch { }

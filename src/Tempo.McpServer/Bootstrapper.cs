@@ -1,10 +1,11 @@
-namespace Tempo.McpServer
+﻿namespace Tempo.McpServer
 {
     using System;
     using System.Collections.Generic;
     using System.Net;
     using System.Threading;
     using System.Threading.Tasks;
+    using Tempo.Hosting;
     using Tempo.McpServer.Services;
     using Tempo.McpServer.Settings;
     using Tempo.McpServer.Tools;
@@ -55,6 +56,11 @@ namespace Tempo.McpServer
             Console.WriteLine("(c)2026 Joel Christner");
             Console.WriteLine();
             Console.WriteLine("Tempo endpoint: " + settings.Tempo.Endpoint);
+
+            // The MCP server is a thin request/response bridge with no background work, so it exports metrics and
+            // traces but not logs.
+            using TelemetryHost telemetry = TelemetryHost.Start(settings.Telemetry, "tempo-mcp", "mcp", logging: null, allowLogs: false);
+            Console.WriteLine("Telemetry: " + (telemetry.IsEnabled ? "enabled as " + telemetry.ServiceName : "disabled"));
 
             using TempoApiClient client = new TempoApiClient(settings.Tempo);
             using CancellationTokenSource tokenSource = new CancellationTokenSource();

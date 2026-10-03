@@ -831,3 +831,15 @@
   .logs-workspace { grid-template-columns: 1fr; }
   .log-viewer-content { max-height: none; }
 }
+
+/* External services card (home page): links to the bundled observability tools. */
+.external-services-card { margin-top: var(--spacing-lg); }
+.external-services-subtitle { font-size: var(--font-size-sm); color: var(--color-text-muted); margin-top: 0.25rem; }
+.external-service-name { font-weight: 600; }
+.external-service-purpose { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.external-service-token { background: var(--color-surface-alt); border: 1px solid var(--color-border); border-radius: var(--radius-sm, 4px); padding: 0.125rem 0.375rem; }
+.external-service-status { font-size: var(--font-size-xs); font-weight: 600; }
+.external-service-status.is-reachable { color: var(--color-success); }
+.external-service-status.is-unreachable { color: var(--color-text-muted); }
+.external-service-status.is-checking { color: var(--color-text-muted); }
+.external-service-unavailable td { opacity: 0.65; }

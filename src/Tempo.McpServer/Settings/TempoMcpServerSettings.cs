@@ -1,6 +1,7 @@
-namespace Tempo.McpServer.Settings
+﻿namespace Tempo.McpServer.Settings
 {
     using System;
+    using Tempo.Core.Settings;
 
     /// <summary>
     /// Root settings for the Tempo MCP server.
@@ -27,5 +28,11 @@ namespace Tempo.McpServer.Settings
 
         /// <summary>WebSocket MCP transport settings.</summary>
         public McpWebSocketSettings WebSocket { get; set; } = new McpWebSocketSettings();
+
+        /// <summary>
+        /// Telemetry export settings (OTLP, Prometheus). Log export is always off for the MCP server, which runs no
+        /// background work. Never null when loaded; a null value is replaced with defaults.
+        /// </summary>
+        public TelemetrySettings Telemetry { get; set; } = new TelemetrySettings();
     }
 }

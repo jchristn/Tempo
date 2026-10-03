@@ -4,7 +4,36 @@ All notable changes to Tempo are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.0]
+
 ### Added
+
+- Built-in observability across the platform. See [TELEMETRY.md](TELEMETRY.md) for the full catalog.
+  - The `Tempo` library and `Tempo.Core` emit metrics and traces on a `Tempo` meter and activity source (`System.Diagnostics` only, no exporter dependency). All names are in `Tempo.Telemetry.TelemetryConstants`, and typed best-effort recorders are in `Tempo.Telemetry.TempoTelemetry`.
+  - Flow and step runs (by runner and outcome, plus transitions), every dispatch pipeline stage (queued, plan, select, assign, execute or hand-off, complete) and the flow resolve, validate, and prepare stages, scheduling decisions, completions, recoveries, the queue depth, the executor and worker pools, worker sessions and protocol frames, worker assignment outcomes, external-process capacity and kills, artifact-package and Python-environment caches, internal limiter waits (coordinator gate, SQLite write lock), background and start-up tasks with last-success timestamps, authentication and authorization outcomes, MCP tool calls, handled errors, build info, and safe configuration gauges.
+  - Client spans and integration metrics for every outbound call: all four database drivers (operation name only, never SQL text), REST steps, artifact subprocesses, C# source-step `dotnet publish`, worker artifact downloads, and MCP calls to the Tempo API.
+  - W3C context propagation across every boundary: inbound HTTP (Watson), the enqueue-to-scheduler hand-off, the server-to-worker websocket (`traceParent` and `traceState` on the `assign` frame and on `run-completed`), outbound HTTP, and artifact subprocesses (`TRACEPARENT` and `TRACESTATE` environment variables).
+- `src/Tempo.Hosting` (`TelemetryHost`): one Radiant host per process in `Tempo.Server`, `Tempo.Worker`, and `Tempo.McpServer`. It subscribes to `Tempo`, `Watson`, and `System.Net.Http`, exports OTLP (default `http://127.0.0.1:4317`), optionally serves Prometheus in-process, includes .NET runtime metrics, applies seconds buckets to Watson's HTTP duration histogram, and forwards server and worker log lines as trace-correlated OpenTelemetry logs. The server attaches the log bridge only after start-up hydration so the default credential is never exported.
+- `telemetry` settings block (`TelemetrySettings`) for the server, worker, and MCP server, with `TEMPO_TELEMETRY_*` environment overrides, and `engine.queueDepthSampleIntervalMs`
+- Observability stack in `docker/compose.yaml`: OpenTelemetry Collector, Prometheus, Grafana Tempo, Loki, and Grafana (host port 3001), with healthchecks, ordered startup, datasources provisioned with stable UIDs and trace-to-log links, and seven dashboards in a `Tempo` folder (`assets/grafana`): Overview, HTTP, Dispatch Pipeline, Flows & Steps, Workers & Capacity, Integrations, and Background Tasks & Runtime
+- Dashboard home page **External services** card that links to Grafana, Prometheus, Grafana Tempo, and Loki, with copyable URLs, local-development credentials, and a reachability indicator (translated for every supported locale)
+- `Telemetry` test suite (18 cases) proving emission for each instrumented area, failure paths, cross-process propagation, host export (Prometheus and OTLP), and bounded metric labels
+
+### Changed
+
+- REST steps now pass the step's cancellation token to the outbound HTTP call, so a step timeout also cancels the request
+- Watson telemetry (`Settings.Telemetry`: metrics, traces, context propagation) is set explicitly on in `Tempo.Server`
+- All projects under `src/` and the dashboard are versioned 0.5.0
+
+### Fixed
+
+- Tempo.McpServer rejected every tool call on Linux and macOS (including the Docker image) with "API path must be relative", because `Uri.TryCreate` treats `/v1.0/...` as an absolute `file://` URI on Unix
+- `.gitignore` excluded `src/Tempo.Core/Artifacts/` on case-insensitive filesystems through the unanchored `artifacts/` rule. The rule is now root-anchored (`/artifacts/`)
+- Added the missing `navigation.discord` dashboard translation for every non-English locale
+
+### Earlier changes included in this release
+
+#### Added
 
 - Dashboard internationalization across login, navigation, workspace titles/subtitles, tables, filters, buttons, modal labels, hover/help text, shared chrome, and status/enum surfaces for the supported ship locales (`en`, `es`, `zh-Hans`, `yue-Hant-HK`, `ja`, `de`, `fr`, `it`, `zh-Hant-TW`)
 - Dashboard i18n audit enforcement so extracted UI strings must be present for supported non-English locales and new raw localizable JSX text fails test coverage
@@ -12,7 +41,7 @@ All notable changes to Tempo are documented in this file.
 - `McpTransport` test suite that boots an in-process Tempo.Server plus every Tempo.McpServer transport and drives it the way MCP clients do. It covers the handshake version cap, session and stateless (`2026-07-28`) Streamable HTTP `tools/list`/`tools/call`, invalid-argument errors, TCP and WebSocket tool discovery, and the installer URL. It also covers the reported server version, wildcard bind-host URLs, the admin API key `/me` principal, `isError` tool failures, and `localhost` connection latency. Voltaic 2.0.0 cases assert that every transport lists exactly the Tempo tools, that `ping` returns an empty result, that demo tools cannot be called, and that HTTP rejects bare tool-method calls
 - `McpEndpointUrls` helper that derives connectable client URLs for every Tempo.McpServer transport from the bind settings
 
-### Changed
+#### Changed
 
 - Updated NuGet dependencies solution-wide:
   - `Voltaic` 0.6.0 to 2.0.0 (through 1.1.0; see the Voltaic `MIGRATE_V1_TO_V2.md` guide)
@@ -32,7 +61,7 @@ All notable changes to Tempo are documented in this file.
 - Tempo.McpServer's default Tempo endpoint is now `http://127.0.0.1:8901`, matching Tempo.Server's default IPv4 loopback bind and Tempo.Worker's default
 - `GET /v1.0/me` now returns `{ "type": "adminApiKey", "id": "admin-api-key", "isAdmin": true }` for the global admin API key; it used to return `{ "type": "anonymous" }`
 
-### Fixed
+#### Fixed
 
 - Claude Code (2.1.x, stateless `2026-07-28` MCP revision) listed zero Tempo tools. The `install` command now configures `http://<host>:<port>/mcp`, the Streamable HTTP endpoint, instead of the legacy `/rpc` endpoint, which does not return the stateless result shape. Existing installs should re-run `install` or change the URL to `/mcp`
 - The TCP and WebSocket MCP transports registered Tempo tools only as raw JSON-RPC methods, so standard MCP clients saw no Tempo tools in `tools/list` and `tools/call` failed with "tool not found". Tools are now registered as MCP tools on every transport, and direct method invocation still works
@@ -43,7 +72,7 @@ All notable changes to Tempo are documented in this file.
 - Client URLs from `install` and the startup banner were unusable for wildcard bind hosts, for example `http://*:8910/mcp` with the Docker config. Wildcards now map to `127.0.0.1` and IPv6 literals are bracketed
 - `ArtifactProcess` "kills the child process when execution is cancelled" test was flaky under load: its fixed 200 ms cancellation could fire before the child process was spawned. It now cancels only after the process holds its capacity lease
 
-### Documentation
+#### Documentation
 
 - README coverage for dashboard internationalization, including supported ship locales, operator-facing scope, and audit enforcement
 - README coverage for authenticated versus public data flows, including trigger invocation behavior and generated `curl` expectations

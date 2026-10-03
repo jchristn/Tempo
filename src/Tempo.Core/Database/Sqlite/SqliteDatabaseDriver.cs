@@ -1,8 +1,9 @@
-namespace Tempo.Core.Database.Sqlite
+﻿namespace Tempo.Core.Database.Sqlite
 {
     using System;
     using System.Collections.Generic;
     using System.Data;
+    using System.Diagnostics;
     using System.IO;
     using System.Linq;
     using System.Threading;
@@ -12,12 +13,15 @@ namespace Tempo.Core.Database.Sqlite
     using Tempo.Core.Database.Sqlite.Queries;
     using Tempo.Core.Enums;
     using Tempo.Core.Settings;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// SQLite implementation of <see cref="DatabaseDriverBase"/>. Serializes writes via <see cref="SemaphoreSlim"/>.
     /// </summary>
     public class SqliteDatabaseDriver : DatabaseDriverBase
     {
+        private const string TelemetrySystem = "sqlite";
+        private const string WriteLockLimiter = "sqlite_write";
         /// <inheritdoc/>
         public override DatabaseTypeEnum DatabaseType => DatabaseTypeEnum.Sqlite;
 
@@ -89,9 +93,14 @@ namespace Tempo.Core.Database.Sqlite
         {
             if (string.IsNullOrWhiteSpace(query)) throw new ArgumentNullException(nameof(query));
             token.ThrowIfCancellationRequested();
-            await _WriteLock.WaitAsync(token).ConfigureAwait(false);
-            try { return await ExecuteInternalAsync(new[] { query }, isTransaction, token).ConfigureAwait(false); }
-            finally { _WriteLock.Release(); }
+            return await DatabaseTelemetry.ExecuteAsync(TelemetrySystem, DatabaseTelemetry.OperationOf(query), async () =>
+            {
+                long waitStart = Stopwatch.GetTimestamp();
+                await _WriteLock.WaitAsync(token).ConfigureAwait(false);
+                TempoTelemetry.RecordLimiterWait(WriteLockLimiter, TempoTelemetry.SecondsSince(waitStart));
+                try { return await ExecuteInternalAsync(new[] { query }, isTransaction, token).ConfigureAwait(false); }
+                finally { _WriteLock.Release(); }
+            }, token).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
@@ -99,9 +108,14 @@ namespace Tempo.Core.Database.Sqlite
         {
             if (queries == null) throw new ArgumentNullException(nameof(queries));
             token.ThrowIfCancellationRequested();
-            await _WriteLock.WaitAsync(token).ConfigureAwait(false);
-            try { return await ExecuteInternalAsync(queries, isTransaction, token).ConfigureAwait(false); }
-            finally { _WriteLock.Release(); }
+            return await DatabaseTelemetry.ExecuteAsync(TelemetrySystem, DatabaseTelemetry.BatchOperation, async () =>
+            {
+                long waitStart = Stopwatch.GetTimestamp();
+                await _WriteLock.WaitAsync(token).ConfigureAwait(false);
+                TempoTelemetry.RecordLimiterWait(WriteLockLimiter, TempoTelemetry.SecondsSince(waitStart));
+                try { return await ExecuteInternalAsync(queries, isTransaction, token).ConfigureAwait(false); }
+                finally { _WriteLock.Release(); }
+            }, token).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>

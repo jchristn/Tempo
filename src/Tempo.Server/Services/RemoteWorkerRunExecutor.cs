@@ -1,7 +1,8 @@
-namespace Tempo.Server.Services
+﻿namespace Tempo.Server.Services
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Net.WebSockets;
     using System.Threading;
@@ -10,6 +11,7 @@ namespace Tempo.Server.Services
     using Tempo.Core.Runtime;
     using Tempo.Core.Services;
     using Tempo.Core.Workers;
+    using Tempo.Telemetry;
     using WatsonWebserver.Core.WebSockets;
 
     /// <summary>
@@ -120,10 +122,18 @@ namespace Tempo.Server.Services
 
             if (!IsConnected) throw new InvalidOperationException("Worker session is not connected.");
 
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanWorkerAssignSend, ActivityKind.Producer);
+            activity?.SetTag(TelemetryConstants.AttrAssignmentId, assignment.Id);
+            activity?.SetTag(TelemetryConstants.AttrFlowRunId, assignment.FlowRunId);
+            activity?.SetTag(TelemetryConstants.AttrWorkerId, Descriptor.WorkerId);
+            activity?.SetTag(TelemetryConstants.AttrWorkerSessionId, Descriptor.WorkerSessionId);
+
             WorkerAssignMessage frame = new WorkerAssignMessage
             {
                 Assignment = assignment,
-                Plan = plan
+                Plan = plan,
+                TraceParent = TempoTelemetry.TraceParentOf(activity),
+                TraceState = activity?.TraceStateString
             };
 
             lock (_Lock)
@@ -135,10 +145,12 @@ namespace Tempo.Server.Services
             try
             {
                 await SendAsync(frame, token).ConfigureAwait(false);
+                TempoTelemetry.SetOk(activity);
                 return null;
             }
-            catch
+            catch (Exception ex)
             {
+                TempoTelemetry.RecordException(activity, ex);
                 CompleteAssignment(assignment.Id);
                 throw;
             }
@@ -159,8 +171,20 @@ namespace Tempo.Server.Services
 
         private Task SendAsync(object frame, CancellationToken token)
         {
+            TempoTelemetry.RecordWorkerFrame("out", FrameTypeOf(frame));
             string json = System.Text.Json.JsonSerializer.Serialize(frame, WorkerProtocolSerialization.Options);
             return _Session.SendTextAsync(json, token);
+        }
+
+        private static string FrameTypeOf(object frame)
+        {
+            switch (frame)
+            {
+                case WorkerAssignMessage: return WorkerFrameTypes.Assign;
+                case WorkerDrainMessage: return WorkerFrameTypes.Drain;
+                case WorkerResumeMessage: return WorkerFrameTypes.Resume;
+                default: return "other";
+            }
         }
     }
 }

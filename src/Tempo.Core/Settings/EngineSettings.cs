@@ -1,4 +1,4 @@
-namespace Tempo.Core.Settings
+﻿namespace Tempo.Core.Settings
 {
     using System;
 
@@ -55,6 +55,23 @@ namespace Tempo.Core.Settings
             }
         }
 
+        /// <summary>
+        /// Minimum milliseconds between samples of the dispatch queue depth published on the
+        /// <c>tempo.dispatch.queue.depth</c> gauge. Each sample is one COUNT query against the flow-run table.
+        /// Default: 15000. Range: 1000 to 600000.
+        /// </summary>
+        public int QueueDepthSampleIntervalMs
+        {
+            get
+            {
+                return _QueueDepthSampleIntervalMs;
+            }
+            set
+            {
+                _QueueDepthSampleIntervalMs = Math.Clamp(value, 1000, 600000);
+            }
+        }
+
         /// <summary>Assignment lease duration in milliseconds. Default: 300000. Range: 1000 to 86400000.</summary>
         public int LeaseDurationMs
         {
@@ -103,6 +120,7 @@ namespace Tempo.Core.Settings
         private string _LoadBalancingStrategy = "LeastLoaded";
         private int _MaxConcurrentRuns = 4;
         private int _PollIntervalMs = 1000;
+        private int _QueueDepthSampleIntervalMs = 15000;
         private int _LeaseDurationMs = 300000;
         private int _WorkerHeartbeatTimeoutMs = 30000;
         private int _MaxAssignmentAttempts = 3;

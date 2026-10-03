@@ -1,4 +1,4 @@
-namespace Tempo.Worker
+﻿namespace Tempo.Worker
 {
     using System;
     using System.IO;
@@ -6,6 +6,8 @@ namespace Tempo.Worker
     using System.Threading.Tasks;
     using SyslogLogging;
     using Tempo.Core.Services;
+    using Tempo.Hosting;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Worker composition root.
@@ -33,6 +35,13 @@ namespace Tempo.Worker
             LoggingModule logging = CreateLogger(settings);
             logging.Info("[Tempo.Worker] starting worker");
 
+            TelemetryHost telemetry = TelemetryHost.Start(settings.Telemetry, "tempo-worker", "worker", logging);
+            telemetry.BridgeLogs(logging);
+            TempoTelemetry.SetConfig("worker.max_concurrent_runs", settings.MaxConcurrentRuns);
+            TempoTelemetry.SetConfig("worker.max_task_timeout_ms", settings.MaxTaskTimeoutMs);
+            TempoTelemetry.SetConfig("external.max_processes_server_wide", settings.Runtimes.ExternalExecution.MaxConcurrentProcessesServerWide);
+            TempoTelemetry.SetConfig("external.max_processes_per_tenant", settings.Runtimes.ExternalExecution.MaxConcurrentProcessesPerTenant);
+
             WorkerNode worker = new WorkerNode(settings, logging);
             using CancellationTokenSource shutdown = new CancellationTokenSource();
 
@@ -58,6 +67,7 @@ namespace Tempo.Worker
             {
                 try { Console.CancelKeyPress -= cancelHandler; } catch { /* ignore */ }
                 try { AppDomain.CurrentDomain.ProcessExit -= exitHandler; } catch { /* ignore */ }
+                try { telemetry.Dispose(); } catch { /* ignore */ }
                 try { logging.Dispose(); } catch { /* ignore */ }
             }
         }

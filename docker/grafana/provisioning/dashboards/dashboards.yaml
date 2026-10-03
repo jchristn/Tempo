@@ -1,0 +1,14 @@
+# Loads the Tempo dashboards (assets/grafana/*.json, mounted read-only) into the "Tempo" folder.
+
+apiVersion: 1
+
+providers:
+  - name: 'Tempo'
+    orgId: 1
+    folder: 'Tempo'
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards/tempo

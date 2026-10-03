@@ -1,4 +1,4 @@
-namespace Tempo.Server.Services
+﻿namespace Tempo.Server.Services
 {
     using System;
     using System.Collections.Generic;
@@ -50,6 +50,23 @@ namespace Tempo.Server.Services
             string id = dt.Rows[0][0]?.ToString() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(id)) return null;
             return await _Database.FlowRuns.ReadGlobalAsync(id, token).ConfigureAwait(false);
+        }
+
+        /// <summary>Count flow runs waiting for assignment (same predicate as <see cref="ReadNextPendingAsync"/>).</summary>
+        /// <param name="token">Cancellation token.</param>
+        /// <returns>The number of pending flow runs.</returns>
+        public async Task<long> CountPendingAsync(CancellationToken token = default)
+        {
+            DataTable dt = await _Database.ExecuteQueryAsync(
+                "SELECT COUNT(*) FROM flow_runs WHERE state = 'Queued' AND (dispatch_state IS NULL OR dispatch_state = 'Pending') AND dispatch_attempt < " +
+                _Settings.MaxAssignmentAttempts.ToString(CultureInfo.InvariantCulture) + ";",
+                false,
+                token).ConfigureAwait(false);
+
+            if (dt.Rows.Count < 1) return 0;
+            object? value = dt.Rows[0][0];
+            if (value == null || value == DBNull.Value) return 0;
+            return Convert.ToInt64(value, CultureInfo.InvariantCulture);
         }
 
         /// <inheritdoc/>

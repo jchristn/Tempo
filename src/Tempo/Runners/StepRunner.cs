@@ -2,6 +2,7 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Linq;
     using System.Text;
     using System.Threading;
@@ -9,6 +10,7 @@
     using Tempo.Enums;
     using Tempo.Logs;
     using Tempo.Protocol;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Abstract base class for step runners.
@@ -39,6 +41,13 @@
             req.ProtocolVersion = ProtocolVersions.Normalize(req.ProtocolVersion);
 
             DateTime startTime = DateTime.UtcNow;
+            long startTimestamp = Stopwatch.GetTimestamp();
+            string runnerLabel = TempoTelemetry.RunnerLabelOf(GetType());
+            using Activity? activity = TempoTelemetry.StartActivity(TelemetryConstants.SpanStepPrefix + stepId);
+            activity?.SetTag(TelemetryConstants.AttrStepId, stepId);
+            activity?.SetTag(TelemetryConstants.AttrRunner, runnerLabel);
+            activity?.SetTag(TelemetryConstants.AttrStepRunId, req.StepRunId);
+            activity?.SetTag(TelemetryConstants.AttrFlowRunId, req.FlowRunId);
 
             // Log step start
             if (Logger != null && !String.IsNullOrEmpty(req.RequestId))
@@ -80,6 +89,8 @@
             TimeSpan runtime = DateTime.UtcNow - startTime;
             long runtimeMs = (long)runtime.TotalMilliseconds;
 
+            RecordStepTelemetry(activity, runnerLabel, result, TempoTelemetry.SecondsSince(startTimestamp));
+
             // Log step completion
             if (Logger != null && !String.IsNullOrEmpty(req.RequestId))
             {
@@ -88,6 +99,28 @@
             }
 
             return result ?? throw new InvalidOperationException($"Step '{stepId}' execution failed to produce a result.");
+        }
+
+        private static void RecordStepTelemetry(Activity? activity, string runnerLabel, StepResult? result, double seconds)
+        {
+            StepResultTypeEnum resultType = result?.Result ?? StepResultTypeEnum.Exception;
+            string outcome = TempoTelemetry.OutcomeOf(resultType);
+            TempoTelemetry.RecordStep(runnerLabel, outcome, seconds);
+            if (activity == null) return;
+
+            activity.SetTag(TelemetryConstants.AttrStepResult, outcome);
+            if (resultType == StepResultTypeEnum.Success)
+            {
+                TempoTelemetry.SetOk(activity);
+            }
+            else if (result?.Exception != null)
+            {
+                TempoTelemetry.RecordException(activity, result.Exception);
+            }
+            else
+            {
+                TempoTelemetry.SetError(activity, outcome, result?.ExceptionMessage);
+            }
         }
 
         /// <summary>

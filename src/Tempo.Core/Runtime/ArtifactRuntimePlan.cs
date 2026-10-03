@@ -1,13 +1,16 @@
-namespace Tempo.Core.Runtime
+﻿namespace Tempo.Core.Runtime
 {
     using System;
     using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
     using Tempo.Core.Artifacts;
     using Tempo.Core.Database;
     using Tempo.Core.Models;
     using Tempo.Core.Settings;
+    using Tempo.Telemetry;
 
     /// <summary>Resolved artifact, manifest, entrypoint, and extracted root for execution.</summary>
     public class ArtifactRuntimePlan
@@ -84,7 +87,7 @@ namespace Tempo.Core.Runtime
             artifact.ManifestEntrypoint = entrypointName;
 
             ArtifactPackageCache cache = new ArtifactPackageCache(blobStore, settings);
-            string root = await cache.PrepareAsync(version, token).ConfigureAwait(false);
+            string root = await PrepareCachedAsync(cache, version, token).ConfigureAwait(false);
             return new ArtifactRuntimePlan
             {
                 Artifact = artifact,
@@ -155,7 +158,7 @@ namespace Tempo.Core.Runtime
             artifact.ManifestEntrypoint = entrypointName;
 
             ArtifactPackageCache cache = new ArtifactPackageCache(blobStore, settings);
-            string root = await cache.PrepareAsync(version, token).ConfigureAwait(false);
+            string root = await PrepareCachedAsync(cache, version, token).ConfigureAwait(false);
             return new ArtifactRuntimePlan
             {
                 Artifact = artifact,
@@ -166,5 +169,31 @@ namespace Tempo.Core.Runtime
                 ArtifactRoot = root
             };
         }
+        private static async Task<string> PrepareCachedAsync(ArtifactPackageCache cache, ArtifactVersionRecord version, CancellationToken token)
+        {
+            long start = Stopwatch.GetTimestamp();
+            bool hit = false;
+            try { hit = File.Exists(Path.Combine(cache.CachePath(version.TenantId, version.Sha256), CacheReadyMarker)); } catch (Exception) { }
+
+            using Activity? activity = TempoTelemetry.StartActivity(CacheName + (hit ? " hit" : " fill"));
+            activity?.SetTag(TelemetryConstants.AttrCache, CacheName);
+            activity?.SetTag(TelemetryConstants.AttrOutcome, hit ? "hit" : "miss");
+            try
+            {
+                string root = await cache.PrepareAsync(version, token).ConfigureAwait(false);
+                TempoTelemetry.SetOk(activity);
+                TempoTelemetry.RecordCache(CacheName, hit ? "hit" : "miss", TempoTelemetry.SecondsSince(start));
+                return root;
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordCache(CacheName, "error", TempoTelemetry.SecondsSince(start));
+                throw;
+            }
+        }
+
+        private const string CacheName = "artifact_package";
+        private const string CacheReadyMarker = ".tempo-cache-ready";
     }
 }

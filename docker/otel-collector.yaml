@@ -1,0 +1,59 @@
+# OpenTelemetry Collector for the Tempo stack.
+#
+# Every Tempo process (tempo-server, tempo-worker-N, tempo-mcp) pushes OTLP over gRPC to this collector,
+# which fans the three signals out:
+#   metrics -> Prometheus exporter on :8889 (scraped by Prometheus)
+#   traces  -> Grafana Tempo (OTLP gRPC)
+#   logs    -> Loki (native OTLP endpoint)
+# resource_to_telemetry_conversion turns resource attributes into labels, so every series carries
+# service_name (tempo-server, tempo-worker, tempo-mcp) and service_instance_id.
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 2s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+  batch:
+    timeout: 5s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+  otlp/tempo:
+    endpoint: grafana-tempo:4317
+    tls:
+      insecure: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+service:
+  extensions: [health_check]
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]

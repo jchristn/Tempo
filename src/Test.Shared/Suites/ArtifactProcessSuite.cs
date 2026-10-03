@@ -1,4 +1,4 @@
-namespace Test.Shared.Suites
+﻿namespace Test.Shared.Suites
 {
     using System;
     using System.Collections.Generic;
@@ -540,7 +540,7 @@ namespace Test.Shared.Suites
                 });
         }
 
-        private sealed class TestRuntime : IDisposable
+        internal sealed class TestRuntime : IDisposable
         {
             private readonly string _Root;
             public SqliteDatabaseDriver Driver { get; }

@@ -1,4 +1,4 @@
-namespace Tempo.Core.Services
+﻿namespace Tempo.Core.Services
 {
     using System;
     using System.Collections.Generic;
@@ -8,6 +8,7 @@ namespace Tempo.Core.Services
     using Tempo.Core.Enums;
     using Tempo.Core.Models;
     using Tempo.Core.Security;
+    using Tempo.Telemetry;
 
     /// <summary>
     /// Evaluates RBAC permissions for a <see cref="RequestContext"/>.
@@ -32,6 +33,13 @@ namespace Tempo.Core.Services
         /// <param name="token">Cancellation token.</param>
         /// <returns>True when authorized.</returns>
         public async Task<bool> AuthorizeAsync(RequestContext context, ResourceTypeEnum resource, OperationTypeEnum operation, CancellationToken token = default)
+        {
+            bool permitted = await AuthorizeInternalAsync(context, resource, operation, token).ConfigureAwait(false);
+            TempoTelemetry.RecordAuthorization(context?.AuthorizationResult.ToString().ToLowerInvariant() ?? "unknown");
+            return permitted;
+        }
+
+        private async Task<bool> AuthorizeInternalAsync(RequestContext context, ResourceTypeEnum resource, OperationTypeEnum operation, CancellationToken token)
         {
             if (context == null) throw new ArgumentNullException(nameof(context));
             context.ResourceType = resource;

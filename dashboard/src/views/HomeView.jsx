@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '../components/PageHeader';
 import ActivityChart, { getTimeRange } from '../components/ActivityChart';
+import ExternalServicesCard from '../components/ExternalServicesCard';
 import { formatDuration, formatNumber } from '../utils/formatters';
 import { normalizeApiError } from '../utils/i18n';
 
@@ -104,6 +105,8 @@ function HomeView({ apiClient }) {
         failureLegend={t('views.home.requestFailureLegend', { defaultValue: 'Failed (4xx-5xx)' })}
         emptyMessage={t('views.home.requestActivityEmpty', { defaultValue: 'No request data for this time range' })}
       />
+
+      <ExternalServicesCard />
     </div>
   );
 }

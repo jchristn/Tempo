@@ -1,9 +1,10 @@
-namespace Tempo.McpServer.Services
+﻿namespace Tempo.McpServer.Services
 {
     using System;
     using System.IO;
     using System.Text.Json;
     using System.Text.Json.Serialization;
+    using Tempo.Core.Settings;
     using Tempo.McpServer.Settings;
 
     /// <summary>
@@ -62,6 +63,9 @@ namespace Tempo.McpServer.Services
         public static void ApplyEnvironment(TempoMcpServerSettings settings)
         {
             if (settings == null) throw new ArgumentNullException(nameof(settings));
+
+            if (settings.Telemetry == null) settings.Telemetry = new TelemetrySettings();
+            settings.Telemetry.ApplyEnvironmentOverrides();
 
             ApplyString(Constants.TempoEndpointEnvironmentVariable, value => settings.Tempo.Endpoint = value);
             ApplyString(Constants.TempoTokenEnvironmentVariable, value => settings.Tempo.Token = value);

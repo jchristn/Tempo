@@ -1,4 +1,4 @@
-namespace Tempo.Worker
+﻿namespace Tempo.Worker
 {
     using System;
     using System.IO;
@@ -87,6 +87,8 @@ namespace Tempo.Worker
 
         private static void ApplyEnvironmentOverrides(WorkerSettings settings)
         {
+            settings.Telemetry.ApplyEnvironmentOverrides();
+
             string? value = Environment.GetEnvironmentVariable(EnvServerEndpoint);
             if (!string.IsNullOrWhiteSpace(value)) settings.ServerEndpoint = value;
 

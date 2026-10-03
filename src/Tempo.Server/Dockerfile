@@ -8,6 +8,7 @@ WORKDIR /repo
 
 COPY src/Tempo/Tempo.csproj src/Tempo/
 COPY src/Tempo.Core/Tempo.Core.csproj src/Tempo.Core/
+COPY src/Tempo.Hosting/Tempo.Hosting.csproj src/Tempo.Hosting/
 COPY src/Tempo.Sample.DotnetProcess/Tempo.Sample.DotnetProcess.csproj src/Tempo.Sample.DotnetProcess/
 COPY src/Tempo.Server/Tempo.Server.csproj src/Tempo.Server/
 COPY README.md LICENSE.md ./

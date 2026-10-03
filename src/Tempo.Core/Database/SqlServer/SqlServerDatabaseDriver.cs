@@ -1,4 +1,4 @@
-namespace Tempo.Core.Database.SqlServer
+﻿namespace Tempo.Core.Database.SqlServer
 {
     using System;
     using System.Collections.Generic;
@@ -14,6 +14,7 @@ namespace Tempo.Core.Database.SqlServer
     /// <summary>Microsoft SQL Server implementation of <see cref="DatabaseDriverBase"/>.</summary>
     public class SqlServerDatabaseDriver : DatabaseDriverBase
     {
+        private const string TelemetrySystem = "sqlserver";
         /// <inheritdoc/>
         public override DatabaseTypeEnum DatabaseType => DatabaseTypeEnum.SqlServer;
 
@@ -86,14 +87,14 @@ namespace Tempo.Core.Database.SqlServer
         public override async Task<DataTable> ExecuteQueryAsync(string query, bool isTransaction = false, CancellationToken token = default)
         {
             if (string.IsNullOrWhiteSpace(query)) throw new ArgumentNullException(nameof(query));
-            return await ExecuteInternalAsync(new[] { query }, isTransaction, token).ConfigureAwait(false);
+            return await DatabaseTelemetry.ExecuteAsync(TelemetrySystem, DatabaseTelemetry.OperationOf(query), () => ExecuteInternalAsync(new[] { query }, isTransaction, token), token).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>
         public override async Task<DataTable> ExecuteQueriesAsync(IEnumerable<string> queries, bool isTransaction = false, CancellationToken token = default)
         {
             if (queries == null) throw new ArgumentNullException(nameof(queries));
-            return await ExecuteInternalAsync(queries, isTransaction, token).ConfigureAwait(false);
+            return await DatabaseTelemetry.ExecuteAsync(TelemetrySystem, DatabaseTelemetry.BatchOperation, () => ExecuteInternalAsync(queries, isTransaction, token), token).ConfigureAwait(false);
         }
 
         /// <inheritdoc/>

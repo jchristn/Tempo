@@ -1,4 +1,4 @@
-namespace Tempo.Core.Services
+﻿namespace Tempo.Core.Services
 {
     using System;
     using System.Collections.Generic;
@@ -18,6 +18,7 @@ namespace Tempo.Core.Services
     using Tempo.Core.Runtime;
     using Tempo.Core.Settings;
     using Tempo.Protocol;
+    using Tempo.Telemetry;
 
     /// <summary>Builds artifact packages and persisted steps from pasted source files.</summary>
     public class SourceStepPackageService
@@ -230,6 +231,24 @@ namespace Tempo.Core.Services
 
         private static async Task RunDotnetAsync(string dotnetExecutable, string sourceDir, string outputDir, CancellationToken token)
         {
+            long start = Stopwatch.GetTimestamp();
+            using Activity? activity = TempoTelemetry.StartIntegration("process", "dotnet_publish");
+            try
+            {
+                await RunDotnetCoreAsync(dotnetExecutable, sourceDir, outputDir, activity, token).ConfigureAwait(false);
+                TempoTelemetry.SetOk(activity);
+                TempoTelemetry.RecordIntegration("process", "dotnet_publish", TelemetryConstants.OutcomeSuccess, TempoTelemetry.SecondsSince(start));
+            }
+            catch (Exception ex)
+            {
+                TempoTelemetry.RecordException(activity, ex);
+                TempoTelemetry.RecordIntegration("process", "dotnet_publish", ex is OperationCanceledException ? TelemetryConstants.OutcomeCancelled : TelemetryConstants.OutcomeError, TempoTelemetry.SecondsSince(start));
+                throw;
+            }
+        }
+
+        private static async Task RunDotnetCoreAsync(string dotnetExecutable, string sourceDir, string outputDir, Activity? activity, CancellationToken token)
+        {
             using Process process = new Process();
             process.StartInfo = new ProcessStartInfo
             {
@@ -253,6 +272,7 @@ namespace Tempo.Core.Services
             await process.WaitForExitAsync(token).ConfigureAwait(false);
             string stdout = await stdoutTask.ConfigureAwait(false);
             string stderr = await stderrTask.ConfigureAwait(false);
+            activity?.SetTag(TelemetryConstants.AttrProcessExitCode, process.ExitCode);
             if (process.ExitCode != 0)
             {
                 string detail = (stdout + Environment.NewLine + stderr).Trim();

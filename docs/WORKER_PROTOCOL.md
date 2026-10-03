@@ -161,11 +161,15 @@ Server-to-worker run-delivery frame.
     "steps": {},
     "executionSnapshot": {},
     "budget": {}
-  }
+  },
+  "traceParent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+  "traceState": null
 }
 ```
 
 The plan is the server-resolved execution contract. Workers execute the plan as-is and do not query the server database for step resolution.
+
+`traceParent` and `traceState` are optional W3C trace-context fields. When the server is tracing, they carry the context of its `tempo.worker.assign send` span, and the worker parents its `tempo.worker.assignment` span on it so the remote execution joins the run's trace. They are omitted when the server is not tracing. Workers that do not understand them ignore them. See [TELEMETRY.md](../TELEMETRY.md).
 
 ## `assign-ack`
 
@@ -203,12 +207,16 @@ Worker-to-server terminal completion frame.
     "errorMessage": null,
     "executionSnapshotJson": "{...}",
     "stepRuns": [],
-    "completedUtc": "2026-04-21T20:00:03.0000000Z"
+    "completedUtc": "2026-04-21T20:00:03.0000000Z",
+    "traceParent": "00-4bf92f3577b34da6a3ce929d0e0e4736-b7ad6b7169203331-01",
+    "traceState": null
   }
 }
 ```
 
 The server is the only component that mutates authoritative run state.
+
+The optional `traceParent` and `traceState` fields carry the worker's `tempo.worker.assignment` span context, so the server's `tempo.dispatch.complete` span joins the same trace. They are omitted when the worker is not tracing.
 
 ## `drain`
 

@@ -119,7 +119,8 @@ dlldata.c
 # DNX
 project.lock.json
 project.fragment.lock.json
-artifacts/
+# Root-anchored: an unanchored "artifacts/" also matched src/Tempo.Core/Artifacts on case-insensitive filesystems.
+/artifacts/
 
 *_i.c
 *_p.c
