@@ -291,9 +291,16 @@
 
                 try
                 {
-                    await process.StandardInput.WriteAsync(requestJson.AsMemory(), linked.Token).ConfigureAwait(false);
-                    await process.StandardInput.FlushAsync(linked.Token).ConfigureAwait(false);
-                    process.StandardInput.Close();
+                    try
+                    {
+                        await process.StandardInput.WriteAsync(requestJson.AsMemory(), linked.Token).ConfigureAwait(false);
+                        await process.StandardInput.FlushAsync(linked.Token).ConfigureAwait(false);
+                    }
+                    catch (IOException)
+                    {
+                        // The process exited or closed stdin without reading the request (broken pipe); its exit code and stdout still decide the result.
+                    }
+                    try { process.StandardInput.Close(); } catch (IOException) { }
                     await process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !token.IsCancellationRequested)

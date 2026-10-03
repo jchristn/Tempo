@@ -133,7 +133,7 @@ namespace Test.Shared.Suites
                                     : null;
 
                                 TempoStepResult result = await ExecuteSeededStepAsync(driver, registry, tenant.Id, executionKey, ct);
-                                Assert2.Equal(StepResultTypeEnum.Success, result.Result, "template step executes " + executionKey);
+                                Assert2.Equal(StepResultTypeEnum.Success, result.Result, "template step executes " + executionKey + (result.Exception != null ? ": " + result.Exception.Message : string.Empty));
                                 if (restTask != null) await restTask;
                             }
                         }

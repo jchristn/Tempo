@@ -4,6 +4,26 @@ All notable changes to Tempo are documented in this file.
 
 ## [Unreleased]
 
+## [0.5.1]
+
+### Changed
+
+- NuGet dependency updates: Padlock 1.1.0 -> 1.2.0, RestWrapper 3.3.0 -> 3.3.1, SyslogLogging 2.2.2 -> 2.3.1, Watson 7.2.0 -> 7.2.2, Microsoft.Data.SqlClient 7.1.0 -> 7.1.1, Voltaic 2.0.0 -> 2.2.1, Touchstone (Core, Cli, XunitAdapter, NunitAdapter) 0.1.12 -> 0.2.0, NUnit 4.6.1 -> 5.0.0
+- Voltaic 2.2.1 behavior now reflected in the MCP surface and `McpTransport` suite: TCP and WebSocket clients initialize automatically on connect, `tools/call` arguments that fail the input schema return an `isError` tool result naming the property (previously JSON-RPC `-32602`), and `ping` under the stateless `2026-07-28` revision returns `-32601`
+- `RuntimeCommandProbe` waits up to 10 seconds (was 3) for runtime probes such as `dotnet --info`, drains the probe's output while waiting, and no longer caches a timed-out probe, so a briefly slow host no longer marks `Artifact.DotnetProcess` unavailable until restart
+- All projects under `src/` and the dashboard are versioned 0.5.1
+
+### Fixed
+
+- `Artifact.Process` reported a step as an exception ("Broken pipe") when the process exited without reading its stdin request, even though it wrote a valid result; the result is now decided by the exit code and stdout
+- Added `src/Tempo.Core/Artifacts/` sources to the repository (previously hidden by the `.gitignore` rule fixed in 0.5.0) and cleared their two nullable warnings
+
+### Tests
+
+- `ArtifactProcess.ProcessIgnoringStdinSucceeds` covers a process that ignores a 512 KiB request (larger than the pipe buffer)
+- `ArtifactProcess.PythonDependencyInstallPolicyFailure` is skipped when Python is not on the PATH, like the other Python cases
+- The hydration sample-step assertion includes the step's exception message
+
 ## [0.5.0]
 
 ### Added

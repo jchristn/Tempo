@@ -5,12 +5,13 @@ namespace Tempo.Core.Runtime
     using System.Diagnostics;
     using System.IO;
     using System.Linq;
+    using System.Threading.Tasks;
     using Tempo.Core.Settings;
 
     /// <summary>Checks host command availability for optional external runtimes.</summary>
     public static class RuntimeCommandProbe
     {
-        private const int DefaultTimeoutMs = 3000;
+        private const int DefaultTimeoutMs = 10000;
         private static readonly ConcurrentDictionary<string, RuntimeCommandProbeResult> _Cache = new ConcurrentDictionary<string, RuntimeCommandProbeResult>(StringComparer.Ordinal);
 
         /// <summary>Probes availability of the configured Python executable.</summary>
@@ -60,7 +61,11 @@ namespace Tempo.Core.Runtime
             return result;
         }
 
-        /// <summary>Probes availability of an arbitrary executable, caching the result by command and arguments.</summary>
+        /// <summary>
+        /// Probes availability of an arbitrary executable, caching the result by command and arguments.
+        /// A probe that times out is not cached, so a transiently slow host is probed again on the next call.
+        /// This method is thread-safe.
+        /// </summary>
         /// <param name="executable">Executable path or command to run.</param>
         /// <param name="arguments">Arguments passed to the executable.</param>
         /// <param name="displayName">Human-readable name used in result messages.</param>
@@ -71,11 +76,16 @@ namespace Tempo.Core.Runtime
             string command = executable.Trim();
             string[] args = arguments ?? Array.Empty<string>();
             string cacheKey = command + "\u001f" + string.Join("\u001e", args);
-            return _Cache.GetOrAdd(cacheKey, _ => ProbeUncached(command, args, displayName));
+            if (_Cache.TryGetValue(cacheKey, out RuntimeCommandProbeResult? cached)) return cached;
+
+            RuntimeCommandProbeResult result = ProbeUncached(command, args, displayName, out bool timedOut);
+            if (timedOut) return result;
+            return _Cache.GetOrAdd(cacheKey, result);
         }
 
-        private static RuntimeCommandProbeResult ProbeUncached(string command, string[] arguments, string displayName)
+        private static RuntimeCommandProbeResult ProbeUncached(string command, string[] arguments, string displayName, out bool timedOut)
         {
+            timedOut = false;
             try
             {
                 if (Path.IsPathFullyQualified(command) && !File.Exists(command))
@@ -92,13 +102,19 @@ namespace Tempo.Core.Runtime
                 };
                 foreach (string argument in arguments ?? Array.Empty<string>()) process.StartInfo.ArgumentList.Add(argument);
                 if (!process.Start()) return RuntimeCommandProbeResult.Missing(command, displayName + " command did not start.");
+
+                // Drain both pipes while waiting so a chatty command (dotnet --info) cannot block on a full pipe buffer.
+                Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+                Task<string> stderr = process.StandardError.ReadToEndAsync();
                 if (!process.WaitForExit(DefaultTimeoutMs))
                 {
                     try { process.Kill(entireProcessTree: true); } catch { }
+                    timedOut = true;
                     return RuntimeCommandProbeResult.Missing(command, displayName + " command did not respond within " + DefaultTimeoutMs + "ms.");
                 }
 
-                string output = (process.StandardOutput.ReadToEnd() + Environment.NewLine + process.StandardError.ReadToEnd()).Trim();
+                process.WaitForExit();
+                string output = (stdout.GetAwaiter().GetResult() + Environment.NewLine + stderr.GetAwaiter().GetResult()).Trim();
                 if (process.ExitCode != 0)
                 {
                     string detail = string.IsNullOrWhiteSpace(output) ? "exit code " + process.ExitCode : output.Split('\n').Last().Trim();

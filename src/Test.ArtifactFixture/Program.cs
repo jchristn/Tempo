@@ -26,6 +26,11 @@
                 Console.Error.Write(Environment.GetEnvironmentVariable("TEMPO_TEST_SECRET") ?? "missing-secret");
                 return 5;
             }
+            if (mode == "nostdin")
+            {
+                Console.Write("{\"protocolVersion\":\"1.0\",\"result\":\"Success\",\"data\":{\"nostdin\":true}}");
+                return 0;
+            }
             if (mode == "sleep")
             {
                 Thread.Sleep(TimeSpan.FromMinutes(5));

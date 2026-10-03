@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>    <IsPackable>false</IsPackable>
     <AssemblyName>Test.Nunit</AssemblyName>
     <RootNamespace>Test.Nunit</RootNamespace>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,9 +15,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
-    <PackageReference Include="NUnit" Version="4.6.1" />
+    <PackageReference Include="NUnit" Version="5.0.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="6.3.0" />
-    <PackageReference Include="Touchstone.NunitAdapter" Version="0.1.12" />
+    <PackageReference Include="Touchstone.NunitAdapter" Version="0.2.0" />
   </ItemGroup>
 
   <ItemGroup>

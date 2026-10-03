@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>enable</Nullable>    <Version>0.5.0</Version>
+    <Nullable>enable</Nullable>    <Version>0.5.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,9 +16,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Touchstone.Core" Version="0.1.12" />
+    <PackageReference Include="Touchstone.Core" Version="0.2.0" />
     <!-- Direct reference so the Voltaic assemblies flow to the test output; Tempo.McpServer is an Exe project and does not propagate its package dependencies transitively. -->
-    <PackageReference Include="Voltaic" Version="2.0.0" />
+    <PackageReference Include="Voltaic" Version="2.2.1" />
   </ItemGroup>
 
   <ItemGroup>

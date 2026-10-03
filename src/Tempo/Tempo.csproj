@@ -15,7 +15,7 @@
     <ApplicationIcon>logo.ico</ApplicationIcon>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <DocumentationFile>Tempo.xml</DocumentationFile>
-    <Version>0.5.0</Version>
+    <Version>0.5.1</Version>
     <PackageIcon>logo.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>data flow dataflow orchestrate orchestrator step lambda faas airflow</PackageTags>
@@ -31,10 +31,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
-    <PackageReference Include="Padlock" Version="1.1.0" />
+    <PackageReference Include="Padlock" Version="1.2.0" />
     <PackageReference Include="PrettyId" Version="2.0.1" />
-    <PackageReference Include="RestWrapper" Version="3.3.0" />
-    <PackageReference Include="SyslogLogging" Version="2.2.2" />
+    <PackageReference Include="RestWrapper" Version="3.3.1" />
+    <PackageReference Include="SyslogLogging" Version="2.3.1" />
   </ItemGroup>
 
   <ItemGroup>

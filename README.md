@@ -5,7 +5,7 @@
 # Tempo
 
 > **Note**  
-> v0.5.0 - Tempo is in ALPHA - API surface and data structures subject to change
+> v0.5.1 - Tempo is in ALPHA - API surface and data structures subject to change
 
 [![NuGet](https://img.shields.io/nuget/v/Tempo.svg)](https://www.nuget.org/packages/Tempo/)
 [![NuGet Tempo.Sdk](https://img.shields.io/nuget/v/Tempo.Sdk.svg)](https://www.nuget.org/packages/Tempo.Sdk/)

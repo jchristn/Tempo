@@ -186,6 +186,19 @@
                         }
                         finally { runtime.Dispose(); }
                     }),
+                    new TestCaseDescriptor("ArtifactProcess", "ProcessIgnoringStdinSucceeds", "Artifact.Process accepts a process that exits without reading a request larger than the pipe buffer instead of failing on a broken pipe", async ct =>
+                    {
+                        using TestRuntime runtime = await TestRuntime.CreateAsync(ct);
+                        try
+                        {
+                            CoreTenant tenant = await runtime.Driver.Tenants.CreateAsync(new CoreTenant { Name = "T" }, ct);
+                            ArtifactVersionRecord version = await runtime.CreateProcessArtifactAsync(tenant.Id, "nostdin-tool", "1", "nostdin", ct);
+                            Dictionary<string, object> data = new Dictionary<string, object> { ["payload"] = new string('x', 512 * 1024) };
+                            StepResult result = await runtime.RunArtifactProcessStepAsync(tenant.Id, version.ArtifactId, "1", "nostdin-step", ct, data: data);
+                            Assert2.Equal(StepResultTypeEnum.Success, result.Result, "process that ignores stdin succeeds: " + (result.ExceptionMessage ?? string.Empty));
+                        }
+                        finally { runtime.Dispose(); }
+                    }),
                     new TestCaseDescriptor("ArtifactProcess", "TimeoutKillsProcess", "Artifact.Process enforces runtime timeout and records kill count", async ct =>
                     {
                         using TestRuntime runtime = await TestRuntime.CreateAsync(ct, maxRuntimeMs: 200);
@@ -349,6 +362,7 @@
                     }),
                     new TestCaseDescriptor("ArtifactProcess", "PythonDependencyInstallPolicyFailure", "Artifact.Python refuses dependency installation unless the operator enables it", async ct =>
                     {
+                        if (!await PythonAvailableAsync(ct)) return;
                         using TestRuntime runtime = await TestRuntime.CreateAsync(ct);
                         try
                         {
@@ -614,11 +628,11 @@
                 return await CreateVersionAsync(tenantId, artifact.Id, versionLabel, ZipWithEntries(files), manifest, token);
             }
 
-            public async Task<StepResult> RunArtifactProcessStepAsync(string tenantId, string artifactId, string version, string executionKey, CancellationToken token, IEnumerable<string>? envRefs = null)
+            public async Task<StepResult> RunArtifactProcessStepAsync(string tenantId, string artifactId, string version, string executionKey, CancellationToken token, IEnumerable<string>? envRefs = null, Dictionary<string, object>? data = null)
             {
                 (FlowRun run, DataFlowRecord flow) = await CreateArtifactFlowRunAsync(tenantId, artifactId, version, executionKey, token, envRefs);
                 FlowRunExecutionSnapshot snapshot = await FlowRunSnapshotBuilder.BuildAsync(Driver, run, flow, token);
-                return await RunExistingAsync(tenantId, flow, run, snapshot, token);
+                return await RunExistingAsync(tenantId, flow, run, snapshot, token, data);
             }
 
             public async Task<StepResult> RunArtifactPythonStepAsync(string tenantId, string artifactId, string version, string executionKey, CancellationToken token)
@@ -719,7 +733,7 @@
                 return (run, flow);
             }
 
-            public async Task<StepResult> RunExistingAsync(string tenantId, DataFlowRecord flow, FlowRun run, FlowRunExecutionSnapshot snapshot, CancellationToken token)
+            public async Task<StepResult> RunExistingAsync(string tenantId, DataFlowRecord flow, FlowRun run, FlowRunExecutionSnapshot snapshot, CancellationToken token, Dictionary<string, object>? data = null)
             {
                 StepRuntimeRegistry registry = StepRuntimeRegistry.CreateDefault(new StepManager(), runtimes: RuntimeSettings, database: Driver, artifactBlobStore: BlobStore, externalCapacity: Capacity);
                 RegistryDataFlowRunner runner = new RegistryDataFlowRunner(new DatabaseStepExecutionResolver(Driver), registry)
@@ -732,7 +746,7 @@
                     DataFlowId = flow.Id,
                     FlowRunId = run.Id,
                     RequestId = run.Id,
-                    Data = new Dictionary<string, object> { ["value"] = 123 }
+                    Data = data ?? new Dictionary<string, object> { ["value"] = 123 }
                 }, snapshot, token);
                 LastRunId = run.Id;
                 return result;

@@ -40,12 +40,12 @@ namespace Test.Shared.Suites
                     new TestCaseDescriptor("McpTransport", "ToolFailuresReturnIsErrorResults", "Tool execution failures (invalid argument values, Tempo.Server unreachable) return isError results with a readable message instead of JSON-RPC -32603", ToolFailuresReturnIsErrorResultsAsync),
                     new TestCaseDescriptor("McpTransport", "HttpHandshakeCapsProtocolVersion", "HTTP initialize never agrees to the stateless 2026-07-28 revision and negotiates 2025-11-25 instead", HttpHandshakeCapsProtocolVersionAsync),
                     new TestCaseDescriptor("McpTransport", "HttpSessionListsAndCallsTools", "HTTP session clients discover Tempo tools through tools/list and call them through tools/call", HttpSessionListsAndCallsToolsAsync),
-                    new TestCaseDescriptor("McpTransport", "HttpSessionRejectsMissingRequiredArgument", "HTTP tools/call with a missing required argument returns JSON-RPC -32602 instead of calling Tempo.Server", HttpSessionRejectsMissingRequiredArgumentAsync),
+                    new TestCaseDescriptor("McpTransport", "HttpSessionRejectsMissingRequiredArgument", "HTTP tools/call with a missing required argument returns an isError result naming the property instead of calling Tempo.Server", HttpSessionRejectsMissingRequiredArgumentAsync),
                     new TestCaseDescriptor("McpTransport", "HttpStatelessListsAndCallsTools", "Stateless 2026-07-28 clients see every Tempo tool with resultType/ttlMs/cacheScope and can call tools without a session", HttpStatelessListsAndCallsToolsAsync),
                     new TestCaseDescriptor("McpTransport", "TcpListsAndCallsTools", "TCP clients discover Tempo tools through tools/list, call them through tools/call, and can still invoke them as direct methods", TcpListsAndCallsToolsAsync),
                     new TestCaseDescriptor("McpTransport", "WebSocketListsAndCallsTools", "WebSocket clients discover Tempo tools through tools/list, call them through tools/call, and can still invoke them as direct methods", WebSocketListsAndCallsToolsAsync),
                     new TestCaseDescriptor("McpTransport", "ToolsListContainsOnlyTempoTools", "Every transport lists exactly the Tempo tools; Voltaic's demo tools (ping, echo, getTime, getSessions, getClients) are not published", ToolsListContainsOnlyTempoToolsAsync),
-                    new TestCaseDescriptor("McpTransport", "PingReturnsEmptyResult", "The MCP protocol ping returns an empty result ({} or resultType-only under 2026-07-28) on every transport instead of \"pong\"", PingReturnsEmptyResultAsync),
+                    new TestCaseDescriptor("McpTransport", "PingReturnsEmptyResult", "The MCP protocol ping returns an empty result on every handshake-era transport instead of \"pong\", and is method-not-found under the stateless 2026-07-28 revision", PingReturnsEmptyResultAsync),
                     new TestCaseDescriptor("McpTransport", "DemoToolsAreNotCallable", "tools/call for a Voltaic demo tool name fails with -32602 not found, and bare demo method calls fail with -32601 on TCP and WebSocket", DemoToolsAreNotCallableAsync),
                     new TestCaseDescriptor("McpTransport", "HttpRejectsBareToolMethodCalls", "HTTP clients cannot bypass tools/call by sending a Tempo tool name as a bare JSON-RPC method (-32601)", HttpRejectsBareToolMethodCallsAsync)
                 });
@@ -69,12 +69,10 @@ namespace Test.Shared.Suites
 
             using McpTcpClient tcp = new McpTcpClient();
             Assert2.True(await tcp.ConnectAsync("127.0.0.1", harness.TcpPort, ct).ConfigureAwait(false), "TCP client connects");
-            await tcp.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
             AssertExactToolSet(await tcp.CallAsync<JsonElement>("tools/list", new { }, 15000, ct).ConfigureAwait(false), expected, "TCP");
 
             using McpWebsocketsClient ws = new McpWebsocketsClient();
             Assert2.True(await ws.ConnectAsync(harness.WebSocketUrl, ct).ConfigureAwait(false), "WebSocket client connects");
-            await ws.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
             AssertExactToolSet(await ws.CallAsync<JsonElement>("tools/list", new { }, 15000, ct).ConfigureAwait(false), expected, "WebSocket");
         }
 
@@ -88,10 +86,10 @@ namespace Test.Shared.Suites
             using JsonDocument sessionPing = await PostJsonAsync(http, url, Request(2, "ping", new { }), headers, ct).ConfigureAwait(false);
             AssertEmptyObject(RequireResult(sessionPing, "session ping"), Array.Empty<string>(), "HTTP session ping");
 
-            using JsonDocument statelessPing = await PostStatelessAsync(http, url, 3, "ping", null, new Dictionary<string, object>(), ct).ConfigureAwait(false);
-            JsonElement statelessResult = RequireResult(statelessPing, "stateless ping");
-            AssertEmptyObject(statelessResult, new[] { "resultType" }, "HTTP stateless ping");
-            Assert2.Equal("complete", statelessResult.GetProperty("resultType").GetString()!, "stateless ping carries resultType complete");
+            // The stateless 2026-07-28 revision removed ping; Voltaic answers it with method-not-found.
+            using JsonDocument statelessPing = await PostStatelessAsync(http, url, 3, "ping", null, new Dictionary<string, object>(), ct, HttpStatusCode.NotFound).ConfigureAwait(false);
+            Assert2.True(statelessPing.RootElement.TryGetProperty("error", out JsonElement statelessError), "stateless ping is rejected under 2026-07-28");
+            Assert2.Equal(-32601, statelessError.GetProperty("code").GetInt32(), "stateless ping is method-not-found");
 
             using McpTcpClient tcp = new McpTcpClient();
             Assert2.True(await tcp.ConnectAsync("127.0.0.1", harness.TcpPort, ct).ConfigureAwait(false), "TCP client connects");
@@ -222,12 +220,12 @@ namespace Test.Shared.Suites
             using JsonDocument init = await PostJsonAsync(http, harness.HttpBaseUrl + McpTransportHarness.McpPath, InitializeRequest(HandshakeProtocolVersion), null, ct).ConfigureAwait(false);
             Assert2.Equal(expected, RequireResult(init, "initialize").GetProperty("serverInfo").GetProperty("version").GetString()!, "HTTP serverInfo.version");
 
-            using McpTcpClient tcp = new McpTcpClient();
+            using McpTcpClient tcp = new McpTcpClient { AutoInitialize = false };
             Assert2.True(await tcp.ConnectAsync("127.0.0.1", harness.TcpPort, ct).ConfigureAwait(false), "TCP client connects");
             JsonElement tcpInit = await tcp.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
             Assert2.Equal(expected, tcpInit.GetProperty("serverInfo").GetProperty("version").GetString()!, "TCP serverInfo.version");
 
-            using McpWebsocketsClient ws = new McpWebsocketsClient();
+            using McpWebsocketsClient ws = new McpWebsocketsClient { AutoInitialize = false };
             Assert2.True(await ws.ConnectAsync(harness.WebSocketUrl, ct).ConfigureAwait(false), "WebSocket client connects");
             JsonElement wsInit = await ws.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
             Assert2.Equal(expected, wsInit.GetProperty("serverInfo").GetProperty("version").GetString()!, "WebSocket serverInfo.version");
@@ -394,9 +392,8 @@ namespace Test.Shared.Suites
             Dictionary<string, string> headers = await OpenSessionAsync(http, url, ct).ConfigureAwait(false);
 
             using JsonDocument call = await PostJsonAsync(http, url, Request(5, "tools/call", new { name = "readWorker", arguments = new { } }), headers, ct).ConfigureAwait(false);
-            Assert2.True(call.RootElement.TryGetProperty("error", out JsonElement error), "missing required argument yields a JSON-RPC error");
-            Assert2.Equal(-32602, error.GetProperty("code").GetInt32(), "invalid params error code");
-            Assert2.True(error.GetProperty("message").GetString()!.Contains("id", StringComparison.Ordinal), "error names the missing property");
+            // Voltaic 2.2 reports input-schema failures as isError tool results on every revision so the model can correct them.
+            AssertToolError(RequireResult(call, "tools/call"), "id", "missing required argument");
         }
 
         private static async Task HttpStatelessListsAndCallsToolsAsync(CancellationToken ct)
@@ -430,7 +427,7 @@ namespace Test.Shared.Suites
         private static async Task TcpListsAndCallsToolsAsync(CancellationToken ct)
         {
             await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
-            using McpTcpClient client = new McpTcpClient();
+            using McpTcpClient client = new McpTcpClient { AutoInitialize = false };
             Assert2.True(await client.ConnectAsync("127.0.0.1", harness.TcpPort, ct).ConfigureAwait(false), "TCP client connects");
 
             JsonElement init = await client.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
@@ -449,7 +446,7 @@ namespace Test.Shared.Suites
         private static async Task WebSocketListsAndCallsToolsAsync(CancellationToken ct)
         {
             await using McpTransportHarness harness = await McpTransportHarness.StartAsync(ct).ConfigureAwait(false);
-            using McpWebsocketsClient client = new McpWebsocketsClient();
+            using McpWebsocketsClient client = new McpWebsocketsClient { AutoInitialize = false };
             Assert2.True(await client.ConnectAsync(harness.WebSocketUrl, ct).ConfigureAwait(false), "WebSocket client connects");
 
             JsonElement init = await client.CallAsync<JsonElement>("initialize", InitializeParams(HandshakeProtocolVersion), 15000, ct).ConfigureAwait(false);
@@ -513,7 +510,7 @@ namespace Test.Shared.Suites
             return headers;
         }
 
-        private static async Task<JsonDocument> PostStatelessAsync(HttpClient http, string url, int id, string method, string? name, Dictionary<string, object> parameters, CancellationToken ct)
+        private static async Task<JsonDocument> PostStatelessAsync(HttpClient http, string url, int id, string method, string? name, Dictionary<string, object> parameters, CancellationToken ct, HttpStatusCode expectedStatus = HttpStatusCode.OK)
         {
             parameters["_meta"] = new Dictionary<string, object>
             {
@@ -529,11 +526,11 @@ namespace Test.Shared.Suites
             };
             if (name != null) headers["Mcp-Name"] = name;
 
-            JsonDocument document = await PostJsonAsync(http, url, Request(id, method, parameters), headers, ct).ConfigureAwait(false);
+            JsonDocument document = await PostJsonAsync(http, url, Request(id, method, parameters), headers, ct, expectedStatus).ConfigureAwait(false);
             return document;
         }
 
-        private static async Task<JsonDocument> PostJsonAsync(HttpClient http, string url, object body, Dictionary<string, string>? headers, CancellationToken ct)
+        private static async Task<JsonDocument> PostJsonAsync(HttpClient http, string url, object body, Dictionary<string, string>? headers, CancellationToken ct, HttpStatusCode expectedStatus = HttpStatusCode.OK)
         {
             using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, url);
             if (headers != null)
@@ -544,7 +541,7 @@ namespace Test.Shared.Suites
             request.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
             using HttpResponseMessage response = await http.SendAsync(request, ct).ConfigureAwait(false);
             string content = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            Assert2.Equal(HttpStatusCode.OK, response.StatusCode, "MCP POST succeeds: " + content);
+            Assert2.Equal(expectedStatus, response.StatusCode, "MCP POST returns the expected status: " + content);
             return JsonDocument.Parse(content);
         }
 
